@@ -1,7 +1,8 @@
-# Nirmaan OS on Fly.io (the public website stays on Vercel).
+# Nirmaan OS on Fly.io (the public website stays on Vercel). Singapore: the nearest
+# region to India that this account can use (Mumbai isn't offered).
 # Deploy from the repo root: fly deploy. Setup: docs/engineering/deployment.md.
 app = "nirmaan-os"
-primary_region = "bom"
+primary_region = "sin"
 
 [build]
   dockerfile = "Dockerfile.os"

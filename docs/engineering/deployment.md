@@ -9,7 +9,7 @@ the site deploy. `vercel.json` holds redirects (for example `/agency-os.html` �
 
 ## Nirmaan OS on Fly.io · IMPLEMENTED (os.nirmaan.online)
 
-One machine in Mumbai (`bom`) runs the web app and the campaign worker side by side
+One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and the campaign worker side by side
 (`app/scripts/start.sh`). The database (`/data/nirmaan.db`) and project files
 (`/data/projects`) live on a persistent volume. Config: `fly.toml` and `Dockerfile.os`
 at the repo root; the image holds only `app/` and `agents/`.
@@ -19,7 +19,7 @@ First setup (once):
 ```text
 brew install flyctl && fly auth login
 fly apps create nirmaan-os
-fly volumes create nirmaan_data --region bom --size 1
+fly volumes create nirmaan_data --region sin --size 1
 claude setup-token                      # prints a long-lived token for the server
 fly secrets set CLAUDE_CODE_OAUTH_TOKEN=… GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… \
   GOOGLE_PLACES_API_KEY=… OUTREACH_FROM=… SMTP_URL=… IMAP_URL=… \
