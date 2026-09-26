@@ -64,6 +64,7 @@ export function signature(channel: OutreachChannel, env: NodeJS.ProcessEnv = pro
 const VOICE = `Write as {{sender}} of Nirmaan, a small software studio in India ("You bring the problem. We build the system."), personally writing one message to one business owner. It must read like a real person wrote it by hand today, not a campaign:
 - First person ("I"), warm and plain. Indian English is fine. No emojis, no buzzwords, no flattery, no fake urgency, no discounts.
 - Say one specific, true thing you noticed about their business (only from the facts given; never invent details, names, numbers, results or clients).
+- About their website, say only what "What we noticed" states. Never call it broken, blank, empty, down or missing unless that is stated there; "no website link on the Google listing" is not "no website".
 - Name the likely problem in their terms, as a question or an observation, never an accusation. Don't say their website is bad.
 - One small next step: a 15-minute call, or they can simply reply.
 - Vary your wording naturally; don't open with "I hope this finds you well" or "I came across".
@@ -84,6 +85,13 @@ This is follow-up number {{step}} to a message they haven't answered. It's a rep
 - If this is the last follow-up ({{last}}), close politely: you won't keep writing, and they can reply any time.
 
 Reply with one JSON object and nothing else: {"body": "..."}`;
+
+/** Adds the sender's signature if the draft left it out, so every message is signed the same way. */
+export function withSignature(body: string, channel: OutreachChannel, env: NodeJS.ProcessEnv = process.env): string {
+  const name = senderName(env);
+  const tail = body.trim().split("\n").slice(-4).join("\n");
+  return tail.includes(name) ? body.trim() : `${body.trim()}\n\n${signature(channel, env)}`;
+}
 
 /** The exact text that goes out: the approved body plus the opt-out line. */
 export function finalBody(body: string): string {
@@ -159,7 +167,7 @@ export async function draftOutreach(actor: Actor, prospectId: string, channel: s
   });
   const draft = parseDraft(completion.text, channel);
   const message = await prisma.outreachMessage.create({
-    data: { prospectId: p.id, channel, toAddress: to, subject: draft.subject, body: draft.body, draftedBy: "AGENT", step: 0, campaignId: deps.campaignId ?? p.campaignId },
+    data: { prospectId: p.id, channel, toAddress: to, subject: draft.subject, body: withSignature(draft.body, channel), draftedBy: "AGENT", step: 0, campaignId: deps.campaignId ?? p.campaignId },
   });
   if (p.status === "NEW" || p.status === "AUDITED") await prisma.prospect.update({ where: { id: p.id }, data: { status: "DRAFTED" } });
   await audit(actor, "outreach.drafted", "OutreachMessage", message.id, `${p.code} by ${channel.toLowerCase()}`);
@@ -204,7 +212,7 @@ export async function draftFollowUp(actor: Actor, prospectId: string, channel: s
       channel,
       toAddress: last.toAddress,
       subject: channel === "EMAIL" ? replySubject(first.subject) : null,
-      body: draft.body,
+      body: withSignature(draft.body, channel),
       draftedBy: "AGENT",
       step,
       campaignId: last.campaignId ?? p.campaignId,

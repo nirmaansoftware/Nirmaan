@@ -10,8 +10,14 @@ export interface SiteSignals {
   hasWebsite: boolean;
   /** Set when a website was listed but couldn't be read. Unknown, not a problem: it may work fine for visitors. */
   unreachable?: string;
-  /** The site answered with a bot-protection check instead of its page. It exists; its content is unknown. */
+  /** The site answered with a bot-protection check or refused our automated visit. It exists; its content is unknown. */
   blocked?: boolean;
+  /** Why the content is unknown (a timeout, an HTTP 500, …). Unknown is never evidence of a problem. */
+  unknown?: string;
+  /** A provable, sayable fact about the website (dead domain, missing page, parked page, a social page instead of a site, no link). */
+  fact?: string;
+  /** The page is drawn by JavaScript, which the check doesn't run: what visitors see is unknown. */
+  jsOnly?: boolean;
   url?: string;
   https?: boolean;
   status?: number;
@@ -105,12 +111,20 @@ export function extractSignals(site: FetchedSite): SiteSignals {
 }
 
 /** The signals as short lines for a prompt or a person. */
+/**
+ * The site as lines for the fit check: FACT lines may be said to the owner;
+ * UNKNOWN lines may not be used as evidence of anything.
+ */
 export function describeSignals(s: SiteSignals): string[] {
-  if (s.blocked) return [`Website exists (${s.url}) but it blocks automated checks, so its content is UNKNOWN. It likely works for visitors; draw no conclusions about it.`];
-  if (!s.hasWebsite && s.unreachable && !/no own website/.test(s.unreachable)) {
-    return [`Website listed but our check couldn't read it (${s.unreachable}). Its content is UNKNOWN; it may work fine for visitors.`];
+  if (s.fact) return [`FACT: ${s.fact}`];
+  if (s.blocked || s.unknown) {
+    return [`UNKNOWN: they have a website (${s.url ?? "listed"}), but our automated check couldn't see its content (${s.unknown ?? "it blocks automated visits"}). It probably works for visitors. Say nothing about the site.`];
   }
-  if (!s.hasWebsite) return [s.unreachable ? `No website of its own: ${s.unreachable}` : "No website found"];
+  if (s.jsOnly) {
+    return [`UNKNOWN: they have a website (${s.url}), but its content is drawn by JavaScript or loaded in a frame, which our check doesn't run, so what visitors see is unknown. Say nothing about the site's content.`];
+  }
+  // Older records from before facts were separated from unknowns.
+  if (!s.hasWebsite) return [s.unreachable ? `UNKNOWN: website listed but not checked (${s.unreachable}).` : "FACT: Their Google listing has no website link. (They may still have a website; never say they have none.)"];
   const lines = [
     `Website: ${s.url} (HTTP ${s.status}${s.https ? "" : ", not HTTPS"})`,
     `Homepage: ${s.pageKb} KB, fetched in ${((s.loadMs ?? 0) / 1000).toFixed(1)} s`,

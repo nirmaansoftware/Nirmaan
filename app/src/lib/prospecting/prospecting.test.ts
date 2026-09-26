@@ -309,3 +309,53 @@ test("check the next few: unchecked prospects from one search, busiest first, fa
   assert.match(broken.siteSignals ?? "", /timed out/);
   await assert.rejects(() => auditNext(ENGINEER, { searchId: s.id }), ForbiddenError);
 });
+
+test("site reading: facts that may be said, unknowns that may not", async () => {
+  const { readSite } = await import("./audit");
+  const { describeSignals } = await import("./siteSignals");
+  const page = (html: string, status = 200, finalUrl = "https://x.test/"): FetchedSite => ({ requestedUrl: finalUrl, finalUrl, status, html, bytes: html.length, ms: 100, truncated: false });
+  const lines = async (fetcher: (u: string) => Promise<FetchedSite>, url: string | null = "https://x.test") => describeSignals(await readSite(url, fetcher)).join(" ");
+
+  assert.match(await lines(async () => page(""), null), /^FACT: Their Google listing has no website link.*never say they have none/);
+  assert.match(await lines(async () => page(""), "https://instagram.com/clinic"), /^FACT: Their listing links to a instagram\.com page/);
+  assert.match(await lines(async () => { throw new Error("Won't fetch that address: the domain doesn't exist."); }), /^FACT: .*is dead: the domain doesn't exist/);
+  assert.match(await lines(async () => page("<h1>Not found</h1>", 404)), /^FACT: .*missing page \(HTTP 404\)/);
+  assert.match(await lines(async () => page("<title>Parked Domain name on Hostinger DNS system</title>")), /^FACT: .*parked placeholder page/);
+  // Unknowns: never evidence.
+  assert.match(await lines(async () => page("<html>Conflict</html>", 409)), /^UNKNOWN: .*HTTP 409/);
+  assert.match(await lines(async () => { throw new Error("The operation was aborted due to timeout"); }), /^UNKNOWN: /);
+  assert.match(await lines(async () => page(`<html><body><div id="root"></div><script src="/app.js"></script></body></html>`)), /^UNKNOWN: .*drawn by JavaScript/);
+  assert.match(await lines(async () => page("")), /^UNKNOWN: .*frame/, "an empty page isn't a blank site");
+  // A <meta refresh> page is followed once.
+  const hops: string[] = [];
+  assert.match(
+    await lines(async (u) => {
+      hops.push(u);
+      return u.endsWith("/home") ? page("<title>Parked Domain</title>", 200, u) : page(`<meta http-equiv="refresh" content="0; url=/home">`);
+    }),
+    /parked placeholder/
+  );
+  assert.deepEqual(hops, ["https://x.test", "https://x.test/home"]);
+});
+
+test("site reading: the contact page is read for an email when the homepage has none", async () => {
+  const { readSite } = await import("./audit");
+  const words = "We are a family dental clinic in Satellite with twenty years of practice. ".repeat(6);
+  const fetched: string[] = [];
+  const s = await readSite("https://clinic.test", async (u) => {
+    fetched.push(u);
+    return u.endsWith("/contact-us")
+      ? site(`<p>Write to us at care@clinic.test</p>`, { finalUrl: u })
+      : site(`<html><p>${words}</p><a href="/contact-us">Contact us</a></html>`, { finalUrl: "https://clinic.test/" });
+  });
+  assert.deepEqual(s.emails, ["care@clinic.test"]);
+  assert.deepEqual(fetched, ["https://clinic.test", "https://clinic.test/contact-us"]);
+});
+
+test("drafts are always signed", async () => {
+  const { withSignature } = await import("./outreach");
+  const env = { OUTREACH_SENDER_NAME: "Sahaj Patel", OUTREACH_WHATSAPP_NUMBER: "9493833697" } as unknown as NodeJS.ProcessEnv;
+  assert.match(withSignature("Hi, a short note about bookings.", "WHATSAPP", env), /\n\nSahaj Patel\nNirmaan · www\.nirmaan\.online$/);
+  const signed = "Hi, a note.\n\nSahaj Patel\nNirmaan · www.nirmaan.online";
+  assert.equal(withSignature(signed, "WHATSAPP", env), signed, "not signed twice");
+});
