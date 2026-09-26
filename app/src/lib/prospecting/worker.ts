@@ -160,8 +160,8 @@ export async function runTick(deps: TickDeps = {}): Promise<TickReport> {
       report.campaigns.push(line);
       const outOfTime = () => Date.now() - started > budgetMs;
       try {
-        line.firstDrafts = await draftFirstMessages(c, now, deps);
-        if (!outOfTime()) line.followUps = await draftDueFollowUps(c, now, deps);
+        line.firstDrafts = await draftFirstMessages(c, now, deps, 5, line.notes);
+        if (!outOfTime()) line.followUps = await draftDueFollowUps(c, now, deps, 5, line.notes);
         if (!outOfTime()) line.checked = await checkSome(c, now, deps);
         if (!outOfTime()) line.searched = await searchMore(c, now, deps, line.notes);
       } catch (err) {
@@ -205,7 +205,7 @@ async function sendOne(now: Date, deps: TickDeps): Promise<{ sent: number; note?
 type CampaignRow = Awaited<ReturnType<typeof prisma.campaign.findMany>>[number];
 
 /** First messages for the best-fitting checked businesses, keeping today's email/WhatsApp split near the target. */
-async function draftFirstMessages(c: CampaignRow, now: Date, deps: TickDeps, perTick = 5): Promise<number> {
+async function draftFirstMessages(c: CampaignRow, now: Date, deps: TickDeps, perTick = 5, errors?: string[]): Promise<number> {
   const today = await prisma.outreachMessage.groupBy({ by: ["channel"], where: { campaignId: c.id, step: 0, createdAt: { gte: startOfDay(now) } }, _count: true });
   let email = today.find((t) => t.channel === "EMAIL")?._count ?? 0;
   let whatsapp = today.find((t) => t.channel === "WHATSAPP")?._count ?? 0;
@@ -229,7 +229,13 @@ async function draftFirstMessages(c: CampaignRow, now: Date, deps: TickDeps, per
     const emailBehind = total === 0 ? c.emailShare >= 50 : email / total < c.emailShare / 100;
     const channel = canEmail && canWhatsapp ? (emailBehind ? "EMAIL" : "WHATSAPP") : canEmail ? "EMAIL" : "WHATSAPP";
     if ((channel === "EMAIL" && c.emailShare === 0) || (channel === "WHATSAPP" && c.emailShare === 100)) continue;
-    await draftOutreach(WORKER, p.id, channel, { provider: deps.provider, angle: c.angle, campaignId: c.id });
+    try {
+      await draftOutreach(WORKER, p.id, channel, { provider: deps.provider, angle: c.angle, campaignId: c.id });
+    } catch (err) {
+      // One business failing mustn't stop the rest; it's tried again next tick.
+      errors?.push(`${p.code}: ${err instanceof Error ? err.message : String(err)}`.slice(0, 200));
+      continue;
+    }
     if (channel === "EMAIL") email++;
     else whatsapp++;
     drafted++;
@@ -238,7 +244,7 @@ async function draftFirstMessages(c: CampaignRow, now: Date, deps: TickDeps, per
 }
 
 /** Follow-ups whose day has come, for businesses that haven't replied. */
-async function draftDueFollowUps(c: CampaignRow, now: Date, deps: TickDeps, perTick = 5): Promise<number> {
+async function draftDueFollowUps(c: CampaignRow, now: Date, deps: TickDeps, perTick = 5, errors?: string[]): Promise<number> {
   const schedule = decodeStringList(c.followUpDays).map(Number).filter((n) => n > 0);
   if (!schedule.length) return 0;
   const contacted = await prisma.prospect.findMany({
@@ -257,8 +263,12 @@ async function draftDueFollowUps(c: CampaignRow, now: Date, deps: TickDeps, perT
       if (sent.length >= Math.min(schedule.length + 1, maxMessages())) continue;
       const last = sent[sent.length - 1];
       if (!last.sentAt || now.getTime() - last.sentAt.getTime() < schedule[stepIndex] * 86_400_000) continue;
-      await draftFollowUp(WORKER, p.id, channel, { provider: deps.provider, now, maxSteps: schedule.length + 1 });
-      drafted++;
+      try {
+        await draftFollowUp(WORKER, p.id, channel, { provider: deps.provider, now, maxSteps: schedule.length + 1 });
+        drafted++;
+      } catch (err) {
+        errors?.push(`${p.code}: ${err instanceof Error ? err.message : String(err)}`.slice(0, 200));
+      }
       break;
     }
   }
