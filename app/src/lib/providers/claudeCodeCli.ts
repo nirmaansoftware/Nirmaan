@@ -89,6 +89,10 @@ export class ClaudeCodeCliProvider implements ModelProvider {
     if (parsed.is_error) {
       throw new Error(`claude CLI reported an error: ${parsed.result}`);
     }
+    // A run stopped by a limit (budget, turns) can come back with is_error false and no answer.
+    if (parsed.subtype !== "success" || typeof parsed.result !== "string" || !parsed.result.trim()) {
+      throw new Error(`claude CLI returned no answer (${parsed.subtype || "no subtype"}): ${result.stdout.slice(0, 500)}`);
+    }
 
     return {
       text: parsed.result,

@@ -60,8 +60,14 @@ export async function planCampaign(actor: Actor, goal: string, deps: { provider?
   assertCan(actor.role, "prospect:run");
   const g = goal.trim();
   if (g.length < 15 || g.length > 1500) throw new Error("Describe the goal in a sentence or two (15 to 1,500 characters).");
-  const { completion } = await callModel({ task: "campaign-plan", taskType: "requirements", systemPrompt: PLAN_PROMPT, userPrompt: g, provider: deps.provider });
-  const plan = parsePlan(completion.text);
+  const ask = () => callModel({ task: "campaign-plan", taskType: "requirements", systemPrompt: PLAN_PROMPT, userPrompt: g, provider: deps.provider });
+  let plan: CampaignPlan;
+  try {
+    plan = parsePlan((await ask()).completion.text);
+  } catch {
+    // A short or vague goal sometimes gets a question back instead of a plan; one more try usually lands.
+    plan = parsePlan((await ask()).completion.text);
+  }
   const campaign = await prisma.$transaction(async (tx) => {
     const code = await nextCode("CAMP", tx);
     return tx.campaign.create({
