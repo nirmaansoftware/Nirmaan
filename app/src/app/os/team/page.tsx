@@ -6,20 +6,61 @@ import { CLIENT_ROLES, INTERNAL_ROLES } from "@/lib/db/enums";
 import { MIN_PASSWORD_LENGTH, passwordLoginEnabled } from "@/lib/auth/password";
 import { ActionForm } from "../../_components/ActionForm";
 import { Badge, NoAccess, PageHead, when } from "../../_components/ui";
-import { createUserAction, setActiveAction, setRoleAction } from "../actions/team";
+import { approveRequestAction, createUserAction, dismissRequestAction, setActiveAction, setRoleAction } from "../actions/team";
 
 export const metadata: Metadata = { title: "Team" };
 
 export default async function TeamPage() {
   const user = await requireUser();
   if (!can(user.role, "user:manage")) return <NoAccess capability="user:manage" />;
-  const [users, clients] = await Promise.all([
+  const [users, clients, requests] = await Promise.all([
     prisma.user.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }], include: { client: { select: { name: true } } } }),
     prisma.client.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.accessRequest.findMany({ where: { status: "PENDING" }, orderBy: { lastAt: "desc" } }),
   ]);
   return (
     <>
       <PageHead title="Team" eyebrow="Company" />
+      {requests.length > 0 && (
+        <section className="panel" aria-labelledby="requests">
+          <h2 id="requests">Asked for access ({requests.length})</h2>
+          <p className="faint" style={{ fontSize: "0.8125rem" }}>
+            These people signed in with Google but aren&apos;t on the team. Their email is verified by Google. Give access only to people you know; they&apos;ll get
+            an email saying they&apos;re in.
+          </p>
+          <ul className="list" role="list">
+            {requests.map((r) => (
+              <li key={r.id}>
+                <div className="item-head">
+                  <span>
+                    <b>{r.email}</b>
+                  </span>
+                  <span className="faint">
+                    first tried {when(r.firstAt)}
+                    {r.attempts > 1 && ` · ${r.attempts} tries, last ${when(r.lastAt)}`}
+                  </span>
+                </div>
+                <div className="row">
+                  <ActionForm action={approveRequestAction} submit="Give access" variant="sm" className="row">
+                    <input type="hidden" name="requestId" value={r.id} />
+                    <input className="input" name="name" placeholder="Their name" aria-label={`Name for ${r.email}`} defaultValue={r.email.split("@")[0]} />
+                    <select className="input" name="role" defaultValue="ENGINEER" aria-label={`Role for ${r.email}`}>
+                      {INTERNAL_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {ROLE_LABELS[role]}
+                        </option>
+                      ))}
+                    </select>
+                  </ActionForm>
+                  <ActionForm action={dismissRequestAction} submit="Dismiss" variant="ghost sm" className="">
+                    <input type="hidden" name="requestId" value={r.id} />
+                  </ActionForm>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="split">
         <section className="panel">
           <div className="table-wrap">

@@ -918,3 +918,21 @@ model AutopilotReview {
   stats     String   @default("{}")
   createdAt DateTime @default(now())
 }
+
+// Someone signed in with Google whose email isn't on the team. The owner
+// sees it on the Team screen and either gives access or dismisses it.
+model AccessRequest {
+  id         String    @id @default(cuid())
+  email      String    @unique // lower-cased, verified by Google
+  // PENDING | APPROVED | DISMISSED
+  status     String    @default("PENDING")
+  attempts   Int       @default(1)
+  firstAt    DateTime  @default(now())
+  lastAt     DateTime  @default(now())
+  // When the owner was last emailed about it (at most once a day per email).
+  notifiedAt DateTime?
+  decidedBy  String?
+  decidedAt  DateTime?
+
+  @@index([status])
+}

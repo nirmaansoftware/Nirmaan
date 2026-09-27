@@ -9,7 +9,9 @@ import { googleConfigured } from "@/lib/auth/google";
 import { passwordLoginEnabled } from "@/lib/auth/password";
 
 const GOOGLE_ERRORS: Record<string, string> = {
-  "google-not-allowed": "That Google account isn't on the team. Ask the founder to add your email.",
+  "google-not-allowed": "isn't on the Nirmaan team yet. We've let the owner know; you'll get an email at this address as soon as you're added.",
+  "google-declined": "isn't on the Nirmaan team, and the request to join was declined. If you think that's a mistake, contact nirmaansoftware@gmail.com.",
+  "google-inactive": "has an account here, but it's turned off. Ask the owner to turn it back on.",
   "google-failed": "Google sign-in didn't work. Try again.",
   "google-expired": "The sign-in took too long or was started elsewhere. Try again.",
   "google-cancelled": "Google sign-in was cancelled.",
@@ -24,7 +26,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   if (current) redirect(isClientRole(current.role) ? "/portal" : "/os");
   const params = await searchParams;
   const next = params.next;
-  const error = typeof params.error === "string" ? GOOGLE_ERRORS[params.error] : undefined;
+  const who = typeof params.as === "string" && params.as.length <= 254 ? params.as : "";
+  const known = typeof params.error === "string" ? GOOGLE_ERRORS[params.error] : undefined;
+  // Messages about an account start with the address that was used (or "That Google account").
+  const error = known && /^(isn't|has an)/.test(known) ? `${who || "That Google account"} ${known}` : known;
   const google = googleConfigured();
   const passwords = passwordLoginEnabled();
   return (

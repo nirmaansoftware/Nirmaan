@@ -5,6 +5,7 @@ import { requireActor } from "@/lib/web/session";
 import { errorState, type ActionState } from "@/lib/web/actionState";
 import { str } from "@/lib/web/form";
 import { createUser, setUserActive, setUserRole } from "@/lib/team/service";
+import { approveRequest, dismissRequest } from "@/lib/team/accessRequests";
 
 export async function createUserAction(_: ActionState, form: FormData): Promise<ActionState> {
   const actor = await requireActor();
@@ -44,6 +45,28 @@ export async function setRoleAction(_: ActionState, form: FormData): Promise<Act
     await setUserRole(actor, str(form, "userId"), str(form, "role"));
     revalidatePath("/os/team");
     return { ok: "Role changed. It applies from their next sign-in." };
+  } catch (err) {
+    return errorState(err);
+  }
+}
+
+export async function approveRequestAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  try {
+    const u = await approveRequest(actor, str(form, "requestId"), { role: str(form, "role"), name: str(form, "name") });
+    revalidatePath("/os/team");
+    return { ok: `${u.email} can now sign in with Google. They've been emailed.` };
+  } catch (err) {
+    return errorState(err);
+  }
+}
+
+export async function dismissRequestAction(_: ActionState, form: FormData): Promise<ActionState> {
+  const actor = await requireActor();
+  try {
+    await dismissRequest(actor, str(form, "requestId"));
+    revalidatePath("/os/team");
+    return { ok: "Dismissed. They'll be told the request was declined if they try again." };
   } catch (err) {
     return errorState(err);
   }

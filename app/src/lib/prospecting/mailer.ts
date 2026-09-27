@@ -18,6 +18,8 @@ export interface OutgoingEmail {
   /** Follow-ups: the first email's Message-ID, so mail apps show one conversation. */
   inReplyTo?: string;
   references?: string[];
+  /** Files to attach (the nightly database backup). */
+  attachments?: { filename: string; content: Buffer }[];
 }
 
 /** Our own Message-ID, so threading works the same with SMTP or Resend. */
@@ -42,7 +44,7 @@ export function mailerFromEnv(env: NodeJS.ProcessEnv = process.env): Mailer | nu
       name: "SMTP",
       async send(mail) {
         const messageId = newMessageId(from);
-        await transport.sendMail({ from, replyTo, to: mail.to, subject: mail.subject, text: mail.text, messageId, inReplyTo: mail.inReplyTo, references: mail.references });
+        await transport.sendMail({ from, replyTo, to: mail.to, subject: mail.subject, text: mail.text, messageId, inReplyTo: mail.inReplyTo, references: mail.references, attachments: mail.attachments });
         return { id: messageId };
       },
     };
@@ -63,6 +65,7 @@ export function mailerFromEnv(env: NodeJS.ProcessEnv = process.env): Mailer | nu
             text: mail.text,
             ...(replyTo ? { reply_to: replyTo } : {}),
             headers: { "Message-ID": messageId, ...(mail.inReplyTo ? { "In-Reply-To": mail.inReplyTo, References: (mail.references ?? [mail.inReplyTo]).join(" ") } : {}) },
+            ...(mail.attachments ? { attachments: mail.attachments.map((a) => ({ filename: a.filename, content: a.content.toString("base64") })) } : {}),
           }),
           signal: AbortSignal.timeout(20_000),
         });

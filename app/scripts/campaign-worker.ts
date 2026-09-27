@@ -23,6 +23,7 @@ function line(r: Awaited<ReturnType<typeof runTick>>): string {
   const parts = [
     r.inbox && (r.inbox.read ? `inbox ${r.inbox.read} read, ${r.inbox.replies} replies, ${r.inbox.stops} stops, ${r.inbox.bounces} bounces` : "inbox quiet"),
     r.sent ? `sent ${r.sent} email` : r.sendNote,
+    r.backup && `backup emailed (${r.backup})`,
     ...r.campaigns.map((c) => `${c.code}: ${c.searched} search, ${c.checked} checked, ${c.firstDrafts} first drafts, ${c.followUps} follow-ups${c.notes.length ? ` (${c.notes.join(" ")})` : ""}`),
     ...r.errors.map((e) => `! ${e}`),
   ].filter(Boolean);

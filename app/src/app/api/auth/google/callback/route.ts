@@ -6,6 +6,7 @@ import { audit } from "@/lib/audit";
 import { userActor, PUBLIC_ACTOR } from "@/lib/auth/actor";
 import { isClientRole } from "@/lib/db/enums";
 import { createRateLimiter } from "@/lib/http/rateLimit";
+import { recordRefusal } from "@/lib/team/accessRequests";
 
 const allow = createRateLimiter({ limit: 20, windowMs: 15 * 60 * 1000 });
 
@@ -23,8 +24,8 @@ function sameString(a: string, b: string): boolean {
 
 /** GET /api/auth/google/callback?code=…&state=… : back from Google. */
 export async function GET(request: NextRequest) {
-  const fail = (reason: string) => {
-    const res = NextResponse.redirect(publicUrl(`/login?error=${reason}`, request.nextUrl.origin));
+  const fail = (reason: string, email?: string) => {
+    const res = NextResponse.redirect(publicUrl(`/login?error=${reason}${email ? `&as=${encodeURIComponent(email)}` : ""}`, request.nextUrl.origin));
     res.cookies.delete({ name: GOOGLE_COOKIE, path: "/api/auth/google" });
     return res;
   };
@@ -53,7 +54,14 @@ export async function GET(request: NextRequest) {
   const user = await userForGoogleEmail(email);
   if (!user) {
     await audit(PUBLIC_ACTOR, "auth.google_refused", "User", email, "No active OS account with this email");
-    return fail("google-not-allowed");
+    // Not on the team: record an access request and tell the owners (rate-limited).
+    let outcome: "requested" | "declined" | "inactive" = "requested";
+    try {
+      outcome = await recordRefusal(email);
+    } catch {
+      // Still refuse; the request just isn't recorded this time.
+    }
+    return fail(outcome === "inactive" ? "google-inactive" : outcome === "declined" ? "google-declined" : "google-not-allowed", email);
   }
 
   await startSession(user.id);

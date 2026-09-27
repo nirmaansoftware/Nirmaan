@@ -62,8 +62,9 @@ async function assertPublic(url: URL, resolve: (host: string) => Promise<string[
   if (url.port && url.port !== "80" && url.port !== "443") throw new UnsafeUrlError("unusual port");
   const host = url.hostname.replace(/^\[|\]$/g, "");
   if (/(^|\.)(localhost|local|internal|intranet|lan|home\.arpa)$/i.test(host)) throw new UnsafeUrlError("not a public internet address");
-  const addresses = isIP(host) ? [host] : await resolve(host).catch(() => {
-    throw new UnsafeUrlError("the domain doesn't resolve");
+  const addresses = isIP(host) ? [host] : await resolve(host).catch((err: { code?: string }) => {
+    // ENOTFOUND/ENODATA: the domain really has no address (a dead link). Anything else: we couldn't tell.
+    throw new UnsafeUrlError(err?.code === "ENOTFOUND" || err?.code === "ENODATA" ? "the domain doesn't exist" : "the domain couldn't be looked up");
   });
   if (!addresses.length || addresses.some(isPrivateAddress)) throw new UnsafeUrlError("not a public internet address");
 }

@@ -32,11 +32,17 @@ fly certs add os.nirmaan.online          # then add the DNS record it asks for
 Also add `https://os.nirmaan.online/api/auth/google/callback` to the Google OAuth
 client's redirect URIs.
 
-Later deploys: `fly deploy` from the repo root. Logs: `fly logs`. The worker's
+Later deploys happen by themselves: `.github/workflows/os.yml` tests every change to
+`app/`, `agents/` or the Fly files (typecheck, lint, unit tests) and, once it's merged
+to `main`, deploys it to Fly with the `FLY_API_TOKEN` repository secret (a deploy token
+for `nirmaan-os` only; renew yearly with `fly tokens create deploy -a nirmaan-os`).
+By hand, `fly deploy` from the repo root still works. Logs: `fly logs`. The worker's
 ticks appear there once a minute.
 
-Backups: `fly ssh sftp get /data/nirmaan.db` downloads the database; Fly also keeps
-daily volume snapshots for 5 days.
+Backups: every night after 02:00 India time the worker emails a gzipped copy of the
+whole database to our own mailbox ("Nirmaan OS backup <date>", `src/lib/backup.ts`;
+`BACKUP_EMAIL` to send it elsewhere). Fly also keeps daily volume snapshots for 5 days,
+and `fly ssh sftp get /data/nirmaan.db` downloads the live file.
 
 ## Nirmaan OS: other hosts
 

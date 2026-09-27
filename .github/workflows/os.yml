@@ -1,0 +1,48 @@
+# Nirmaan OS: test every change to the OS, and deploy to Fly.io when it lands on main.
+# The public website isn't touched here (Vercel deploys it on its own).
+name: Nirmaan OS
+
+on:
+  pull_request:
+    paths: ["app/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
+  push:
+    branches: [main]
+    paths: ["app/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: os-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

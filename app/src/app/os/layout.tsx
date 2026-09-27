@@ -11,7 +11,7 @@ import { logout } from "../login/actions";
 export default async function OsLayout({ children }: LayoutProps<"/os">) {
   const user = await requireUser();
   const role = user.role as Role;
-  const [pendingApprovals, newLeads, openSupport, replied, toReview] = await Promise.all([
+  const [pendingApprovals, newLeads, openSupport, replied, toReview, accessRequests] = await Promise.all([
     can(role, "approval:decide") ? prisma.approval.count({ where: { status: "PENDING" } }) : Promise.resolve(0),
     can(role, "lead:read") ? prisma.lead.count({ where: { status: "NEW" } }) : Promise.resolve(0),
     can(role, "support:write") ? prisma.supportRequest.count({ where: { status: "OPEN" } }) : Promise.resolve(0),
@@ -19,6 +19,7 @@ export default async function OsLayout({ children }: LayoutProps<"/os">) {
     can(role, "prospect:read") ? prisma.prospect.count({ where: { status: "REPLIED" } }) : Promise.resolve(0),
     // Messages waiting for a person: emails to approve, WhatsApp to send.
     can(role, "prospect:read") ? prisma.outreachMessage.count({ where: { status: "DRAFT" } }) : Promise.resolve(0),
+    can(role, "user:manage") ? prisma.accessRequest.count({ where: { status: "PENDING" } }) : Promise.resolve(0),
   ]);
 
   const items: NavItem[] = [
@@ -38,7 +39,7 @@ export default async function OsLayout({ children }: LayoutProps<"/os">) {
     can(role, "finance:read") && { href: "/os/finance", label: "Finance", group: "Company" },
     can(role, "ai:read") && { href: "/os/ai", label: "AI usage", group: "Company" },
     can(role, "audit:read") && { href: "/os/audit", label: "Audit log", group: "Company" },
-    can(role, "user:manage") && { href: "/os/team", label: "Team", group: "Company" },
+    can(role, "user:manage") && { href: "/os/team", label: "Team", count: accessRequests, group: "Company" },
   ].filter(Boolean) as NavItem[];
 
   return (
