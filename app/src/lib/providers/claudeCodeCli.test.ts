@@ -97,6 +97,15 @@ test("complete() throws when the CLI itself reports is_error:true, even with exi
   );
 });
 
+test("complete() throws when a run stops on a limit without an answer, even with is_error:false", async () => {
+  const budgetJson = JSON.stringify({ is_error: false, subtype: "error_max_budget_usd" });
+  const provider = new ClaudeCodeCliProvider("claude", 60_000, fakeRunner({ stdout: budgetJson }));
+  await assert.rejects(
+    () => provider.complete({ systemPrompt: "s", userPrompt: "u", model: "claude-sonnet-5", maxTokens: 100 }),
+    /returned no answer \(error_max_budget_usd\)/
+  );
+});
+
 test("complete() leaves usage/costUsd undefined (not a fabricated number) when the CLI response omits them", async () => {
   const minimalJson = JSON.stringify({ result: "ok", is_error: false, subtype: "success" });
   const provider = new ClaudeCodeCliProvider("claude", 60_000, fakeRunner({ stdout: minimalJson }));
