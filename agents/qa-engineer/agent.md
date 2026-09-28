@@ -30,6 +30,7 @@ Test strategy, unit testing, integration testing, E2E testing, regression testin
 - Run visual regression checks where a Design System / UI spec exists to compare against.
 - Log every bug found with severity (blocker/critical/major/minor/cosmetic), exact reproduction steps, expected vs. actual behavior, and environment.
 - Track regression status across re-test cycles — a bug marked fixed gets re-verified, not assumed fixed.
+- For any website, run the launch list in `/docs/engineering/list.md` before launch and record every item as PASS, FIXED, or N/A with a reason; an unrecorded item blocks the release.
 - Issue an explicit release recommendation: go / no-go / go-with-known-issues (with those issues named and accepted by the Orchestrator), never a bare list of findings with no verdict.
 
 ## Inputs
