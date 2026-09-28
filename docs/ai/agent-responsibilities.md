@@ -8,8 +8,8 @@ each `agents/<slug>/agent.md`). "R" = responsible, "A" = the human who approves.
 | Business Analyst | `business-analyst` (discovery mode), `market-research` | Discovery items; requirement drafts | REQUIREMENTS (founder/CTO) |
 | Product Manager | `product-manager` | PRD, prioritization, scope | PLAN |
 | Solution Architect | `principal-architect` | ADRs, build vs buy, simplest safe architecture | ARCHITECTURE |
-| UX/UI Designer | `ux-designer`, `ui-designer`, `creative-director`, `design-system-engineer` | Flows, UI spec, components | DESIGN |
-| Frontend Engineer | `frontend-engineer` | UI implementation | IMPLEMENTATION |
+| UX/UI Designer | `ux-designer`, `ui-designer`, `creative-director`, `design-system-engineer` | Flows, UI spec (including motion), components | DESIGN |
+| Frontend Engineer | `frontend-engineer` | UI implementation, including motion | IMPLEMENTATION |
 | Backend Engineer | `backend-engineer` | APIs, business logic | IMPLEMENTATION |
 | Database Engineer | `database-engineer` | Schema, migrations | ARCHITECTURE / IMPLEMENTATION |
 | AI/ML Engineer | `ai-ml-engineer` | AI features, evals | ARCHITECTURE / QA |

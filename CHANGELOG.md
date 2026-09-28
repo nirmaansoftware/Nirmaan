@@ -13,6 +13,16 @@
   - Fixed two accessibility failures (dimmed journey stamps, the footer logo's
     accessible name). Lighthouse accessibility 96 to 100.
 
+## 2026-09-28: Motion design standard
+
+- `docs/engineering/motion.md`: how Nirmaan designs and builds motion, written
+  down from what nirmaan.online already does: what motion is for, a named
+  vocabulary (rise, assemble, reveal, draw, latch, print, count, build),
+  timing and easing tokens, how to build it (opt-in, final state in the HTML,
+  cheap properties only), a spec-line format, and a review checklist.
+- The UI Designer now specifies motion and the Frontend Engineer builds it;
+  both agent specs point at the standard.
+
 ## 2026-09-26: Nirmaan OS: ready for Fly.io
 
 - `fly.toml` + `Dockerfile.os`: the OS and its campaign worker on one always-on
