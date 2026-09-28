@@ -39,6 +39,7 @@ maps directly to one pattern.
 | **print** | Text appears line by line, as in a terminal | Command-line output |
 | **count** | A number counts up to the value already in the HTML | Stat tiles |
 | **build** | A page is laid down block by block (view transition with a stepped sprite mask) | Page-to-page navigation |
+| **scene** | A story pinned in place and scrubbed by scroll: one progress value (0 to 1) drives every element's own span, so the reader sets the pace and can go back. Written in its finished state; pinned only when it fits the screen (zoomed down a little if it nearly fits), otherwise it stays still | Home "problem to system", ip.nirmaan.online "How it works" |
 
 A new pattern gets a name here before it ships.
 

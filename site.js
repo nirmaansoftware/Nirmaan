@@ -13,6 +13,7 @@
          [data-scene="rail"]      services track moves sideways (pinned, all widths)
          [data-scene="line"]      process timeline fills as it passes
          [data-scene="spy"]       process index highlights the step in view
+         [data-scene="build"]     problem → system story, scrubbed by scroll (pinned)
 
   Everything here is progressive enhancement. With JS off, or with reduced
   motion, every section renders fully built and in normal document flow.
@@ -336,6 +337,71 @@
       },
     });
     viewport.addEventListener('scroll', function () { schedule(); }, { passive: true });
+  });
+
+  /* Problem → system: pinned, and scroll position p (0 to 1) tells the
+     story. Each [data-at="a b"] element gets --t, its own 0 to 1 over that
+     span; each order shows the last status whose time has passed; the beat
+     being told is current. The HTML is the finished state, so p = 1 is the
+     page as written. Pinned only when it fits on screen (zoomed down a
+     little if it nearly fits); otherwise it stays a still before-and-after. */
+  $$('[data-scene="build"]').forEach(function (el) {
+    var grid = el.querySelector('.build__grid');
+    var dock = document.querySelector('[data-dock]');
+    var span = function (node, attr) { var r = node.getAttribute(attr).split(' ').map(Number); return { el: node, a: r[0], b: r[1] }; };
+    var timed = $$('[data-at]', el).map(function (n) { return span(n, 'data-at'); });
+    var beats = $$('[data-span]', el).map(function (n) { return span(n, 'data-span'); });
+    var orders = $$('[data-states]', el).map(function (n) {
+      var chip = n.querySelector('.order__state');
+      chip.addEventListener('animationend', function () { chip.classList.remove('is-changed'); });
+      return { chip: chip, states: JSON.parse(n.getAttribute('data-states')) };
+    });
+    var pinned = false;
+
+    function render(p) {
+      timed.forEach(function (x) { x.el.style.setProperty('--t', clamp01((p - x.a) / (x.b - x.a)).toFixed(3)); });
+      beats.forEach(function (x) {
+        x.el.classList.toggle('is-current', p >= x.a && p < x.b);
+        x.el.classList.toggle('is-done', p >= x.b);
+      });
+      orders.forEach(function (o) {
+        var state = o.states[0][1];
+        o.states.forEach(function (st) { if (p >= st[0]) state = st[1]; });
+        if (o.chip.getAttribute('data-state') !== state) {
+          o.chip.setAttribute('data-state', state);
+          o.chip.textContent = state;
+          o.chip.classList.add('is-changed');
+        }
+      });
+      el.classList.toggle('is-built', p >= 0.5);
+      el.style.setProperty('--swap', clamp01((p - 0.47) / 0.06).toFixed(3));
+    }
+
+    scenes.push({
+      el: el,
+      layout: function () {
+        el.classList.remove('is-pinned');
+        el.style.removeProperty('--fit');
+        pinned = false;
+        if (!reduceMotion.matches) {
+          el.classList.add('is-pinned');
+          // Phones show one beat at a time, and the scene's height changes
+          // from beat to beat: fit the tallest.
+          var tallest = 0;
+          beats.forEach(function (x) { render((x.a + Math.min(1, x.b)) / 2); tallest = Math.max(tallest, grid.offsetHeight); });
+          render(pinProgress(el));
+          // Leave room for the phone dock, which sits over the bottom of the screen.
+          var dockH = dock && getComputedStyle(dock).display !== 'none' ? dock.offsetHeight : 0;
+          el.style.setProperty('--dock-h', dockH + 'px');
+          var fit = (window.innerHeight - (nav ? nav.offsetHeight : 0) - dockH - 16) / tallest;
+          pinned = fit >= 0.72;
+          if (pinned) el.style.setProperty('--fit', Math.min(1, fit).toFixed(3));
+          else el.classList.remove('is-pinned');
+        }
+        if (!pinned) render(1);
+      },
+      update: function () { if (pinned) render(pinProgress(el)); },
+    });
   });
 
   /* Timeline line: fills as the list crosses the middle of the screen, and
