@@ -2,7 +2,7 @@
   <div class="wrap">
     <div class="footer__grid">
       <div class="footer__brand">
-        <a class="brand brand--lockup" href="/" aria-label="{{ site.name }}, home">
+        <a class="brand brand--lockup" href="/" aria-label="{{ site.name }} {{ site.descriptor }}, home">
           {% logo "brand__mark" %}
           <span class="brand__stack">
             <span class="brand__word">{{ site.name }}</span>
@@ -52,6 +52,7 @@
     <div class="footer__base mono">
       <span>© {{ build.year }} {{ site.name }}</span>
       <span>Built block by block</span>
+      <span class="footer__legal"><a href="/privacy.html">Privacy</a> <a href="/terms.html">Terms</a></span>
       <a href="#top" class="footer__top" data-to-top>Back to top <span aria-hidden="true">↑</span></a>
     </div>
   </div>

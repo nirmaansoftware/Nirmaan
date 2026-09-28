@@ -1,0 +1,60 @@
+---
+layout: base.njk
+title: "Privacy policy · Nirmaan"
+description: "What Nirmaan's websites collect, who processes it, and how to ask us to delete it. No cookies, no analytics, no ads."
+permalink: "/privacy.html"
+nav: "privacy"
+head:
+  eyebrow: "Privacy"
+  lines: ["Privacy", "policy."]
+  accent: 1
+  lede: "What our websites collect, who processes it, and how to ask us to delete it. Short version: only what you send us, no cookies, no analytics, no ads."
+  glyph: "01110/10001/11111/11011/11111"
+  crumbs: []
+  current: "Privacy policy"
+---
+{#- Keep this page true: whenever a site starts loading or sending to a new
+    third party, or starts storing something new, update it (docs/engineering/list.md, item 1). -#}
+<section class="section" aria-label="Privacy policy">
+  <div class="wrap legal">
+    <p class="legal__meta mono">Last updated 28 September 2026</p>
+
+    <h2>Who this covers</h2>
+    <p>This policy covers the websites run by {{ site.name }}: <a href="/">nirmaan.online</a> and <a href="https://ip.nirmaan.online/">ip.nirmaan.online</a>. {{ site.name }} is the data fiduciary for anything you send us through them. Questions go to <a href="mailto:{{ site.email }}">{{ site.email }}</a>.</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><strong>What you send us.</strong> If you fill in the enquiry form, we receive what you type: your name and email, and anything else you choose to tell us (phone, company, your problem, budget, timeline). If you email us or message us on WhatsApp, we receive that message and your address or number.</li>
+      <li><strong>Standard server logs.</strong> Our host records each request (IP address, browser, the page requested, and the time) to deliver the site and protect it from abuse.</li>
+    </ul>
+    <p>That is all. We do not use analytics, advertising, or tracking of any kind, and we do not build profiles of visitors.</p>
+
+    <h2>Cookies and storage</h2>
+    <p>Our websites set <strong>no cookies</strong>, which is why there is no cookie banner. nirmaan.online keeps two small things in your own browser, and neither leaves your device:</p>
+    <ul>
+      <li>your light or dark theme choice, if you pick one (local storage);</li>
+      <li>a note that lets a page's heading carry over smoothly to the next page (session storage, cleared when you close the tab).</li>
+    </ul>
+
+    <h2>Who processes it</h2>
+    <ul>
+      <li><strong>Vercel</strong> hosts the websites and keeps the server logs above.</li>
+      <li><strong>Web3Forms</strong> receives the enquiry form and emails it to us.</li>
+      <li><strong>Google</strong>: the pages load fonts from Google Fonts, which receives your IP address to deliver them, and our mailbox is Gmail.</li>
+      <li><strong>WhatsApp</strong>, if you choose to message us there.</li>
+    </ul>
+    <p>We do not sell or share your information with anyone else.</p>
+
+    <h2>Why, and for how long</h2>
+    <p>We use what you send us only to reply to you and, if we work together, to run the project. We keep enquiries for as long as we need them for that and for our business records, and delete them sooner if you ask. Server logs are kept by the host for a short period for security.</p>
+
+    <h2>Your rights</h2>
+    <p>Under India's Digital Personal Data Protection Act, 2023, you can ask us what we hold about you, to correct it, or to delete it, and you can raise a grievance with us. Email <a href="mailto:{{ site.email }}">{{ site.email }}</a> and we will act on it.</p>
+
+    <h2>Children</h2>
+    <p>Our websites are for businesses and are not directed at children.</p>
+
+    <h2>Changes</h2>
+    <p>If what we collect changes, we update this page and the date at the top first.</p>
+  </div>
+</section>

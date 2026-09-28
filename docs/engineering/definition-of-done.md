@@ -12,3 +12,5 @@ A feature is done only when:
 - [ ] Docs updated (and the status label in `/docs`)
 - [ ] Observable where it matters (audit, activity, usage ledger)
 - [ ] Typecheck, lint and build are clean; it deploys
+
+A website also has to pass the [launch list](list.md) before it goes live.

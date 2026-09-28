@@ -7,12 +7,12 @@
 
   <title>{{ title | safe }}</title>
   <meta name="description" content="{{ description }}" />
-  <meta name="robots" content="index, follow" />
-  <link rel="canonical" href="{{ site.url }}{{ permalink }}" />
+  <meta name="robots" content="{{ robots or 'index, follow' }}" />
+  <link rel="canonical" href="{{ site.url }}{{ page.url }}" />
 
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="{{ site.name }}" />
-  <meta property="og:url" content="{{ site.url }}{{ permalink }}" />
+  <meta property="og:url" content="{{ site.url }}{{ page.url }}" />
   <meta property="og:title" content="{{ title | safe }}" />
   <meta property="og:description" content="{{ ogDescription or description }}" />
   <meta property="og:image" content="{{ site.url }}/og-image.png" />

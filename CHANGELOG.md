@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-28: Website launch list, run on nirmaan.online
+
+- `docs/engineering/list.md`: the 20 things every website we build or run must
+  get right before launch (privacy policy to single clear CTA), each with what
+  "done" means, an owner, and how to check it. QA runs it and records each item
+  as PASS, FIXED or N/A; the definition of done points to it.
+- Run on nirmaan.online:
+  - New `/privacy.html`, `/terms.html` and a branded `/404.html`, linked from the footer.
+  - Fixed the canonical and `og:url` tags on the 24 service and pricing detail
+    pages, which contained an unrendered `{{ ... }}` permalink.
+  - Fixed two accessibility failures (dimmed journey stamps, the footer logo's
+    accessible name). Lighthouse accessibility 96 to 100.
+
 ## 2026-09-28: Motion design standard
 
 - `docs/engineering/motion.md`: how Nirmaan designs and builds motion, written
