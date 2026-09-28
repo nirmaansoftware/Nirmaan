@@ -223,12 +223,80 @@ tools: ["HTML5", "Modern CSS", "JavaScript", "React", "Next.js", "Node.js", "Pyt
       <p class="section__text">You approve the plan and the design before we build, and you always know where things stand. <a href="/process.html">See every deliverable</a>.</p>
     </div>
 
-    {#- Problem → system, with the customer's own words as the starting point.
-        Each step stamps its outcome as the line reaches it (site.js). #}
-    <figure class="journey__from" data-reveal>
-      <figcaption class="mono">It starts in your words</figcaption>
-      <blockquote class="journey__quote display">“We keep losing orders in&nbsp;WhatsApp.”</blockquote>
-    </figure>
+    {#- Problem → system, told as a pinned scene (site.js, [data-scene="build"]):
+        the customer's words become a system, as you scroll. Written in its
+        finished state, so without motion it is a before-and-after. #}
+    <div class="build" data-scene="build">
+      <div class="build__sticky">
+        <div class="build__grid">
+          <ol class="build__beats" role="list">
+            <li data-span="0 0.28"><span class="mono">It starts in your words</span><p class="journey__quote display">“We keep losing orders in&nbsp;WhatsApp.”</p></li>
+            <li data-span="0.28 0.5"><span class="mono">We find the structure</span><p>Every order is a customer, items and a date. The one that slipped through has no record at all.</p></li>
+            <li data-span="0.5 0.8"><span class="mono">We build the system</span><p>Orders land in one place, each with a status, instead of scrolling away in a chat.</p></li>
+            <li data-span="0.8 1.01"><span class="mono">Your team runs on it</span><p>Everyone sees what's due, and nothing is lost.</p></li>
+          </ol>
+
+          <figure class="build__stage">
+            <div class="chat">
+              <p class="build__label mono">Before: orders in a chat</p>
+              <ul class="chat__list" role="list">
+            <li class="msg" data-at="0.04 0.08">
+              <span class="msg__who">Ravi Traders <time class="mono">9:02</time></span>
+              <span class="msg__text">Need <mark data-at="0.30 0.34">20 kg basmati rice</mark> by <mark data-at="0.31 0.35">Friday</mark></span>
+            </li>
+            <li class="msg" data-at="0.08 0.12">
+              <span class="msg__who">Meena Stores <time class="mono">9:15</time></span>
+              <span class="msg__text">Same as last week: <mark data-at="0.33 0.37">12 packs atta</mark>, deliver <mark data-at="0.34 0.38">Thursday</mark></span>
+            </li>
+            <li class="msg" data-at="0.12 0.16">
+              <span class="msg__who">Hotel Sagar <time class="mono">9:31</time></span>
+              <span class="msg__text">Please send <mark data-at="0.36 0.40">8 L cooking oil</mark> <mark data-at="0.37 0.41">tomorrow</mark></span>
+            </li>
+            <li class="msg" data-at="0.16 0.20">
+              <span class="msg__who">Ravi Traders <time class="mono">10:05</time></span>
+              <span class="msg__text">Also add <mark data-at="0.39 0.43">5 kg dal</mark> to my order</span>
+            </li>
+            <li class="msg msg--lost" data-at="0.20 0.24">
+              <span class="msg__who">Anand Kirana <time class="mono">10:20</time></span>
+              <span class="msg__text">Did you get my order from Monday??</span>
+              <span class="msg__flag" data-at="0.43 0.47">No record of this order</span>
+            </li>
+              </ul>
+            </div>
+            <div class="sys">
+              <p class="build__label mono">After: one orders system</p>
+              <table class="orders">
+                <thead><tr><th scope="col">Order</th><th scope="col">Customer</th><th scope="col">Items</th><th scope="col">Due</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+              <tr data-at="0.52 0.56" data-states='[[0.52,"new"],[0.82,"confirmed"]]'>
+                <td class="mono">#1041</td><td>Ravi Traders</td><td>20 kg basmati rice, 5 kg dal</td><td>Fri</td>
+                <td><span class="order__state" data-state="confirmed">confirmed</span></td>
+              </tr>
+              <tr data-at="0.56 0.60" data-states='[[0.56,"new"],[0.84,"confirmed"]]'>
+                <td class="mono">#1042</td><td>Meena Stores</td><td>12 packs atta</td><td>Thu</td>
+                <td><span class="order__state" data-state="confirmed">confirmed</span></td>
+              </tr>
+              <tr data-at="0.60 0.64" data-states='[[0.60,"new"],[0.86,"confirmed"]]'>
+                <td class="mono">#1043</td><td>Hotel Sagar</td><td>8 L cooking oil</td><td>Tomorrow</td>
+                <td><span class="order__state" data-state="confirmed">confirmed</span></td>
+              </tr>
+              <tr data-at="0.64 0.68" data-states='[[0.64,"new"],[0.88,"follow up"]]'>
+                <td class="mono">#1044</td><td>Anand Kirana</td><td>Monday's order</td><td>Today</td>
+                <td><span class="order__state" data-state="follow up">follow up</span></td>
+              </tr>
+                </tbody>
+              </table>
+              <ul class="tiles" role="list">
+                <li data-at="0.90 0.94"><b>4</b> open orders</li>
+                <li data-at="0.92 0.96"><b>3</b> due by Friday</li>
+                <li data-at="0.94 0.98"><b>0</b> lost in chat</li>
+              </ul>
+            </div>
+            <figcaption class="mono">Illustration: a typical problem, and the kind of system we build for it.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
 
     <div class="timeline timeline--journey" data-scene="line">
       <span class="timeline__bar" aria-hidden="true"></span>

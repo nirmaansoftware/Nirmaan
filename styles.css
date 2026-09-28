@@ -748,7 +748,45 @@
   }
 
   /* ============ HOME: problem → system journey ============ */
-  .journey__from { display: grid; gap: var(--s2); margin-bottom: clamp(2.5rem, 1.5rem + 3vw, 4rem); padding-left: clamp(1rem, 0.5rem + 2vw, 2rem); border-left: 0.375rem solid var(--blue); }
+  /* Problem → system scene. Resting state (no motion): a before-and-after,
+     the chat beside the finished orders system. */
+  .build { margin-bottom: clamp(2.5rem, 1.5rem + 3vw, 4rem); }
+  .build__grid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.7fr); gap: clamp(2rem, 4vw, 4rem); align-items: center; }
+  .build__beats { display: grid; gap: var(--s4); }
+  .build__beats li { display: grid; gap: var(--s1); padding-left: clamp(1rem, 0.5rem + 1.5vw, 1.5rem); border-left: 0.375rem solid var(--line-2); }
+  .build__beats li:first-child { border-left-color: var(--blue); }
+  .build__beats .mono { font-size: var(--fs-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .build__beats p { color: var(--ink-2); }
+  .build__beats .journey__quote { font-size: clamp(1.6rem, 1.1rem + 1.8vw, 2.75rem); color: var(--ink); }
+  .build__stage { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.25fr); gap: var(--s3); align-items: start; margin: 0; }
+  .build__label { margin-bottom: var(--s1); font-size: var(--fs-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .build__stage figcaption { grid-column: 1 / -1; font-size: var(--fs-mono); color: var(--ink-3); }
+  .chat { padding: var(--s2); border: 1px solid var(--line-2); background: var(--paper-2); }
+  .chat__list { display: grid; gap: 0.5rem; }
+  .msg { display: grid; gap: 0.15rem; max-width: 92%; padding: 0.5rem 0.7rem; background: var(--paper); border: 1px solid var(--line); font-size: var(--fs-small); }
+  .msg:nth-child(odd) { justify-self: start; }
+  .msg:nth-child(even) { justify-self: end; }
+  .msg__who { font-size: 0.75rem; font-weight: 600; color: var(--ink-2); }
+  .msg__who time { font-weight: 400; font-size: 0.6875rem; color: var(--ink-3); margin-left: 0.35rem; }
+  .msg mark { background: var(--blue-wash); color: var(--ink); box-shadow: inset 0 -2px 0 var(--blue); padding: 0 0.1em; }
+  .msg--lost { border-style: dashed; border-color: var(--ink-3); }
+  .msg__flag { justify-self: start; margin-top: 0.2rem; padding: 0.05rem 0.4rem; font-family: var(--mono); font-size: 0.6875rem; color: var(--paper); background: var(--ink); }
+  .sys { display: grid; gap: var(--s2); min-width: 0; }
+  .orders { width: 100%; border-collapse: collapse; font-size: var(--fs-small); background: var(--paper); border: 1px solid var(--line-2); }
+  .orders th { text-align: left; font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line-2); }
+  .orders td { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .orders tr:last-child td { border-bottom: 0; }
+  .order__state { display: inline-block; white-space: nowrap; padding: 0.05rem 0.45rem; font-family: var(--mono); font-size: 0.75rem; border: 1px solid var(--line-2); color: var(--ink-3); }
+  .order__state[data-state="confirmed"] { color: var(--blue); border-color: var(--blue); background: var(--blue-wash); }
+  .order__state[data-state="follow up"] { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s1); }
+  .tiles li { padding: var(--s2); border: 1px solid var(--line-2); background: var(--paper); font-size: var(--fs-small); color: var(--ink-2); }
+  .tiles b { display: block; font-family: var(--display); font-weight: 800; font-size: 2rem; line-height: 1; color: var(--ink); }
+  .tiles li:last-child b { color: var(--blue); }
+  @media (max-width: 60rem) {
+    .build__grid, .build__stage { grid-template-columns: 1fr; }
+    .orders td:nth-child(1), .orders th:nth-child(1) { display: none; }
+  }
   .journey__quote { font-size: clamp(1.9rem, 1.2rem + 3vw, 3.75rem); max-width: 22ch; color: var(--ink); }
   .timeline--journey .timeline__list li::before { transition: background-color 0.4s, border-color 0.4s; }
   .timeline--journey .timeline__list li.is-reached::before { background: var(--blue); border-color: var(--blue); }
@@ -1552,6 +1590,40 @@
   /* Journey stamps press in as the line reaches each step. */
   /* Scale only: dimming the text would drop it below AA contrast. */
   .motion .timeline--journey li:not(.is-reached) .stamp { transform: scale(0.92); }
+
+  /* Problem → system scene, pinned and scrubbed by scroll (site.js sets
+     .is-pinned, --t on each [data-at] element, and each order's status). */
+  .build.is-pinned { height: 420vh; }
+  .build.is-pinned .build__sticky {
+    position: sticky; top: var(--nav-h); height: calc(100svh - var(--nav-h));
+    display: grid; align-items: center; overflow: hidden; padding-bottom: var(--dock-h, 0px);
+  }
+  .build.is-pinned .build__grid { zoom: var(--fit, 1); }
+  .build.is-pinned [data-at] { opacity: var(--t, 0); transform: translateY(calc((1 - var(--t, 0)) * 0.75rem)); }
+  .build.is-pinned .msg[data-at] { transform: translateY(calc((1 - var(--t, 0)) * 1.25rem)) scale(calc(0.94 + var(--t, 0) * 0.06)); }
+  .build.is-pinned mark[data-at] { opacity: 1; transform: none; background: rgb(0 0 0 / 0); box-shadow: inset 0 calc(-2px * var(--t, 0)) 0 var(--blue); }
+  .build.is-pinned tr[data-at] { transform: translateX(calc((1 - var(--t, 0)) * -2rem)); }
+  .build.is-pinned .chat { transition: opacity 0.4s var(--ease-out); }
+  /* The system appears only once it is being built (--swap: 0 to 1 around p = 0.5). */
+  .build.is-pinned .sys { opacity: var(--swap, 0); transform: translateY(calc((1 - var(--swap, 0)) * 1rem)); }
+  .build.is-pinned.is-built .chat { opacity: 0.45; }
+  .build.is-pinned .order__state { transition: color 0.3s, background-color 0.3s, border-color 0.3s; }
+  .build.is-pinned .order__state.is-changed { animation: chip-stamp 0.4s var(--ease-out); }
+  @keyframes chip-stamp { from { transform: scale(1.18); opacity: 0.4; } }
+  .build.is-pinned .build__beats li { opacity: 0.3; transition: opacity 0.35s var(--ease-out), border-color 0.35s; }
+  .build.is-pinned .build__beats li:first-child { border-left-color: var(--line-2); }
+  .build.is-pinned .build__beats li.is-done { opacity: 0.55; }
+  .build.is-pinned .build__beats li.is-current { opacity: 1; border-left-color: var(--blue); }
+  @media (max-width: 60rem) {
+    /* Phones: one beat at a time, and the chat hands over to the system in place. */
+    .build.is-pinned .build__beats li:not(.is-current) { display: none; }
+    .build.is-pinned .build__stage { grid-template-columns: 1fr; }
+    /* The caption leads, so it is never below the fold or under the dock. */
+    .build.is-pinned .chat, .build.is-pinned .sys { grid-area: 2 / 1; }
+    .build.is-pinned .build__stage figcaption { grid-area: 1 / 1; }
+    .build.is-pinned .chat { opacity: calc(1 - var(--swap, 0)); }
+    .build.is-pinned.is-built .chat { opacity: calc(1 - var(--swap, 0)); }
+  }
 
   /* Section rules are drawn across as each section arrives, like a line on a drawing. */
   .motion .section { position: relative; }

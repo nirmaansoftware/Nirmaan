@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-28: Home: the problem-to-system scene
+
+- The homepage's "We keep losing orders in WhatsApp" is now a scene, pinned
+  and told by scroll: orders pile into a chat and one is missed, the
+  structure in each message is found, the orders land in one system with a
+  status, and a small dashboard shows nothing lost. Written in its finished
+  state, so with reduced motion it is a still before-and-after. Phones show
+  one beat at a time, the chat hands over to the system in place, and the
+  scene is fitted between the nav and the dock.
+- The motion standard names the pattern: **scene**.
+
 ## 2026-09-28: Website launch list, run on nirmaan.online
 
 - `docs/engineering/list.md`: the 20 things every website we build or run must
