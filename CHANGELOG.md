@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-28: Self-hosted fonts
+
+- Archivo, Hanken Grotesk and JetBrains Mono are served from `/assets/fonts`
+  (Latin subset, variable, preloaded, with their OFL licenses) instead of
+  Google Fonts, so the first paint no longer waits on a third party.
+  Lighthouse mobile (local): performance 74 to 93, first paint 4.3 s to 1.8 s.
+- The privacy policy no longer lists Google Fonts: neither site loads it.
+
 ## 2026-09-28: Home: the problem-to-system scene
 
 - The homepage's "We keep losing orders in WhatsApp" is now a scene, pinned
