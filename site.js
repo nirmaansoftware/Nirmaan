@@ -10,7 +10,8 @@
     5. Scroll scenes, all driven from one rAF-throttled scroll loop:
          [data-scene="stack"]     layer tower builds as you scroll (pinned); on
                                   narrower screens the layer you're reading lights up
-         [data-scene="rail"]      services track moves sideways (pinned, all widths)
+         [data-scene="rail"]      services track moves sideways (pinned above phone
+                                  width); on phones it's a plain swipe row
          [data-scene="line"]      process timeline fills as it passes
          [data-scene="spy"]       process index highlights the step in view
 
@@ -309,9 +310,13 @@
     });
   });
 
-  /* Services rail: vertical scroll drives the track sideways, on every screen
-     tall enough to hold it (phones included), not only wide ones. */
-  function canPinRail() { return !reduceMotion.matches && window.innerHeight >= 520; }
+  /* Services rail: vertical scroll drives the track sideways on screens wider
+     than a phone and tall enough to hold it. On phones it isn't pinned: turning
+     three screens of thumb scroll into sideways motion felt like the page had
+     frozen, and a flick carried straight past it. There the cards are a
+     normal sideways swipe row (overflow-x with snap in styles.css). */
+  var phoneRail = window.matchMedia('(max-width: 48rem)');
+  function canPinRail() { return !reduceMotion.matches && !phoneRail.matches && window.innerHeight >= 520; }
   $$('[data-scene="rail"]').forEach(function (el) {
     var viewport = el.querySelector('[data-rail-viewport]');
     var track = el.querySelector('[data-rail-track]');
@@ -415,8 +420,19 @@
   }
 
   window.addEventListener('scroll', schedule, { passive: true });
-  window.addEventListener('resize', relayout);
+  // Phone browsers fire resize whenever the address bar hides or shows while
+  // scrolling. Re-laying out then (resetting the rail's height mid-scroll)
+  // made the page stutter and jump, so on touch screens only a width change
+  // counts. With a mouse, a height change is a real window resize.
+  var finePointer = window.matchMedia('(pointer: fine)');
+  var lastWidth = window.innerWidth;
+  window.addEventListener('resize', function () {
+    if (window.innerWidth === lastWidth && !finePointer.matches) return schedule();
+    lastWidth = window.innerWidth;
+    relayout();
+  });
   wide.addEventListener('change', relayout);
+  phoneRail.addEventListener('change', relayout);
   reduceMotion.addEventListener('change', relayout);
   // Web fonts change card widths, which changes the rail's travel distance.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayout);
