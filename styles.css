@@ -668,11 +668,6 @@
     align-content: center; padding-block: var(--s4);
   }
   .rail.is-pinned .rail__viewport { overflow: visible; }
-  /* Phones: keep the cards clear of the dock at the bottom of the screen. */
-  @media (max-width: 48rem) {
-    .rail.is-pinned .rail__sticky { padding-bottom: calc(var(--s4) + 4.5rem); gap: var(--s4); }
-    .rail.is-pinned .svc-card { min-height: min(20rem, 42svh); }
-  }
   .rail.is-pinned .rail__track { transform: translate3d(calc(var(--rail, 0) * var(--rail-distance, 0px) * -1), 0, 0); will-change: transform; }
 
   .svc-card {
@@ -1460,6 +1455,12 @@
       view-transition-name: dock;
     }
     .dock.is-shown { transform: none; }
+    /* No frosted blur on phones: re-blurring what's underneath on every
+       scroll frame made scrolling stutter. A near-solid bar instead. */
+    .nav, .dock {
+      -webkit-backdrop-filter: none; backdrop-filter: none;
+      background: color-mix(in srgb, var(--paper) 97%, transparent);
+    }
     .dock__cta { flex: 1; min-height: 3.25rem; }
     .dock__link {
       display: inline-grid; place-items: center; min-height: 3.25rem; padding: 0 1.1rem;
