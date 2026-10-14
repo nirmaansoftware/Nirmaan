@@ -1,5 +1,5 @@
 > **Historical record.** This is the original Agency OS plan (phases 0–9). The current plan is
-> [`strategy/roadmap.md`](strategy/roadmap.md) and the current state is [`assessment/current-state.md`](assessment/current-state.md).
+> [`strategy/roadmap.md`](../strategy/roadmap.md) and the current state is [`assessment/current-state.md`](../assessment/current-state.md).
 > Where they differ (9 gates instead of 6, `/os` instead of `/dashboard`, auth now implemented,
 > the public Agency OS page removed), the newer documents are correct.
 > Paths in it (`/app`) predate the 2026-10 restructure: `/app` is now `os/`.
