@@ -17,6 +17,6 @@ Rules:
 - Client-specific code and data never enter the library.
 - Library code lives in a **private** repository (this one is public).
 
-Already reusable today (internal): the `/app` auth, RBAC, audit, ID, intake
+Already reusable today (internal): the `/os` auth, RBAC, audit, ID, intake
 validation and traceability modules, and the public site's design system
 and glyph shortcode.

@@ -1,6 +1,6 @@
 # Model routing · IMPLEMENTED (per task type + complexity nudge) / PLANNED (criticality)
 
-`src/lib/model-router.ts` maps task types to models:
+`src/lib/ai/router.ts` maps task types to models:
 
 | Task type | Used for | Default tier |
 |---|---|---|

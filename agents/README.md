@@ -17,7 +17,7 @@ Every `agent.md` follows the same structure:
 
 ## Status
 
-All 25 agents from the architecture plan's Agent Architecture table (Section C) exist as `agent.md` specs, and all load cleanly through the real Phase 2 runtime (`app/src/lib/agents/loadAgent.ts` — see `app/src/lib/agents/allAgentsLoad.test.ts`):
+All 25 agents from the architecture plan's Agent Architecture table (Section C) exist as `agent.md` specs, and all load cleanly through the real Phase 2 runtime (`os/src/lib/agents/loadAgent.ts` — see `os/src/lib/agents/allAgentsLoad.test.ts`):
 
 - **Orchestrator** — [`orchestrator/`](orchestrator/agent.md)
 - **Discovery**: [`product-manager/`](product-manager/agent.md), [`business-analyst/`](business-analyst/agent.md), [`market-research/`](market-research/agent.md)
@@ -27,6 +27,6 @@ All 25 agents from the architecture plan's Agent Architecture table (Section C) 
 - **Ops/Quality**: [`devops-engineer/`](devops-engineer/agent.md), [`security-engineer/`](security-engineer/agent.md), [`qa-engineer/`](qa-engineer/agent.md), [`performance-engineer/`](performance-engineer/agent.md), [`sre/`](sre/agent.md)
 - **Cross-cutting**: [`legal-compliance/`](legal-compliance/agent.md), [`client-communication/`](client-communication/agent.md), [`finance-estimation/`](finance-estimation/agent.md)
 
-**What this does NOT mean yet:** none of these agents have been run against a real or realistic input and had their output inspected — that only happened for Product Manager, in Phase 2, using a mock model response. Every agent here is a reviewed, structurally-valid *specification*; none has been exercised end-to-end against a live model. That's Phase 5+ work (orchestration) and Phase 8 (evaluation harness) — see `/docs/architecture-plan.md`.
+**What this does NOT mean yet:** none of these agents have been run against a real or realistic input and had their output inspected — that only happened for Product Manager, in Phase 2, using a mock model response. Every agent here is a reviewed, structurally-valid *specification*; none has been exercised end-to-end against a live model. That's Phase 5+ work (orchestration) and Phase 8 (evaluation harness) — see `/docs/history/agency-os-plan.md`.
 
 No production deploy/execute capability is live anywhere in this repo. A few agents (DevOps Engineer, Design System Engineer, AI/ML Engineer, Frontend/Backend/Database Engineers) declare `execute` or `deploy` permissions in their frontmatter — those describe what the agent *would* be authorized to do once the permission-enforcement runtime exists (Phase 7) and, for anything destructive or production-facing, once a human-approval-gate runtime exists (referenced throughout as a hard constraint, not yet built as code). Declaring a permission in `agent.md` is not the same as the platform actually granting or enforcing it today.

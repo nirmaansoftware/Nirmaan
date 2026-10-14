@@ -2,17 +2,19 @@
 
 ## Public site · IMPLEMENTED
 
-Vercel from `main`; static output of Eleventy (`npm run build` at the root).
-`.vercelignore` keeps `app/`, `agents/`, `docs/`, `projects/` and `scripts/` out of
-the site deploy. `vercel.json` holds redirects (for example `/agency-os.html` →
-`/process.html#honest`) and baseline headers.
+Vercel from `main`. The Vercel project's **Root Directory is `website/public`**: that
+folder is the built site (Eleventy output, committed), so Vercel runs no build and
+publishes nothing else. Sources live in `website/src/`; rebuild with `npm run build`
+in `website/` and commit `public/`. `vercel.json` (in `website/src/static/`, copied to
+`public/`) holds redirects, for example `/agency-os.html` → `/process.html#honest`, and
+baseline headers.
 
 ## Nirmaan OS on Fly.io · IMPLEMENTED (os.nirmaan.online)
 
 One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and the campaign worker side by side
-(`app/scripts/start.sh`). The database (`/data/nirmaan.db`) and project files
+(`os/scripts/start.sh`). The database (`/data/nirmaan.db`) and project files
 (`/data/projects`) live on a persistent volume. Config: `fly.toml` and `Dockerfile.os`
-at the repo root; the image holds only `app/` and `agents/`.
+at the repo root; the image holds only `os/` and `agents/`.
 
 First setup (once):
 
@@ -33,7 +35,7 @@ Also add `https://os.nirmaan.online/api/auth/google/callback` to the Google OAut
 client's redirect URIs.
 
 Later deploys happen by themselves: `.github/workflows/os.yml` tests every change to
-`app/`, `agents/` or the Fly files (typecheck, lint, unit tests) and, once it's merged
+`os/`, `agents/` or the Fly files (typecheck, lint, unit tests) and, once it's merged
 to `main`, deploys it to Fly with the `FLY_API_TOKEN` repository secret (a deploy token
 for `nirmaan-os` only; renew yearly with `fly tokens create deploy -a nirmaan-os`).
 By hand, `fly deploy` from the repo root still works. Logs: `fly logs`. The worker's
@@ -64,7 +66,7 @@ Recommended first deployment (see `procurement.md`):
    or set `AGENTS_ROOT`).
 4. `npx prisma migrate deploy`, then create the founder:
    `NIRMAAN_PASSWORD=... npm run user:create -- you@… "Name" FOUNDER`.
-5. Set `intakeEndpoint` in the site's `src/_data/site.json` to
+5. Set `intakeEndpoint` in the site's `website/src/_data/site.json` to
    `https://os.nirmaan.online/api/intake` and redeploy the site.
 6. Nightly database backup off the machine, and a restore drill once.
 
@@ -82,7 +84,7 @@ account whose email matches it.
    name `Nirmaan OS`. Under **Authorized redirect URIs** add
    `http://localhost:3000/api/auth/google/callback`, and later the live one,
    `https://os.nirmaan.online/api/auth/google/callback`.
-3. Put the client ID and secret in `app/.env.local` (never in git):
+3. Put the client ID and secret in `os/.env.local` (never in git):
    `GOOGLE_CLIENT_ID=…` and `GOOGLE_CLIENT_SECRET=…`. Online, also set
    `NIRMAAN_OS_URL=https://os.nirmaan.online`.
 4. Make sure the owner has an OS account with the same email. Without a password

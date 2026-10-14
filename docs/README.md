@@ -4,7 +4,7 @@
 
 The operating manual for Nirmaan: what the company is, how work flows from a
 customer's problem to a maintained system, and how the software behind it
-(the Nirmaan OS in `/app`) is built.
+(the Nirmaan OS in `/os`) is built.
 
 **This repository is public.** These documents describe models, formulas and
 policies. They never contain real prices, margins, costs, client data or
@@ -34,7 +34,7 @@ Every document, and every capability inside one, is marked:
 | AI | [agent architecture](ai/agent-architecture.md) · [agent responsibilities](ai/agent-responsibilities.md) · [orchestration](ai/orchestration.md) · [model routing](ai/model-routing.md) · [evaluation](ai/evaluation.md) · [AI cost governance](ai/ai-cost-governance.md) |
 | Product | [portal architecture](product/portal-architecture.md) · [knowledge graph](product/project-knowledge-graph.md) · [client portal](product/client-portal.md) · [internal OS](product/internal-os.md) · [prospecting](product/prospecting.md) |
 | Strategy | [moat](strategy/moat.md) · [productization](strategy/productization.md) · [reusable IP](strategy/reusable-ip.md) · [roadmap](strategy/roadmap.md) · [risks](strategy/risks.md) |
-| History | [architecture-plan.md](architecture-plan.md): the original Agency OS plan (phases 0–9), kept as a record |
+| History | [history/](history/README.md): the original Agency OS plan, the OS build log and the 2026-09 website review. Kept as records, not as current guidance. |
 
 ## Where the 20 required planning artifacts live
 

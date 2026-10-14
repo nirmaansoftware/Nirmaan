@@ -1,7 +1,7 @@
 # Prospecting · IMPLEMENTED (EXPERIMENTAL until used on real outreach)
 
 Finding businesses Nirmaan could help, before they ask. Lives in the Nirmaan OS
-at **Pipeline → Prospects** (`/os/prospects`), code in `app/src/lib/prospecting/`.
+at **Pipeline → Prospects** (`/os/prospects`), code in `os/src/lib/prospecting/`.
 
 The website waits for people to bring a problem. Prospecting goes looking for the
 problem: businesses that match the [ideal customer](../company/ideal-customer-profile.md)
@@ -57,11 +57,11 @@ emails are approved one by one or all at once; WhatsApp messages are sent one ta
 time from our WhatsApp Business number ("Open in WhatsApp" → send → "Sent"). Each
 campaign shows replies and reply rate per channel, so the split can follow the evidence.
 
-**Running the worker** (in `app/`):
+**Running the worker** (in `os/`):
 
 ```text
 npm run campaigns:worker    # a tick every minute; leave it running
-npm run campaigns:tick      # one tick (for cron), e.g. */2 * * * * cd …/app && npm run campaigns:tick
+npm run campaigns:tick      # one tick (for cron), e.g. */2 * * * * cd …/os && npm run campaigns:tick
 ```
 
 Or press "Run one tick now" on the Campaigns page. It only works while the machine is

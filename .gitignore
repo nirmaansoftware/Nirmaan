@@ -5,12 +5,12 @@ node_modules/
 *.local
 
 # Next.js
-/app/.next/
-/app/out/
+/os/.next/
+/os/out/
 
 # Prisma (Phase 3)
-/app/prisma/dev.db
-/app/prisma/dev.db-journal
+/os/prisma/dev.db
+/os/prisma/dev.db-journal
 
 # iCloud Drive / Finder conflict copies ("file 2.ts", "folder 3"). This repo
 # lives in a synced folder; these must never be committed.

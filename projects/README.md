@@ -25,8 +25,8 @@ Every artifact file carries frontmatter per the Agent Handoff Protocol: `project
 
 ## Important — before any real client data goes in here
 
-**Do not use this public repository for real client project data.** This convention was designed to live in a **private** repository or private storage. Client briefs, contracts, and correspondence should not be committed to a public repo. This is flagged as an explicit risk in [`/docs/architecture-plan.md`](../docs/architecture-plan.md) (Risk Register, Section J).
+**Do not use this public repository for real client project data.** This convention was designed to live in a **private** repository or private storage. Client briefs, contracts, and correspondence should not be committed to a public repo. This is flagged as an explicit risk in [`/docs/history/agency-os-plan.md`](../docs/history/agency-os-plan.md) (Risk Register, Section J).
 
 ## Status
 
-No real project exists here yet. `demo-project/` is fixture data created by `app/prisma/seed.ts` (Phase 3) to exercise the dashboard — a fake client ("Riverside Bread Co."), not a real engagement, clearly labeled as such in its own files. The first real project directory gets created once there's an actual client engagement to run through the system, at which point the private-repo requirement above must be resolved first.
+No real project exists here yet. `demo-project/` is fixture data created by `os/prisma/seed.ts` (Phase 3) to exercise the dashboard — a fake client ("Riverside Bread Co."), not a real engagement, clearly labeled as such in its own files. The first real project directory gets created once there's an actual client engagement to run through the system, at which point the private-repo requirement above must be resolved first.
