@@ -800,7 +800,7 @@
     transition: background-color 0.35s, color 0.35s, border-color 0.35s, transform 0.5s var(--ease-out);
   }
   .is-reached .stamp { background: var(--blue-wash); border-color: var(--blue); color: var(--blue); }
-  .stamp--approve::after { content: "you approve"; margin-left: 0.2rem; padding-left: 0.5rem; border-left: 1px solid currentColor; }
+  .stamp--approve::after { content: "you approve"; margin-left: 0.2rem; padding-left: 0.5rem; border-left: 1px solid currentColor; opacity: 0.75; }
   .journey__to { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: var(--s2) var(--s4); margin-top: clamp(2.5rem, 1.5rem + 3vw, 4rem); padding-top: var(--s4); border-top: 1px solid var(--line-2); font-size: var(--fs-lede); color: var(--ink-2); }
   .journey__to b { color: var(--ink); font-weight: 600; }
   @media (max-width: 40rem) { .journey__to { grid-template-columns: 1fr; } }
@@ -1598,7 +1598,7 @@
 
   /* Journey stamps press in as the line reaches each step. */
   /* Scale only: dimming the text would drop it below AA contrast. */
-  .motion .timeline--journey li:not(.is-reached) .stamp { transform: scale(0.92); }
+  .motion .timeline--journey li:not(.is-reached) .stamp { transform: scale(0.92); opacity: 0.55; }
 
   /* Problem → system scene, pinned and scrubbed by scroll (site.js sets
      .is-pinned, --t on each [data-at] element, and each order's status). */
