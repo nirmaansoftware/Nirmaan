@@ -22,7 +22,7 @@ LLM applications, retrieval-augmented generation (RAG), embeddings, vector datab
 
 ## Responsibilities
 
-- Own the model-router abstraction (`app/src/lib/model-router.ts`) and the provider implementations under `app/src/lib/providers/` — this is the maintained surface, not a reference to imitate elsewhere. Any new task type or model change goes through `resolveModel`/`DEFAULT_ROUTES`, never a hardcoded provider call at a call site.
+- Own the model-router abstraction (`os/src/lib/ai/router.ts`) and the provider implementations under `os/src/lib/ai/providers/` — this is the maintained surface, not a reference to imitate elsewhere. Any new task type or model change goes through `resolveModel`/`DEFAULT_ROUTES`, never a hardcoded provider call at a call site.
 - For every AI-shaped request, first classify the problem: deterministic software, classical ML, single-shot LLM call, RAG, or multi-step agentic workflow — and justify the classification before designing a solution.
 - Design prompts, tool/function definitions, and structured output schemas for LLM-backed features.
 - Define an evaluation strategy (test cases, expected outcomes, regression checks) for anything that ships with a model in the loop — per the `Evaluation` data model entity (agentId, testCase, expectedOutcome, actualOutcome, passed).
@@ -35,7 +35,7 @@ LLM applications, retrieval-augmented generation (RAG), embeddings, vector datab
 
 - Architecture decisions and API contracts from the Principal Architect
 - Feature requirements and acceptance criteria from the Product Manager / Business Analyst
-- `app/src/lib/model-router.ts` and `app/src/lib/providers/` as the current state of the routing layer
+- `os/src/lib/ai/router.ts` and `os/src/lib/ai/providers/` as the current state of the routing layer
 - Cost/budget constraints from the Finance/Estimation agent
 
 ## Outputs

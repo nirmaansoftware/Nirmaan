@@ -1,0 +1,938 @@
+// Data model per /docs/architecture-plan.md Section E.
+//
+// SQLite for now (Phase 3 — zero infra, single-founder scale). See the
+// architecture plan's Technology Decisions for the migration trigger to
+// Postgres. Two SQLite-specific simplifications, both called out inline:
+//   - No native enum type: status/stage/gate fields are plain String
+//     columns. The allowed values are enforced in the TypeScript layer
+//     (src/lib/db/enums.ts), not the database.
+//   - No native scalar list type: list fields (dependencies, blockers,
+//     assumptions, tags, ...) are stored as JSON-encoded TEXT and
+//     parsed/serialized in application code (src/lib/db/json.ts).
+//
+// Artifact CONTENT is never stored here — only a pointer (filePath) into
+// /projects/{id}/... on disk. That's the whole point of the file-based
+// artifact convention (versioning for free via git).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  // Locally file:./dev.db (os/.env, relative to this folder); on the server
+  // a file on the persistent disk, e.g. file:/data/nirmaan.db.
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id              String           @id @default(cuid())
+  name            String
+  contact         String? // free-text for now; not enough client volume yet to justify structured fields
+  email           String? // primary contact email (Phase 1: taken from the lead that converted)
+  company         String?
+  projects        Project[]
+  leads           Lead[]
+  invoices        Invoice[]
+  subscriptions   Subscription[]
+  users           User[]
+  supportRequests SupportRequest[]
+  createdAt       DateTime         @default(now())
+}
+
+model Project {
+  id              String           @id @default(cuid())
+  // Human-readable id, e.g. PRJ-003 (see src/lib/ids.ts). Nullable only
+  // because projects created before Phase 1 have none.
+  code            String?          @unique
+  name            String
+  clientId        String?
+  client          Client?          @relation(fields: [clientId], references: [id])
+  // LEAD|DISCOVERY|REQUIREMENTS|ESTIMATION|PROPOSAL|APPROVED|PLANNING|
+  // DESIGN|ARCHITECTURE|IMPLEMENTATION|QA|SECURITY_REVIEW|DEPLOYMENT|
+  // MONITORING|MAINTENANCE — see src/lib/db/enums.ts#PROJECT_STAGES
+  stage           String           @default("LEAD")
+  // Directory name under /projects/ at the repo root, e.g. "demo-project"
+  artifactsPath   String
+  tasks           Task[]
+  artifacts       Artifact[]
+  approvals       Approval[]
+  events          Event[]
+  deployments     Deployment[]
+  knowledge       Knowledge[]
+  // Phase 1 business links
+  leadId          String?
+  lead            Lead?            @relation(fields: [leadId], references: [id])
+  proposalId      String?          @unique
+  proposal        Proposal?        @relation("ProjectProposal", fields: [proposalId], references: [id])
+  // sha256 of the client status-page token (/status/<token>); raw token is
+  // shown once and never stored.
+  statusTokenHash String?          @unique
+  requirements    Requirement[]
+  features        Feature[]
+  testCases       TestCase[]
+  changeRequests  ChangeRequest[]
+  // Phase 2: AI software factory
+  agentRuns       AgentRun[]
+  // Spend cap for automated agent work on this project (USD). Null = no automated dispatch.
+  aiBudgetUsd     Float?
+  // sha256 of the CI token allowed to post test evidence (/api/ci/evidence)
+  ciTokenHash     String?          @unique
+  // Phase 3: Financial OS
+  // One of the pricing packages / service areas (src/lib/db/enums.ts#SERVICE_TYPES),
+  // so estimate-vs-actual can be compared by kind of work.
+  serviceType     String?
+  invoices        Invoice[]
+  costEntries     CostEntry[]
+  subscriptions   Subscription[]
+  postMortem      PostMortem?
+  assetUses       AssetUse[]
+  supportRequests SupportRequest[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  code         String?    @unique // TASK-042
+  title        String
+  description  String?
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id])
+  ownerAgent   String? // agent slug, matches /agents/<slug>
+  // BACKLOG|READY|IN_PROGRESS|BLOCKED|REVIEW|APPROVED|DONE
+  status       String     @default("BACKLOG")
+  // LOW|MEDIUM|HIGH
+  priority     String     @default("MEDIUM")
+  dependencies String     @default("[]") // JSON array of Task ids
+  estimate     String?
+  actual       String?
+  blockers     String     @default("[]") // JSON array of strings
+  artifacts    Artifact[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Agent {
+  id          String       @id @default(cuid())
+  slug        String       @unique // matches /agents/<slug>/agent.md
+  role        String
+  // ACTIVE|DRAFT|DISABLED
+  status      String       @default("DRAFT")
+  permissions String       @default("{}") // JSON-encoded AgentPermissions
+  artifacts   Artifact[]
+  evaluations Evaluation[]
+  createdAt   DateTime     @default(now())
+}
+
+model Artifact {
+  id               String       @id @default(cuid())
+  projectId        String
+  project          Project      @relation(fields: [projectId], references: [id])
+  taskId           String?
+  task             Task?        @relation(fields: [taskId], references: [id])
+  // PRD|ADR|UX_SPEC|DESIGN_SPEC|API_SPEC|SCHEMA|TEST_REPORT|SECURITY_REPORT|
+  // DEPLOYMENT_PLAN|... — open-ended by design, agents keep adding types
+  type             String
+  // Path relative to /projects/{projectId}/, e.g. "requirements/prd.md".
+  // Content lives on disk, never duplicated here.
+  filePath         String
+  version          Int          @default(1)
+  createdByAgentId String?
+  createdByAgent   Agent?       @relation(fields: [createdByAgentId], references: [id])
+  deployments      Deployment[]
+  createdAt        DateTime     @default(now())
+}
+
+model Approval {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  // REQUIREMENTS|DESIGN|ARCHITECTURE|IMPLEMENTATION|QA|PRODUCTION — see src/lib/db/enums.ts#APPROVAL_GATES
+  gate        String
+  // PENDING|APPROVED|REJECTED
+  status      String    @default("PENDING")
+  requestedBy String // agent slug, or "human"
+  decidedBy   String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  agentSlug String?
+  taskId    String?
+  message   String
+  timestamp DateTime @default(now())
+}
+
+model Knowledge {
+  id        String   @id @default(cuid())
+  // GLOBAL|PROJECT|AGENT
+  scope     String
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  agentSlug String?
+  title     String
+  content   String
+  tags      String   @default("[]") // JSON array of strings
+  // Phase 4: MANUAL | POST_MORTEM, and who wrote it
+  source    String   @default("MANUAL")
+  author    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Evaluation {
+  id              String   @id @default(cuid())
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id])
+  testCase        String
+  expectedOutcome String
+  actualOutcome   String?
+  passed          Boolean?
+  runAt           DateTime @default(now())
+}
+
+model Deployment {
+  id           String    @id @default(cuid())
+  code         String?   @unique // DEPLOY-012
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id])
+  environment  String // e.g. "production", "staging"
+  // PENDING|IN_PROGRESS|SUCCEEDED|FAILED|ROLLED_BACK
+  status       String    @default("PENDING")
+  deployedAt   DateTime?
+  rollbackPlan String?
+  artifactId   String?
+  artifact     Artifact? @relation(fields: [artifactId], references: [id])
+}
+
+// ---------------------------------------------------------------------
+// Phase 1: Business OS (see /docs/strategy/roadmap.md)
+// Money is stored as whole Indian rupees (Int). Allowed string values are
+// enforced in src/lib/db/enums.ts, as for every other status column here.
+// ---------------------------------------------------------------------
+
+// Internal team member. Clients do not have accounts in Phase 1; they act
+// through capability links (see Proposal.shareTokenHash, Project.statusTokenHash).
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique // stored lower-cased
+  name         String
+  // FOUNDER|CTO|PROJECT_MANAGER|ENGINEER|DESIGNER|QA|FINANCE|SUPPORT
+  role         String
+  passwordHash String // scrypt, see src/lib/auth/password.ts
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  // Phase 4: set for CLIENT_ADMIN / CLIENT_USER accounts. Every portal query
+  // is scoped to this client.
+  clientId     String?
+  client       Client?   @relation(fields: [clientId], references: [id])
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  // sha256 of the cookie value; the raw token only ever lives in the cookie
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// Security-relevant actions across the whole system (who did what to which
+// object). Distinct from Event, which is a per-project activity feed.
+model AuditLog {
+  id         String   @id @default(cuid())
+  // USER|CLIENT_LINK|SYSTEM|AGENT|PUBLIC
+  actorType  String
+  actorId    String? // user id, agent slug, or null
+  actorLabel String // human-readable, e.g. "Om Patel" or "Client via proposal link"
+  action     String // e.g. "proposal.sent", "lead.status_changed"
+  entityType String
+  entityId   String
+  detail     String? // redacted free text
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// Atomic per-prefix counters behind human-readable ids (REQ-104).
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
+
+model Lead {
+  id              String          @id @default(cuid())
+  code            String          @unique // LEAD-001
+  // NEW|DISCOVERY|QUALIFIED|PROPOSAL|WON|LOST|SPAM
+  status          String          @default("NEW")
+  // WEBSITE|MANUAL|REFERRAL|OUTBOUND
+  source          String          @default("WEBSITE")
+  // The customer's own words. Never rewritten; discovery works from it.
+  problem         String
+  business        String?
+  currentSolution String?
+  affected        String?
+  frequency       String?
+  scale           String?
+  existingSystems String?
+  desiredOutcome  String?
+  budgetRange     String?
+  timeline        String?
+  urgency         String?
+  // What the visitor clicked before asking: a package, care plan or service
+  // from the public site (e.g. "Growth package (from ₹35,000 · 3–4 weeks)").
+  interest        String?
+  contactName     String
+  contactEmail    String
+  contactPhone    String?
+  company         String?
+  lostReason      String?
+  ownerId         String?
+  clientId        String?
+  client          Client?         @relation(fields: [clientId], references: [id])
+  discovery       DiscoveryItem[]
+  requirements    Requirement[]
+  proposals       Proposal[]
+  projects        Project[]
+  notes           LeadNote[]
+  // Set when the lead came from outbound prospecting (source OUTBOUND).
+  prospect        Prospect?
+  lastActivityAt  DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([status])
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    String
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// Discovery output, kept strictly typed so a guess can never silently
+// become a requirement (see src/lib/discovery/items.ts#promoteToRequirement).
+model DiscoveryItem {
+  id          String       @id @default(cuid())
+  leadId      String
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  // FACT|ASSUMPTION|QUESTION|RECOMMENDATION
+  kind        String
+  text        String
+  // CLIENT|AGENT|TEAM
+  source      String
+  // OPEN|CONFIRMED|REJECTED|ANSWERED
+  status      String       @default("OPEN")
+  answer      String?
+  // Which agent run produced it (AiUsage.id), if any
+  aiUsageId   String?
+  requirement Requirement?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Requirement {
+  id                 String         @id @default(cuid())
+  code               String         @unique // REQ-104
+  leadId             String?
+  lead               Lead?          @relation(fields: [leadId], references: [id])
+  projectId          String?
+  project            Project?       @relation(fields: [projectId], references: [id])
+  // BUSINESS|FUNCTIONAL|NON_FUNCTIONAL|CONSTRAINT
+  kind               String
+  statement          String
+  acceptanceCriteria String         @default("[]") // JSON list of strings
+  // MUST|SHOULD|COULD|WONT
+  priority           String         @default("MUST")
+  // DRAFT|APPROVED|CHANGED|DROPPED
+  status             String         @default("DRAFT")
+  sourceItemId       String?        @unique
+  sourceItem         DiscoveryItem? @relation(fields: [sourceItemId], references: [id])
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+}
+
+model Feature {
+  id          String   @id @default(cuid())
+  code        String   @unique // FEAT-027
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id])
+  title       String
+  description String?
+  // PLANNED|IN_PROGRESS|DONE
+  status      String   @default("PLANNED")
+  createdAt   DateTime @default(now())
+}
+
+model TestCase {
+  id        String     @id @default(cuid())
+  code      String     @unique // TEST-031
+  projectId String
+  project   Project    @relation(fields: [projectId], references: [id])
+  title     String
+  // STATIC|UNIT|INTEGRATION|E2E|SECURITY|PERFORMANCE|SMOKE|QA
+  level     String
+  evidence  Evidence[]
+  createdAt DateTime   @default(now())
+}
+
+// Proof, not claims: "14/14 unit tests passed", recorded against a test case.
+model Evidence {
+  id         String   @id @default(cuid())
+  testCaseId String
+  testCase   TestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+  // PASS|FAIL
+  result     String
+  passed     Int      @default(0)
+  total      Int      @default(0)
+  summary    String
+  link       String? // CI run, report, screenshot
+  // MANUAL | CI. For CI, runRef makes re-posting the same run idempotent.
+  source     String   @default("MANUAL")
+  runRef     String?
+  recordedBy String
+  recordedAt DateTime @default(now())
+
+  @@unique([testCaseId, runRef])
+}
+
+// Edges of the project knowledge graph. Nodes are addressed by their
+// human-readable code (REQ-104 -> FEAT-027), which is stable and unique
+// across every table.
+model TraceLink {
+  id        String   @id @default(cuid())
+  projectId String
+  fromCode  String
+  toCode    String
+  // SATISFIED_BY (REQ->FEAT) | IMPLEMENTED_BY (FEAT->TASK) | VERIFIED_BY (REQ|FEAT|TASK->TEST) | SHIPPED_IN (FEAT|TASK->DEPLOY)
+  relation  String
+  createdAt DateTime @default(now())
+
+  @@unique([fromCode, toCode, relation])
+  @@index([projectId])
+}
+
+model Proposal {
+  id              String    @id @default(cuid())
+  code            String    @unique // PROP-007
+  leadId          String
+  lead            Lead      @relation(fields: [leadId], references: [id])
+  version         Int       @default(1)
+  // DRAFT|SENT|CLARIFICATION_REQUESTED|APPROVED|REJECTED|SUPERSEDED
+  status          String    @default("DRAFT")
+  title           String
+  problem         String
+  solution        String
+  scope           String    @default("[]") // JSON list
+  outOfScope      String    @default("[]")
+  deliverables    String    @default("[]")
+  milestones      String    @default("[]") // JSON [{ name, weeks }]
+  technology      String?
+  priceTotal      Int       @default(0) // INR
+  paymentSchedule String    @default("[]") // JSON [{ label, percent }], must sum to 100
+  maintenance     String? // JSON { name, monthly, includes[] } or null
+  assumptions     String    @default("[]")
+  changePolicy    String
+  validUntil      DateTime?
+  // Internal economics: never rendered on the client page
+  estHours        Int       @default(0)
+  estCostHuman    Int       @default(0)
+  estCostAi       Int       @default(0)
+  estCostInfra    Int       @default(0)
+  estCostOther    Int       @default(0)
+  shareTokenHash  String?   @unique
+  sentAt          DateTime?
+  decidedAt       DateTime?
+  decidedByName   String?
+  clientNote      String?
+  project         Project?  @relation("ProjectProposal")
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ChangeRequest {
+  id            String    @id @default(cuid())
+  code          String    @unique // CR-004
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id])
+  requestedBy   String
+  description   String
+  // null until assessed
+  inScope       Boolean?
+  impact        String?
+  costDelta     Int       @default(0) // INR
+  timelineDelta Int       @default(0) // days
+  // OPEN|ASSESSED|APPROVED|REJECTED|CONVERTED
+  status        String    @default("OPEN")
+  taskId        String? // set when converted into normal work
+  decidedBy     String?
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// One row per model call. The basis for AI cost governance.
+model AiUsage {
+  id           String   @id @default(cuid())
+  task         String // e.g. "discovery"
+  agentSlug    String?
+  provider     String
+  model        String
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Float? // real when the provider reports it, else estimated, else null
+  costSource   String // REPORTED|ESTIMATED|UNKNOWN
+  latencyMs    Int
+  success      Boolean
+  error        String?
+  leadId       String?
+  projectId    String?
+  prospectId   String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------
+// Phase 2: AI software factory
+// ---------------------------------------------------------------------
+
+// A structured, human-reviewed agent output that shapes the project: the
+// Solution Architect's recommendation or the Planner's feature/task plan.
+// Kept in the database (not /projects files) because it's client-specific.
+model AgentRun {
+  id         String    @id @default(cuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id])
+  // ARCHITECTURE | PLAN
+  kind       String
+  agentSlug  String
+  // PROPOSED | ACCEPTED | REJECTED
+  status     String    @default("PROPOSED")
+  summary    String
+  output     String // validated JSON (see src/lib/factory/*)
+  usageId    String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?
+  createdAt  DateTime  @default(now())
+
+  @@index([projectId, kind])
+}
+
+// ---------------------------------------------------------------------
+// Phase 3: Financial OS. Money is whole rupees (Int).
+// ---------------------------------------------------------------------
+
+// Company-wide finance settings. A single row with id "company".
+model CompanySettings {
+  id                  String   @id @default("company")
+  legalName           String   @default("Nirmaan")
+  gstin               String?
+  // Applied to new invoices. 0 until the business is GST-registered.
+  taxRatePercent      Int      @default(0)
+  // Converts the AI ledger's USD into INR for project costs.
+  usdToInr            Float    @default(84)
+  // Loaded internal cost of one hour of human effort, for effort-based cost entries.
+  hourlyCost          Int      @default(0)
+  invoiceDueDays      Int      @default(7)
+  paymentInstructions String?
+  updatedAt           DateTime @updatedAt
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  code            String        @unique // INV-001
+  projectId       String?
+  project         Project?      @relation(fields: [projectId], references: [id])
+  clientId        String?
+  client          Client?       @relation(fields: [clientId], references: [id])
+  // MILESTONE | CHANGE | RECURRING | OTHER
+  kind            String
+  label           String
+  subtotal        Int
+  taxRatePercent  Int           @default(0)
+  tax             Int           @default(0)
+  total           Int
+  // DRAFT | ISSUED | PAID | VOID (overdue = ISSUED and past dueDate)
+  status          String        @default("DRAFT")
+  issuedAt        DateTime?
+  dueDate         DateTime?
+  paidAt          DateTime?
+  changeRequestId String?       @unique
+  subscriptionId  String?
+  subscription    Subscription? @relation(fields: [subscriptionId], references: [id])
+  // For recurring invoices: the month it covers, so a month is never billed twice.
+  periodStart     DateTime?
+  payments        Payment[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([subscriptionId, periodStart])
+  @@index([status])
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  invoiceId  String
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
+  amount     Int
+  // BANK | UPI | CARD | CASH | OTHER
+  method     String
+  reference  String?
+  receivedAt DateTime
+  recordedBy String
+  createdAt  DateTime @default(now())
+}
+
+// Actual costs of delivering a project. AI cost is not entered here: it is
+// read live from the AiUsage ledger (so it can't drift or be double counted).
+model CostEntry {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id])
+  // HUMAN | INFRA | EXTERNAL_AI | OTHER
+  category   String
+  amount     Int
+  hours      Float?
+  note       String
+  incurredOn DateTime
+  recordedBy String
+  createdAt  DateTime @default(now())
+}
+
+model Subscription {
+  id              String    @id @default(cuid())
+  code            String    @unique // SUB-001
+  clientId        String
+  client          Client    @relation(fields: [clientId], references: [id])
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id])
+  name            String
+  monthly         Int
+  // ACTIVE | PAUSED | CANCELLED
+  status          String    @default("ACTIVE")
+  startDate       DateTime
+  nextInvoiceDate DateTime
+  cancelledAt     DateTime?
+  invoices        Invoice[]
+  createdAt       DateTime  @default(now())
+}
+
+// Declared here (Phase 3 relation on Project); used by Phase 4.
+model PostMortem {
+  id             String   @id @default(cuid())
+  projectId      String   @unique
+  project        Project  @relation(fields: [projectId], references: [id])
+  wentWell       String
+  wentWrong      String
+  rework         String
+  underestimated String
+  reusable       String
+  automate       String
+  pricing        String
+  process        String
+  // Snapshot of estimate vs actual at the time of writing (JSON)
+  economics      String   @default("{}")
+  createdBy      String
+  createdAt      DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------
+// Phase 4: Knowledge and IP
+// ---------------------------------------------------------------------
+
+// A reusable piece of Nirmaan IP: a component, pattern or template harvested
+// from delivered work. Client-specific code never goes in here.
+model Asset {
+  id           String     @id @default(cuid())
+  code         String     @unique // IP-004
+  name         String
+  // see src/lib/db/enums.ts#ASSET_CATEGORIES
+  category     String
+  version      String     @default("0.1.0")
+  description  String
+  dependencies String     @default("[]") // JSON list
+  usage        String // how to use it (markdown)
+  // EXPERIMENTAL | USED_ONCE | PROVEN
+  maturity     String     @default("EXPERIMENTAL")
+  owner        String
+  docsUrl      String?
+  repoUrl      String?
+  uses         AssetUse[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model AssetUse {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([assetId, projectId])
+}
+
+model SupportRequest {
+  id         String    @id @default(cuid())
+  code       String    @unique // SR-012
+  clientId   String
+  client     Client    @relation(fields: [clientId], references: [id])
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id])
+  subject    String
+  body       String
+  // LOW | NORMAL | URGENT
+  priority   String    @default("NORMAL")
+  // OPEN | IN_PROGRESS | RESOLVED
+  status     String    @default("OPEN")
+  response   String?
+  openedBy   String
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------
+// Prospecting: finding businesses Nirmaan could help, before they ask.
+// See /docs/product/prospecting.md. Nothing here reaches a business until a
+// person approves the exact message (OutreachMessage.status APPROVED/SENT).
+// ---------------------------------------------------------------------
+
+// One "find me X in Y" run.
+model ProspectSearch {
+  id         String     @id @default(cuid())
+  // What to look for and where, in plain words: "dental clinics", "Ahmedabad"
+  query      String
+  location   String
+  // LOCAL_SERVICE | RETAIL_D2C | SME_OPS (src/lib/db/enums.ts#PROSPECT_SEGMENTS)
+  segment    String
+  // Sources actually used: JSON array of PLACES | WEB
+  sources    String     @default("[]")
+  found      Int        @default(0)
+  added      Int        @default(0)
+  // Anything that went wrong with one source while the other still worked.
+  notes      String?
+  createdBy  String
+  // Set when a campaign ran this search on its own.
+  campaignId String?
+  campaign   Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  prospects  Prospect[]
+  createdAt  DateTime   @default(now())
+
+  @@index([campaignId, createdAt])
+}
+
+model Prospect {
+  id               String            @id @default(cuid())
+  code             String            @unique // PROS-014
+  searchId         String?
+  search           ProspectSearch?   @relation(fields: [searchId], references: [id], onDelete: SetNull)
+  // The campaign that found it first; its drafts and follow-ups follow that campaign\'s settings.
+  campaignId       String?
+  campaign         Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  repliedAt        DateTime?
+  // PLACES | WEB | MANUAL
+  source           String
+  // The same business found twice (by Places id, website domain or name+city) is one prospect.
+  dedupeKey        String            @unique
+  // Also matched when merging, so Places and web results for one business meet:
+  // its own website domain and its name in its city (src/lib/prospecting/basics.ts).
+  domain           String?
+  nameKey          String
+  placeId          String?
+  name             String
+  segment          String
+  category         String?
+  address          String?
+  city             String?
+  website          String?
+  phone            String?
+  email            String?
+  // Where the email came from (their website, web search), so it can be checked.
+  emailSource      String?
+  rating           Float?
+  ratingCount      Int?
+  mapsUrl          String?
+  // What the web search said about them, if found that way.
+  sourceNote       String?
+  // NEW | AUDITED | DRAFTED | CONTACTED | REPLIED | CONVERTED | DISMISSED | DO_NOT_CONTACT
+  status           String            @default("NEW")
+  // Website check (JSON of src/lib/prospecting/siteSignals.ts#SiteSignals) and when it ran
+  siteSignals      String?
+  auditedAt        DateTime?
+  // Claude's fit assessment against the ICP and the packages
+  fitScore         Int?
+  suggestedPackage String?
+  problem          String?
+  evidence         String            @default("[]") // JSON array of strings
+  dismissedReason  String?
+  leadId           String?           @unique
+  lead             Lead?             @relation(fields: [leadId], references: [id])
+  messages         OutreachMessage[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([status])
+  @@index([fitScore])
+  @@index([campaignId, status])
+  @@index([domain])
+  @@index([nameKey])
+  @@index([placeId])
+}
+
+model OutreachMessage {
+  id           String    @id @default(cuid())
+  prospectId   String
+  prospect     Prospect  @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  // EMAIL | WHATSAPP
+  channel      String
+  toAddress    String
+  subject      String?
+  body         String
+  // DRAFT → APPROVED (email queued for paced sending) → SENT; or FAILED | CANCELLED
+  status       String    @default("DRAFT")
+  // 0 = first message, 1+ = follow-ups in the same thread
+  step         Int       @default(0)
+  campaignId   String?
+  // Approved emails wait until this time, so sending is spread out like a person\'s.
+  scheduledFor DateTime?
+  // Email threading: our Message-ID once sent, and the first message\'s, which follow-ups reply to.
+  messageRef   String?
+  threadRef    String?
+  // AGENT | USER
+  draftedBy    String
+  // Who approved it, and how it went out: EMAIL (sent by the OS) or MANUAL (sent by a person)
+  approvedBy   String?
+  sentVia      String?
+  sentAt       DateTime?
+  sendError    String?
+  providerId   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, sentAt])
+  @@index([status, scheduledFor])
+  @@index([campaignId, channel, createdAt])
+}
+
+// Do not contact: an email, phone or website domain that must never get outreach.
+model Suppression {
+  id        String   @id @default(cuid())
+  value     String   @unique // lowercased email, digits-only phone, or bare domain
+  reason    String
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+// A standing goal ("dental clinics in Gujarat's big cities that book only by
+// phone") that the OS works on every day: searching, checking, drafting and
+// following up within daily budgets. A person still approves every message.
+model Campaign {
+  id                   String           @id @default(cuid())
+  code                 String           @unique // CAMP-003
+  // Created and steered by autopilot (src/lib/prospecting/autopilot.ts), not by a person.
+  autopilot            Boolean          @default(false)
+  name                 String
+  // The goal in plain words, as the founder wrote it.
+  goal                 String
+  segment              String
+  // DRAFT | ACTIVE | PAUSED | DONE
+  status               String           @default("DRAFT")
+  // Search plan (JSON arrays of strings), made by Claude from the goal and editable.
+  queries              String           @default("[]")
+  locations            String           @default("[]")
+  // What every first message should lead with, in one sentence.
+  angle                String?
+  // Next query × location pair to search (walks the plan, then wraps around).
+  searchCursor         Int              @default(0)
+  // Daily budgets. Places searches are cheap; web searches use the Claude subscription heavily.
+  placesSearchesPerDay Int              @default(6)
+  webSearchesPerDay    Int              @default(1)
+  checksPerDay         Int              @default(60)
+  newContactsPerDay    Int              @default(100)
+  // Percent of new contacts by email; the rest by WhatsApp.
+  emailShare           Int              @default(50)
+  minFit               Int              @default(55)
+  // Days after the previous message that each follow-up is drafted (JSON array), e.g. [3, 7]
+  followUpDays         String           @default("[3,7]")
+  createdBy            String
+  lastRunAt            DateTime?
+  searches             ProspectSearch[]
+  prospects            Prospect[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([status])
+}
+
+// Background job bookkeeping: a lock so two runs never overlap, and a checkpoint.
+model JobState {
+  name        String    @id // e.g. "campaign-tick", "inbox-check"
+  lockedUntil DateTime?
+  lastRunAt   DateTime?
+  data        String    @default("{}")
+}
+
+// Autopilot: the OS picks whom to look for next on its own, across all
+// segments and the chosen cities, within one daily volume, and re-balances
+// every week from what got replies. One row.
+model Autopilot {
+  id                String    @id @default("autopilot")
+  on                Boolean   @default(false)
+  newContactsPerDay Int       @default(100)
+  // Percent of new contacts by email; the rest by WhatsApp. Moved by the weekly review.
+  emailShare        Int       @default(50)
+  // JSON array of places, best first
+  cities            String    @default("[\"Ahmedabad\",\"Surat\",\"Vadodara\",\"Rajkot\",\"Gandhinagar\",\"Bhavnagar\"]")
+  // JSON {segment: share 0..1} of new contacts; empty = equal
+  weights           String    @default("{}")
+  lastReviewAt      DateTime?
+  updatedBy         String?
+  updatedAt         DateTime  @updatedAt
+}
+
+// What the weekly review saw and changed, in plain words, for the Growth dashboard.
+model AutopilotReview {
+  id        String   @id @default(cuid())
+  summary   String
+  // JSON: the numbers behind it (per segment, channel, city)
+  stats     String   @default("{}")
+  createdAt DateTime @default(now())
+}
+
+// Someone signed in with Google whose email isn't on the team. The owner
+// sees it on the Team screen and either gives access or dismisses it.
+model AccessRequest {
+  id         String    @id @default(cuid())
+  email      String    @unique // lower-cased, verified by Google
+  // PENDING | APPROVED | DISMISSED
+  status     String    @default("PENDING")
+  attempts   Int       @default(1)
+  firstAt    DateTime  @default(now())
+  lastAt     DateTime  @default(now())
+  // When the owner was last emailed about it (at most once a day per email).
+  notifiedAt DateTime?
+  decidedBy  String?
+  decidedAt  DateTime?
+
+  @@index([status])
+}

@@ -4,10 +4,10 @@ name: Nirmaan OS
 
 on:
   pull_request:
-    paths: ["app/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
+    paths: ["os/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
   push:
     branches: [main]
-    paths: ["app/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
+    paths: ["os/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
   workflow_dispatch: {}
 
 permissions:
@@ -22,14 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: app
+        working-directory: os
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: os/package-lock.json
       - run: npm ci
       - run: npx prisma migrate deploy
       - run: npm run typecheck

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-14: Repository restructure
+
+- The website moved to `website/`. Sources are in `website/src/`, hand-written files in
+  `website/src/static/`, and the built site in `website/public/`, the folder Vercel
+  deploys. The Vercel Root Directory changed to `website/public`.
+- The OS moved from `app/` to `os/`, matching os.nirmaan.online. Its database and
+  secrets paths are unchanged apart from the folder name.
+- All model code is under `os/src/lib/ai/` (router, providers, costs). The IP library
+  is `os/src/lib/library/` at `/os/library`.
+- Removed: iCloud duplicate files, a stale one-off website review script, and the
+  root `.vercelignore`. The 2026-09 website review and the original plan moved to
+  `docs/history/`. The OS phase history moved to `docs/history/os-build-log.md`.
+
 ## 2026-09-28: Self-hosted fonts
 
 - Archivo, Hanken Grotesk and JetBrains Mono are served from `/assets/fonts`

@@ -43,7 +43,7 @@ Our own sites and their current record are at the end.
 |---|---|---|
 | nirmaan.online | this repository (`/src`, built to the root) | 2026-09-28, see below |
 | ip.nirmaan.online | `nirmaansoftware/ip-nirmaan`, `site/` | 2026-09-28, recorded in that repository's `site/README.md` |
-| os.nirmaan.online | `/app` (sign-in only, not a public website) | Items 3, 4, 14, 16, 17 apply; not yet run |
+| os.nirmaan.online | `/os` (sign-in only, not a public website) | Items 3, 4, 14, 16, 17 apply; not yet run |
 
 ### nirmaan.online, 2026-09-28
 

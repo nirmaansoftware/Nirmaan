@@ -1,7 +1,7 @@
 # Target architecture
 
 ```text
-                  nirmaan.online (static, Vercel)            Nirmaan OS (/app, Next.js 16)
+                  nirmaan.online (static, Vercel)            Nirmaan OS (/os, Next.js 16)
                   ───────────────────────────────            ─────────────────────────────
  Visitor ──► Eleventy pages ──"Tell us your problem"──► POST /api/intake ──► Lead (LEAD-###)
                                                               │
@@ -29,7 +29,7 @@ No microservices, queues, event bus, Kubernetes, second database, paid
 observability, or UI component library. Each would add cost and moving parts
 with no current problem to solve (`engineering/procurement.md`).
 
-## Layers inside `/app`
+## Layers inside `/os`
 
 ```text
 src/app/          routes: /os (internal), /p & /status (client), /api/intake (public), /login

@@ -12,4 +12,4 @@ In the OS: care plans (SUB-###) per client, optionally tied to a project, with
 monthly price, status (active, paused, cancelled) and next billing date.
 "Create due invoices" on `/os/finance` drafts one invoice per month owed; a
 month can never be billed twice. MRR and client lifetime value are on the
-same screen. The public care-plan tiers are in `src/_data/pricing.json`.
+same screen. The public care-plan tiers are in `website/src/_data/pricing.json`.

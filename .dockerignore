@@ -1,13 +1,13 @@
-# Only the OS (app/) and the agent specs go into the image.
+# Only the OS (os/) and the agent specs go into the image.
 *
-!app
+!os
 !agents
 !Dockerfile.os
-app/node_modules
-app/.next
-app/.env*
-app/prisma/*.db
-app/prisma/*.db-journal
+os/node_modules
+os/.next
+os/.env*
+os/prisma/*.db
+os/prisma/*.db-journal
 # iCloud duplicates ("file 2.ts")
 **/* [0-9]
 **/* [0-9].*

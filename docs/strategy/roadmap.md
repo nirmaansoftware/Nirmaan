@@ -34,7 +34,7 @@ TARGET STATE
 - Audit of the current state (`assessment/current-state.md`).
 - The full `/docs` structure, with every doc marked by status.
 - Data model for phases 1–4, designed once so later phases don't reshape tables.
-- Internal design system for `/app`, reusing the public site's tokens.
+- Internal design system for `/os`, reusing the public site's tokens.
 
 ### Phase 1: Business OS · IMPLEMENTED (PR #18)
 

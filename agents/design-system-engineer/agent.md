@@ -37,7 +37,7 @@ Design token architecture, styling systems (CSS variables, Tailwind config, them
 
 ## Outputs
 
-- Implemented code: token definitions, component library source, written into the codebase at the location the Principal Architect's stack decisions specify (e.g. `/app/src/lib/design-system` or equivalent)
+- Implemented code: token definitions, component library source, written into the codebase at the location the Principal Architect's stack decisions specify (e.g. `/os/src/lib/design-system` or equivalent)
 - `/projects/{id}/design/design-system/` — documentation of what was implemented and any deviations from the UI Designer's spec, with standard handoff frontmatter (`status, confidence, assumptions, risks, open_questions, next_agent, review_required`)
 
 ## Tools

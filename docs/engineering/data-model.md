@@ -1,4 +1,4 @@
-# Data model · IMPLEMENTED (Prisma schema: `app/prisma/schema.prisma`)
+# Data model · IMPLEMENTED (Prisma schema: `os/prisma/schema.prisma`)
 
 ```text
 Client ─┬─ Lead ─┬─ DiscoveryItem (FACT|ASSUMPTION|QUESTION|RECOMMENDATION) ──promotes──► Requirement
@@ -31,5 +31,5 @@ Conventions:
 - **Artifacts:** content lives on disk under `/projects/{path}`; the database
   holds pointers.
 
-Migrations: `app/prisma/migrations/`. Phase 1's migration only adds tables
+Migrations: `os/prisma/migrations/`. Phase 1's migration only adds tables
 and nullable columns, so existing data and the original tests are untouched.
