@@ -207,7 +207,7 @@
   });
 
   /* ---- Where the visitor came from ----
-     ?plan=, ?care= or ?service= (a "Start with…" button elsewhere on the
+     ?plan=, ?care=, ?service= or ?product= (a "Start with…" button elsewhere on the
      site) shows what they're asking about and sends it as `interest`;
      ?estimate= (the estimator, which also sends ?plan=) replaces the
      plan's budget range with that exact ballpark. */
@@ -229,7 +229,7 @@
   var box = form.querySelector('[data-interest]');
   var interests = {};
   try { interests = JSON.parse(form.querySelector('[data-interests]').textContent); } catch (e) { /* no context available */ }
-  var kind = params && ['plan', 'care', 'service'].filter(function (k) { return params.get(k); })[0];
+  var kind = params && ['plan', 'care', 'service', 'product'].filter(function (k) { return params.get(k); })[0];
   var chosen = kind && interests[kind] && interests[kind][params.get(kind)];
   if (box && chosen) {
     box.querySelector('[data-interest-link]').textContent = chosen.label;

@@ -80,17 +80,19 @@ module.exports = function (eleventyConfig) {
   // {{ 35000 | share(40) }} → 14000: a percentage of an amount, in whole rupees.
   eleventyConfig.addFilter('share', (amount, percent) => Math.round((Number(amount) * Number(percent)) / 100));
 
-  // {{ pricing | interests(serviceList) }}: what contact.html can say it's
-  // "about" when a visitor arrives from a plan, care plan or service page
-  // (?plan=, ?care=, ?service=), and the budget range that fits it.
+  // {{ pricing | interests(serviceList, products) }}: what contact.html can say
+  // it's "about" when a visitor arrives from a plan, care plan, service or
+  // product page (?plan=, ?care=, ?service=, ?product=), and the budget range
+  // that fits it.
   const BUDGETS = [[25000, 'Under ₹25,000'], [75000, '₹25,000 – ₹75,000'], [200000, '₹75,000 – ₹2,00,000'], [500000, '₹2,00,000 – ₹5,00,000']];
   const budgetFor = (amount) => (BUDGETS.find(([max]) => amount < max) || [0, '₹5,00,000+'])[1];
-  eleventyConfig.addFilter('interests', (pricing, serviceList) => {
+  eleventyConfig.addFilter('interests', (pricing, serviceList, products = []) => {
     const byId = Object.fromEntries(pricing.packages.map((p) => [p.id, p]));
     const map = (list, fn) => Object.fromEntries(list.map((x) => [x.id, fn(x)]));
     return {
       plan: map(pricing.packages, (p) => ({ label: `${p.name} package`, detail: `from ${INR.format(p.from)} · ${p.weeks} weeks`, href: `/pricing/${p.id}.html`, budget: budgetFor(p.from) })),
       care: map(pricing.care, (c) => ({ label: `${c.name} care plan`, detail: `${INR.format(c.monthly)} / month`, href: `/pricing/care/${c.id}.html` })),
+      product: map(products.filter((p) => !p.external), (p) => ({ label: p.name, detail: p.tagline, href: p.href })),
       service: map(serviceList, (s) => {
         const p = byId[s.plan];
         return { label: s.title, detail: p ? `usually ${p.name}, from ${INR.format(p.from)}` : 'a monthly care plan', href: `/services/${s.id}.html`, budget: p ? budgetFor(p.from) : '' };

@@ -1,0 +1,21 @@
+[
+  {
+    "id": "marketing",
+    "name": "Nirmaan Marketing",
+    "tagline": "Find the customers who need you. Write to them like a person.",
+    "text": "Finds businesses that match the customer you want, drafts a short personal message for each, and sends it only after you approve it.",
+    "href": "/products/marketing.html",
+    "glyph": "10001/11011/10101/10001/10001",
+    "label": "For your growth"
+  },
+  {
+    "id": "ip",
+    "name": "IP Nirmaan",
+    "tagline": "Chip IP, built as software.",
+    "text": "A semiconductor IP company modelled as software: give it a requirement, and an organisation plans, routes, reviews and gates the work, with evidence behind every step.",
+    "href": "https://ip.nirmaan.online/",
+    "external": true,
+    "glyph": "11111/10101/11111/10101/11111",
+    "label": "Semiconductors"
+  }
+]

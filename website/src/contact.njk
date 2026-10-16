@@ -36,7 +36,7 @@ head:
 
       {#- What the visitor clicked to get here (?plan=, ?care=, ?service=), shown
           so they know we know, and sent with the enquiry as `interest`. -#}
-      <script type="application/json" data-interests>{{ pricing | interests(serviceList) | dump | safe }}</script>
+      <script type="application/json" data-interests>{{ pricing | interests(serviceList, products) | dump | safe }}</script>
       <div class="interest" data-interest hidden>
         <div class="interest__copy">
           <span class="mono">You're asking about</span>

@@ -1,0 +1,40 @@
+---
+layout: base.njk
+title: "Products — Nirmaan"
+description: "Products Nirmaan builds and runs: Nirmaan Marketing, which finds the customers who need you and writes to them like a person, and IP Nirmaan, semiconductor IP built as software."
+ogDescription: "Nirmaan Marketing and IP Nirmaan: systems we built for our own work, offered as products."
+permalink: "/products.html"
+nav: "products"
+head:
+  eyebrow: "Our products"
+  lines: ["Systems we built", "for ourselves first."]
+  accent: 1
+  lede: "Most of what we build belongs to our clients. These are ours: systems we made for our own work and now offer to other businesses."
+  glyph: "11111/10001/11111/10001/11111"
+cta:
+  eyebrow: "Something else in mind?"
+  lines: ["Need a system", "nobody sells?"]
+  text: "Most problems don't fit a product. Tell us yours, and we'll build the system around how your business runs."
+  primary: { label: "Tell us your problem", href: "/contact.html" }
+  secondary: { label: "See our services", href: "/services.html" }
+---
+<section class="section" aria-label="Products">
+  <div class="wrap">
+    <ul class="product-grid" role="list">
+      {%- for p in products %}
+      <li class="product-card" data-reveal style="--d: {{ loop.index0 }}">
+        <div class="product-card__top">
+          {% glyph p.glyph, "product-card__glyph" %}
+          <p class="eyebrow">{{ p.label }}</p>
+        </div>
+        <h2 class="product-card__name display">
+          <a href="{{ p.href }}"{% if not p.external %} data-morph="product-{{ p.id }}"{% endif %}>{{ p.name }}</a>
+        </h2>
+        <p class="product-card__tagline">{{ p.tagline }}</p>
+        <p class="product-card__text">{{ p.text }}</p>
+        <p class="product-card__more mono" aria-hidden="true">{% if p.external %}{{ p.href | replace("https://", "") | replace("/", "") }} ↗{% else %}See it work →{% endif %}</p>
+      </li>
+      {%- endfor %}
+    </ul>
+  </div>
+</section>
