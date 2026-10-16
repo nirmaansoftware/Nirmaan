@@ -20,6 +20,9 @@ each `agents/<slug>/agent.md`). "R" = responsible, "A" = the human who approves.
 | Content Specialist | `content-strategist`, `brand-strategist`, `seo-specialist` | Content | DESIGN |
 | Support Agent | `client-communication` (drafts only) | Client update drafts, support triage | Human sends; agents never send client messages |
 | Estimation | `finance-estimation` | Effort and cost estimate inputs | Proposal send (`proposal:send`) |
+| Legal drafting | `legal-counsel` (drafts only) | Agreement, NDA, DPA and policy drafts, with a brief for counsel | A qualified lawyer reviews; the founder engages them and signs |
+| Tax and accounts | `tax-accounts` (notes only) | GST, TDS and invoice notes, questions for the accountant | A chartered accountant reviews; the founder files |
+| Sales and partnerships | `sales-partnerships` (plans only) | Go-to-market and partner plans, call guides | Messages go through the OS with a person's approval; the founder signs deals |
 
 Unassigned by design: no agent can approve a gate, send a client
 communication, change a price, or deploy.
