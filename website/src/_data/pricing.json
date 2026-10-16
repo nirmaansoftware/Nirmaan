@@ -665,7 +665,6 @@
       "setup": 35000,
       "monthly": 12000,
       "earlySetup": 25000,
-      "earlyClients": 3,
       "allowance": 300,
       "termMonths": 3,
       "includes": [
