@@ -1732,6 +1732,19 @@
   }
 }
 
+/* Touch: small text links get an invisible hit area of at least 44px, so they
+   are easy to tap without changing how the page looks. */
+@layer components {
+  @media (pointer: coarse) {
+    .brand, .crumbs a, .footer__col a, .footer__social a, .footer__top { position: relative; }
+    .brand::after, .crumbs a::after, .footer__col a::after, .footer__social a::after, .footer__top::after {
+      content: ""; position: absolute; inset: -0.75rem -0.5rem;
+    }
+    .footer__col ul { gap: 0.75rem; }
+    .footer__social { gap: var(--s4); }
+  }
+}
+
 /* Cross-document View Transitions opt-in. Must be a top-level rule. */
 @view-transition { navigation: auto; }
 @media (prefers-reduced-motion: reduce) { @view-transition { navigation: none; } }
