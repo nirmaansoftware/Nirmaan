@@ -1,28 +1,28 @@
 ---
 layout: base.njk
-title: "Nirmaan Marketing: B2B Lead Generation & Outreach, India"
+title: "Nirmaan Outreach: B2B Lead Generation in India"
 description: "Find B2B customers in India with researched, personal email and WhatsApp outreach that you approve before anything is sent. Early access."
 ogDescription: "B2B lead generation without blasts or bought lists. Nothing is sent until you approve it. Early access."
-permalink: "/products/marketing.html"
+permalink: "/products/outreach.html"
 nav: "products"
 scripts: ["tour.js"]
 head:
   crumbs: [{ label: "Products", href: "/products.html" }]
-  current: "Nirmaan Marketing"
-  morph: "product-marketing"
-  eyebrow: "Nirmaan Marketing · Early access"
+  current: "Nirmaan Outreach"
+  morph: "product-outreach"
+  eyebrow: "Nirmaan Outreach · Early access"
   lines: ["Find the customers", "who need you."]
   accent: 1
-  lede: "B2B lead generation without blasts or bought lists. Nirmaan Marketing finds businesses that match the customer you want, looks for a reason to write to each one, and drafts a short message in your voice. <strong>Nothing is sent until you approve it.</strong>"
+  lede: "B2B lead generation without blasts or bought lists. Nirmaan Outreach finds businesses that match the customer you want, looks for a reason to write to each one, and drafts a short message in your voice. <strong>Nothing is sent until you approve it.</strong>"
   glyph: "11111/10001/10101/10001/11111"
   actions:
-    - { label: "Ask for early access", href: "/contact.html?product=marketing", style: "primary" }
+    - { label: "Ask for early access", href: "/contact.html?product=outreach", style: "primary" }
     - { label: "See it work", href: "#demo" }
 cta:
   eyebrow: "Early access"
   lines: ["Tell us who you", "want to reach."]
   text: "We'll tell you honestly whether it fits, how it would find them, and what it would say. We're taking up to three businesses in early access."
-  primary: { label: "Ask for early access", href: "/contact.html?product=marketing" }
+  primary: { label: "Ask for early access", href: "/contact.html?product=outreach" }
   secondary: { label: "See it work", href: "#demo" }
 problems:
   - title: "Ads"
@@ -95,7 +95,7 @@ faq:
   - q: "Do you use it yourselves?"
     a: "Yes. Nirmaan has used it for its own outreach since September 2026. That's why it exists."
 ---
-{%- set m = pricing.products.marketing -%}
+{%- set m = pricing.products.outreach -%}
 {%- set costAnswer -%}
 {{ m.setup | inr }} to set up, then {{ m.monthly | inr }} a month, before GST. Early-access clients pay {{ m.earlySetup | inr }} to set up. The monthly fee covers up to {{ m.allowance }} businesses researched a month, hosting and care. Google Maps search is billed to your own Google account, and we show you the expected cost first. The minimum term is {{ m.termMonths }} months.
 {%- endset -%}
@@ -108,12 +108,12 @@ faq:
       "itemListElement": [
         { "@type": "ListItem", "position": 1, "name": "Home", "item": "{{ site.url }}/" },
         { "@type": "ListItem", "position": 2, "name": "Products", "item": "{{ site.url }}/products.html" },
-        { "@type": "ListItem", "position": 3, "name": "Nirmaan Marketing", "item": "{{ site.url }}{{ page.url }}" }
+        { "@type": "ListItem", "position": 3, "name": "Nirmaan Outreach", "item": "{{ site.url }}{{ page.url }}" }
       ]
     },
     {
       "@type": "Service",
-      "name": "Nirmaan Marketing",
+      "name": "Nirmaan Outreach",
       "serviceType": "B2B lead generation and outreach",
       "description": {{ description | dump | safe }},
       "url": "{{ site.url }}{{ page.url }}",
@@ -145,7 +145,7 @@ faq:
       </li>
       {%- endfor %}
     </ul>
-    <p class="mk-answer display" data-reveal>Nirmaan Marketing does the research and the first draft. <span class="accent">You keep the&nbsp;judgement.</span></p>
+    <p class="mk-answer display" data-reveal>Nirmaan Outreach does the research and the first draft. <span class="accent">You keep the&nbsp;judgement.</span></p>
   </div>
 </section>
 
@@ -422,7 +422,7 @@ faq:
       <ul class="ticks" role="list">
         {%- for i in m.includes %}<li>{{ i }}</li>{% endfor %}
       </ul>
-      <a class="btn" href="/contact.html?product=marketing">Ask for early access {% glyph "00100/00010/11111/00010/00100", "btn__arrow" %}</a>
+      <a class="btn" href="/contact.html?product=outreach">Ask for early access {% glyph "00100/00010/11111/00010/00100", "btn__arrow" %}</a>
       <p class="price-note">Prices are before GST. Minimum term {{ m.termMonths }} months, then month to month. Google Maps search runs on your own Google account, and we show you the expected cost before you start. Need more than {{ m.allowance }} businesses a month? We'll quote it before you commit.</p>
     </div>
   </div>

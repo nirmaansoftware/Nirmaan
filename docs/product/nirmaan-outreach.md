@@ -1,7 +1,7 @@
-# Nirmaan Marketing · EARLY ACCESS (decided 2026-10-16)
+# Nirmaan Outreach · EARLY ACCESS (decided 2026-10-16)
 
 Decisions on price, status, page copy and the gates before the first paying client:
-[nirmaan-marketing-decisions.md](nirmaan-marketing-decisions.md). Where this brief and the
+[nirmaan-outreach-decisions.md](nirmaan-outreach-decisions.md). Where this brief and the
 decisions differ, the decisions win.
 
 A product page on nirmaan.online for the outbound marketing engine inside the
@@ -53,10 +53,10 @@ does it is not.
 ## Information architecture
 
 - New nav item **Products** → `/products.html`: Nirmaan's products, as a hub.
-  Today: Nirmaan Marketing (this page) and IP Nirmaan (ip.nirmaan.online).
-- **`/products/marketing.html`**: the product page.
+  Today: Nirmaan Outreach (this page) and IP Nirmaan (ip.nirmaan.online).
+- **`/products/outreach.html`**: the product page.
 - Products live in `website/src/_data/products.json`; the hub, the contact
-  form's "asking about" context (`?product=marketing`) and the sitemap read it.
+  form's "asking about" context (`?product=outreach`) and the sitemap read it.
 
 ## The page
 

@@ -1,4 +1,4 @@
-# Nirmaan Marketing: launch decisions (2026-10-16)
+# Nirmaan Outreach (formerly Nirmaan Marketing): launch decisions (2026-10-16)
 
 Status of the page changes: done on PR #59 (2026-10-16), with the claim check by QA applied
 (four claims softened to match the code). Internal minutes, with margins and cost arithmetic,
@@ -10,7 +10,9 @@ these decisions to the meeting. The founder still merges the page and signs each
 ## Decisions
 
 ### Name
-- The product stays **Nirmaan Marketing**. The URL stays `/products/marketing.html`.
+- **Renamed by the founder on 2026-10-16: the product is Nirmaan Outreach**, the Brand Strategist's
+  proposal (the meeting had kept "Nirmaan Marketing"). The URL is `/products/outreach.html`; the page
+  had not been published under the old name, so nothing needed redirecting.
 - The page title, description and lede say "B2B lead generation" and "outreach", so nobody mistakes
   it for a social media or ads agency.
 - We look again if early enquiries read it as an ads or social media service. The fallback name is
@@ -62,15 +64,15 @@ these decisions to the meeting. The founder still merges the page and signs each
 
 ## Page changes
 
-File: `website/src/marketing.njk` on branch `product/nirmaan-marketing` (PR #59), plus the files
+File: `website/src/outreach.njk` on branch `product/nirmaan-marketing` (PR #59), plus the files
 named below. Rebuild `website/public/` in the same PR.
 
 ### Head, hero and status
-- [ ] `title` → `Nirmaan Marketing: B2B Lead Generation & Outreach, India`
+- [ ] `title` → `Nirmaan Outreach: B2B Lead Generation in India`
 - [ ] `description` → `Find B2B customers in India with researched, personal email and WhatsApp outreach that you approve before anything is sent. Early access.`
-- [ ] `eyebrow` → `Nirmaan Marketing · Early access`
-- [ ] `lede` → `B2B lead generation without blasts or bought lists. Nirmaan Marketing finds businesses that match the customer you want, looks for a reason to write to each one, and drafts a short message in your voice. <strong>Nothing is sent until you approve it.</strong>`
-- [ ] Hero primary action → `Ask for early access` (`/contact.html?product=marketing`). Secondary stays `See it work`.
+- [ ] `eyebrow` → `Nirmaan Outreach · Early access`
+- [ ] `lede` → `B2B lead generation without blasts or bought lists. Nirmaan Outreach finds businesses that match the customer you want, looks for a reason to write to each one, and drafts a short message in your voice. <strong>Nothing is sent until you approve it.</strong>`
+- [ ] Hero primary action → `Ask for early access` (`/contact.html?product=outreach`). Secondary stays `See it work`.
 - [ ] `products.json`: `label` → `Early access`.
 
 ### Order of sections
@@ -123,7 +125,7 @@ named below. Rebuild `website/public/` in the same PR.
 - [ ] Keep steps 1, 3 and 4.
 
 ### Price (new section, tinted, between Getting started and FAQ)
-- [ ] Add `products.marketing` to `pricing.json`. Render with the `inr` filter and one `.care-card` in a `.mk-split`. No new component.
+- [ ] Add `products.outreach` to `pricing.json`. Render with the `inr` filter and one `.care-card` in a `.mk-split`. No new component.
 - [ ] Eyebrow `Price · Early access`. Heading `One plan, priced up front.`
 - [ ] Section text `We use it for our own outreach. We're now taking up to three businesses as early-access clients.`
 - [ ] Card: `₹35,000` `to set up`, then `₹12,000` `/ month`. Line: `Early-access clients: ₹25,000 to set up.`
@@ -150,7 +152,7 @@ named below. Rebuild `website/public/` in the same PR.
 - [ ] Eyebrow → `Early access`
 - [ ] Text → `We'll tell you honestly whether it fits, how it would find them, and what it would say. We're taking up to three businesses in early access.`
 - [ ] Primary → `Ask for early access`. Secondary stays `See it work`.
-- [ ] Should: on the contact form for `?product=marketing`, ask `Who do you want to reach?`
+- [ ] Should: on the contact form for `?product=outreach`, ask `Who do you want to reach?`
 
 ### SEO and structured data
 - [ ] JSON-LD: `BreadcrumbList` and `Service` (provider → the home page Organization `@id`), with an `Offer` that matches the visible prices exactly. No ratings or reviews. No `FAQPage`.
@@ -227,7 +229,7 @@ No contract is signed before **L1**. No client email is sent before every other 
 - What reply rate can a client expect? Unknown. We don't quote one.
 
 ## Dissent
-- **Brand Strategist** wanted to rename the product "Nirmaan Outreach". Kept "Nirmaan Marketing" for now, with a check on early enquiries.
+- **Brand Strategist** wanted to rename the product "Nirmaan Outreach". The meeting kept "Nirmaan Marketing"; the founder then chose "Nirmaan Outreach" (resolved).
 - **Product Manager** and **Business Analyst** wanted no public price. The price is shown, with an Early access label and a review date.
 - **Business Analyst** proposed ₹6,000 a month with running costs passed through. **Product Manager** proposed ₹25,000 setup and ₹8,000 a month. The monthly fee is ₹12,000; the PM's setup figure became the early-access price.
 - **Client Communication** wanted every running cost in one fee. AI is included; Google Maps search stays on the client's own account.

@@ -1,5 +1,5 @@
 /*
-  tour.js: the "See it work" demo on /products/marketing.html.
+  tour.js: the "See it work" demo on /products/outreach.html.
 
   The HTML holds all seven beats in their finished state, so without JS the
   demo is an ordinary list of steps. With JS the beats are stacked in one place

@@ -661,7 +661,7 @@
     }
   ],
   "products": {
-    "marketing": {
+    "outreach": {
       "setup": 35000,
       "monthly": 12000,
       "earlySetup": 25000,
@@ -676,7 +676,7 @@
         "Up to 4 hours of changes a month",
         "Replies the same working day, Monday to Saturday"
       ],
-      "_comment": "Nirmaan Marketing's one plan, decided 2026-10-16 (docs/product/nirmaan-marketing-decisions.md). allowance = businesses researched a month; keep it in step with the includes line. Review after three clients or by 31 March 2027."
+      "_comment": "Nirmaan Outreach's one plan, decided 2026-10-16 (docs/product/nirmaan-outreach-decisions.md). allowance = businesses researched a month; keep it in step with the includes line. Review after three clients or by 31 March 2027."
     }
   }
 }

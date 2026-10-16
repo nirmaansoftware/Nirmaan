@@ -1733,7 +1733,7 @@
   }
 }
 
-/* ============ PRODUCTS: hub and Nirmaan Marketing ============ */
+/* ============ PRODUCTS: hub and Nirmaan Outreach ============ */
 @layer pages {
   /* Products hub: one card per product; the whole card is the link. */
   .product-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--s3); }
