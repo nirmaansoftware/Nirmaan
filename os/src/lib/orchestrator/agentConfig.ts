@@ -32,6 +32,9 @@ export const AGENT_TASK_TYPES: Record<string, TaskType> = {
   "legal-compliance": "content",
   "client-communication": "content",
   "finance-estimation": "content",
+  "legal-counsel": "architecture", // contract drafting is high-stakes reasoning, like security review
+  "tax-accounts": "content",
+  "sales-partnerships": "content",
 };
 
 /**
@@ -80,6 +83,9 @@ export const AGENT_OUTPUT_PATHS: Record<string, string> = {
   "legal-compliance": "reports/compliance-notes.md",
   "client-communication": "client/communication-draft.md",
   "finance-estimation": "reports/estimate.md",
+  "legal-counsel": "reports/legal-draft.md",
+  "tax-accounts": "reports/tax-notes.md",
+  "sales-partnerships": "reports/sales-plan.md",
 };
 
 /** Artifact.type value each agent's primary output is recorded as. */
@@ -109,6 +115,9 @@ export const AGENT_ARTIFACT_TYPES: Record<string, string> = {
   "legal-compliance": "COMPLIANCE_NOTES",
   "client-communication": "CLIENT_COMMUNICATION_DRAFT",
   "finance-estimation": "ESTIMATE",
+  "legal-counsel": "LEGAL_DRAFT",
+  "tax-accounts": "TAX_NOTES",
+  "sales-partnerships": "SALES_PLAN",
 };
 
 export function requireTaskType(agentSlug: string): TaskType {

@@ -9,6 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadAgent, listAgentSlugs } from "./loadAgent";
+import { AGENT_TASK_TYPES, AGENT_OUTPUT_PATHS, AGENT_ARTIFACT_TYPES } from "../orchestrator/agentConfig";
 
 const REQUIRED_SECTIONS = [
   "## Mission",
@@ -82,5 +83,15 @@ test("only DevOps Engineer declares deploy permission", () => {
     if (agent.permissions.deploy === true) {
       assert.equal(slug, "devops-engineer", `${slug}: unexpectedly declares deploy: true`);
     }
+  }
+});
+
+test("every agent on disk is configured for dispatch: task type, output path and artifact type", () => {
+  // agentConfig.ts is explicit by design; this keeps a new agent.md from
+  // shipping without the three decisions it needs.
+  for (const slug of listAgentSlugs()) {
+    assert.ok(AGENT_TASK_TYPES[slug], `${slug}: no entry in AGENT_TASK_TYPES`);
+    assert.ok(AGENT_OUTPUT_PATHS[slug], `${slug}: no entry in AGENT_OUTPUT_PATHS`);
+    assert.ok(AGENT_ARTIFACT_TYPES[slug], `${slug}: no entry in AGENT_ARTIFACT_TYPES`);
   }
 });

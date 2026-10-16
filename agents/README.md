@@ -17,7 +17,7 @@ Every `agent.md` follows the same structure:
 
 ## Status
 
-All 25 agents from the architecture plan's Agent Architecture table (Section C) exist as `agent.md` specs, and all load cleanly through the real Phase 2 runtime (`os/src/lib/agents/loadAgent.ts` — see `os/src/lib/agents/allAgentsLoad.test.ts`):
+All 28 agents exist as `agent.md` specs (the 25 from the architecture plan's Agent Architecture table, Section C, plus three added on 2026-10-16 after the first decision meetings), and all load cleanly through the real Phase 2 runtime (`os/src/lib/agents/loadAgent.ts` — see `os/src/lib/agents/allAgentsLoad.test.ts`):
 
 - **Orchestrator** — [`orchestrator/`](orchestrator/agent.md)
 - **Discovery**: [`product-manager/`](product-manager/agent.md), [`business-analyst/`](business-analyst/agent.md), [`market-research/`](market-research/agent.md)
@@ -26,6 +26,7 @@ All 25 agents from the architecture plan's Agent Architecture table (Section C) 
 - **Engineering**: [`principal-architect/`](principal-architect/agent.md), [`frontend-engineer/`](frontend-engineer/agent.md), [`backend-engineer/`](backend-engineer/agent.md), [`database-engineer/`](database-engineer/agent.md), [`ai-ml-engineer/`](ai-ml-engineer/agent.md)
 - **Ops/Quality**: [`devops-engineer/`](devops-engineer/agent.md), [`security-engineer/`](security-engineer/agent.md), [`qa-engineer/`](qa-engineer/agent.md), [`performance-engineer/`](performance-engineer/agent.md), [`sre/`](sre/agent.md)
 - **Cross-cutting**: [`legal-compliance/`](legal-compliance/agent.md), [`client-communication/`](client-communication/agent.md), [`finance-estimation/`](finance-estimation/agent.md)
+- **Business** (added 2026-10-16): [`legal-counsel/`](legal-counsel/agent.md) drafts agreements and policies for a qualified lawyer to review (`legal-compliance` flags risks and never drafts), [`tax-accounts/`](tax-accounts/agent.md) works out GST, TDS and invoicing for a chartered accountant to review, [`sales-partnerships/`](sales-partnerships/agent.md) plans who to approach and how deals close. None of them advises, sends or signs.
 
 **What this does NOT mean yet:** none of these agents have been run against a real or realistic input and had their output inspected — that only happened for Product Manager, in Phase 2, using a mock model response. Every agent here is a reviewed, structurally-valid *specification*; none has been exercised end-to-end against a live model. That's Phase 5+ work (orchestration) and Phase 8 (evaluation harness) — see `/docs/history/agency-os-plan.md`.
 
