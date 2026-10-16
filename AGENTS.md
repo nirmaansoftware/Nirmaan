@@ -33,3 +33,5 @@ Read [README.md](README.md) for the map. This file adds the rules and commands.
 - What is built today: `docs/assessment/current-state.md`. The plan: `docs/strategy/roadmap.md`.
 - Agent behaviour: `agents/<slug>/agent.md`. The OS loads these at runtime.
 - Finished records (may describe old paths): `docs/history/`.
+- Big decisions (pricing, launches, naming, legal, public pages): run a decision meeting,
+  `docs/operations/decision-meetings.md` (the `decision-meeting` skill runs it).
