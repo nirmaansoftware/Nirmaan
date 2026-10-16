@@ -659,5 +659,25 @@
       "when": "Delivery",
       "text": "When it's launched and handed over."
     }
-  ]
+  ],
+  "products": {
+    "marketing": {
+      "setup": 35000,
+      "monthly": 12000,
+      "earlySetup": 25000,
+      "earlyClients": 3,
+      "allowance": 300,
+      "termMonths": 3,
+      "includes": [
+        "Your own private setup, hosted and looked after by us",
+        "Up to 300 businesses researched a month",
+        "Email from your own mailbox, WhatsApp prepared for you to send",
+        "Backups, updates and monitoring",
+        "A monthly review of what was sent and what got replies",
+        "Up to 4 hours of changes a month",
+        "Replies the same working day, Monday to Saturday"
+      ],
+      "_comment": "Nirmaan Marketing's one plan, decided 2026-10-16 (docs/product/nirmaan-marketing-decisions.md). allowance = businesses researched a month; keep it in step with the includes line. Review after three clients or by 31 March 2027."
+    }
+  }
 }

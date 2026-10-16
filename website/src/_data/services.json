@@ -241,7 +241,8 @@
             "integrations",
             "ai-systems",
             "internal-tools"
-          ]
+          ],
+          "product": "marketing"
         },
         {
           "id": "dashboards",
@@ -317,7 +318,8 @@
             "automation",
             "integrations",
             "internal-tools"
-          ]
+          ],
+          "product": "marketing"
         },
         {
           "id": "mobile-apps",

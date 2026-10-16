@@ -3,16 +3,17 @@
 
   The HTML holds all seven beats in their finished state, so without JS the
   demo is an ordinary list of steps. With JS the beats are stacked in one place
-  (the stage keeps the height of the tallest, so nothing below it jumps) and
-  shown one at a time:
+  (the stage keeps the height of the tallest, so nothing below it jumps), the
+  step buttons become tabs, and the beats are shown one at a time:
 
     - plays once, a beat every few seconds, when it scrolls into view;
+    - Pause / Play is always visible (WCAG 2.2.2), and Replay starts again;
     - the numbered steps are tabs (click, or arrow keys / Home / End);
-    - choosing a step or pressing Replay takes over from the autoplay;
-    - hovering pauses it, and so does switching to another browser tab.
+    - choosing a step, or moving keyboard focus into the demo, stops autoplay;
+    - hovering with a mouse pauses it, and so does switching browser tab.
 
   With "reduce motion" on nothing plays by itself and nothing animates; the
-  steps still switch beats.
+  steps, Play and Replay still work.
 */
 (function () {
   'use strict';
@@ -20,15 +21,27 @@
   var tour = document.querySelector('[data-tour]');
   if (!tour) return;
 
-  var tabs = Array.prototype.slice.call(tour.querySelectorAll('[role="tab"]'));
-  var panels = Array.prototype.slice.call(tour.querySelectorAll('[role="tabpanel"]'));
   var row = tour.querySelector('.tour__steps');
+  var tabs = Array.prototype.slice.call(row.querySelectorAll('button'));
+  var panels = Array.prototype.slice.call(tour.querySelectorAll('.tour__beat'));
   var bar = tour.querySelector('[data-tour-progress]');
+  var toggle = tour.querySelector('[data-tour-toggle]');
   var replay = tour.querySelector('[data-tour-replay]');
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   var BEAT = 5200; // ms each beat stays on screen while playing
 
   var current = 0, timer = null, playing = false, held = false;
+
+  // Tab semantics only exist with JS, so they're added here, not in the HTML.
+  row.setAttribute('role', 'tablist');
+  tabs.forEach(function (tab) { tab.setAttribute('role', 'tab'); });
+  panels.forEach(function (panel) { panel.setAttribute('role', 'tabpanel'); });
+
+  function label() {
+    if (!toggle) return;
+    toggle.textContent = playing ? 'Pause' : 'Play';
+    toggle.setAttribute('aria-pressed', playing ? 'false' : 'true');
+  }
 
   function keepStepInView(tab) {
     var left = tab.offsetLeft - row.offsetLeft;
@@ -55,18 +68,24 @@
     keepStepInView(tabs[i]);
   }
 
-  function stop() { playing = false; clearTimeout(timer); }
+  function stop() { playing = false; clearTimeout(timer); label(); }
   function schedule(ms) { clearTimeout(timer); timer = setTimeout(tick, ms); }
   function tick() {
     if (!playing || held || document.hidden) return;
-    if (current >= tabs.length - 1) { playing = false; return; }
+    if (current >= tabs.length - 1) { stop(); return; }
     show(current + 1);
     schedule(BEAT);
   }
-  function play() { stop(); playing = true; show(0); schedule(BEAT); }
+  function play(from) {
+    playing = true;
+    label();
+    show(from);
+    schedule(BEAT);
+  }
 
   tour.classList.add('is-ready');
   show(0);
+  label();
 
   tabs.forEach(function (tab, k) {
     tab.addEventListener('click', function () { stop(); show(k); });
@@ -80,8 +99,17 @@
     });
   });
 
-  if (replay) replay.addEventListener('click', function () {
-    if (reduce.matches) { stop(); show(0); } else { play(); }
+  if (toggle) toggle.addEventListener('click', function () {
+    if (playing) stop();
+    else play(current >= tabs.length - 1 ? 0 : current);
+  });
+  if (replay) replay.addEventListener('click', function () { play(0); });
+
+  // Keyboard focus inside the demo means someone is reading or operating it,
+  // so autoplay stops. The Pause / Play button is exempt: focusing it with a
+  // mouse click comes just before the click, and must not flip its state.
+  tour.addEventListener('focusin', function (e) {
+    if (e.target !== toggle && e.target !== replay) stop();
   });
 
   // Hover pauses with a mouse only: on touch screens a tap can fire an enter
@@ -95,7 +123,7 @@
   // Play once, the first time most of the stage is on screen.
   if (!reduce.matches && 'IntersectionObserver' in window) {
     var seen = new IntersectionObserver(function (entries) {
-      if (entries.some(function (e) { return e.isIntersecting; })) { seen.disconnect(); play(); }
+      if (entries.some(function (e) { return e.isIntersecting; })) { seen.disconnect(); if (current === 0) play(0); }
     }, { threshold: 0.35 });
     seen.observe(tour.querySelector('.tour__stage'));
   }

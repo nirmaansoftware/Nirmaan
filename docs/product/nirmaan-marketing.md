@@ -1,4 +1,8 @@
-# Nirmaan Marketing · PROPOSED (public page IMPLEMENTED 2026-10-16)
+# Nirmaan Marketing · EARLY ACCESS (decided 2026-10-16)
+
+Decisions on price, status, page copy and the gates before the first paying client:
+[nirmaan-marketing-decisions.md](nirmaan-marketing-decisions.md). Where this brief and the
+decisions differ, the decisions win.
 
 A product page on nirmaan.online for the outbound marketing engine inside the
 Nirmaan OS ([prospecting](prospecting.md)). Nirmaan built it to find its own
