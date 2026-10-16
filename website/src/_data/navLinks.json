@@ -1,5 +1,6 @@
 [
   { "slug": "services", "href": "services.html", "label": "Services" },
+  { "slug": "products", "href": "products.html", "label": "Products" },
   { "slug": "pricing", "href": "pricing.html", "label": "Pricing" },
   { "slug": "projects", "href": "projects.html", "label": "Projects" },
   { "slug": "process", "href": "process.html", "label": "Process" },

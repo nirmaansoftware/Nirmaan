@@ -241,7 +241,8 @@
             "integrations",
             "ai-systems",
             "internal-tools"
-          ]
+          ],
+          "product": "outreach"
         },
         {
           "id": "dashboards",
@@ -317,7 +318,8 @@
             "automation",
             "integrations",
             "internal-tools"
-          ]
+          ],
+          "product": "outreach"
         },
         {
           "id": "mobile-apps",
