@@ -134,7 +134,10 @@ session has the PR's branch checked out.
 What the script does, in order:
 
 1. **One review at a time.** It takes a lock shared with ip-nirmaan, so only
-   one review runs across both repositories.
+   one review runs across both repositories. The lock is a folder
+   (`review.lock`) with an owner file written whole (a temporary file renamed
+   inside it). A lock whose process is gone is cleared, and so is one with no
+   readable owner file that is older than 30 minutes.
 2. **Eligibility.** The PR must be open, target `main`, come from a branch in
    this repository (never a fork) and be authored by `patel-om` or
    `nirmaansoftware`. Otherwise it refuses and posts nothing.
@@ -151,8 +154,15 @@ What the script does, in order:
    key is deferred. Design key 1 is deferred until
    `docs/design/visual-direction.md` exists on `main`. The script itself
    refuses to post unless it is `main`'s copy.
-5. **CI first.** Until `os-test`, `website-build` and `repo-checks` are green
-   on the head commit, both checks stay pending and no model is called.
+5. **CI first.** For each required job (`os-test`, `website-build`,
+   `repo-checks`) the newest run on the head counts (by start time, then run
+   id), and a run still in progress, such as a rerun, always means waiting: an
+   older success never counts while a newer run exists. While a job runs or is
+   missing, both checks stay pending ("waiting for CI"). When a job finished
+   without success, both checks are posted as `action_required` with the
+   title "CI failed on <sha>; review not run" (terminal, and never green: a
+   required check is satisfied only by success, neutral or skipped). No model
+   is called in either case.
 6. **Key 1, then key 2.** Key 1 is one fresh `claude -p` process per owning
    team, with that team's lead spec, the base and team checklists, and the
    specs of any member checklists the map requires. Key 2 runs only when every
@@ -182,11 +192,16 @@ What the script does, in order:
     `review/team-lead` (success only when every owning team passed) and
     `review/executive`. `review/executive` is success only when key 2 passed,
     no `hold` label is set, and for a founder-class PR the founder's latest
-    GitHub review is an approval of this head SHA.
+    GitHub review is an approval of this head SHA. A comment or check run is
+    not posted again when the App's latest one for that key, team and head
+    already says the same (a rerun that reused its cached verdicts); the
+    comment's marker carries a digest of the result for this.
 11. **Records.** Every model call (tokens, duration, outcome) is logged
     outside the repository in `~/.nirmaan/pr-review/calls.jsonl`. Validated
     verdicts are cached per head and `main` commit, so re-running after the
-    founder approves does not call the model again.
+    founder approves does not call the model again. Each run's worktrees, and
+    the per-run folder that holds them under `~/.nirmaan/pr-review/worktrees`,
+    are removed when it ends.
 
 **Posting identity.** The review App posts the check runs with a short-lived
 installation token scoped to this repository. It reads these environment
@@ -214,8 +229,9 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
 **Each step, per PR:**
 
 1. **CI.** Until `os-test`, `website-build` and `repo-checks` are green on the
-   head commit, the loop waits and calls no model. CI failing on a head the
-   loop pushed stops the loop; CI failing on the author's head only waits.
+   head commit, the loop waits and calls no model (the newest run of each job
+   counts, as in the review). CI failing on a head the loop pushed stops the
+   loop; CI failing on the author's head only waits.
 2. **Review.** The review script above runs unchanged: one fresh read-only
    process per owning team (key 1), then the orchestrator (key 2), specs from
    `main`, comments and checks posted.

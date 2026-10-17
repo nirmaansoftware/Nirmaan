@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { generateKeyPairSync, createVerify } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -122,8 +122,14 @@ function setup({ responses = [{ type: 'verdict', verdict: 'pass' }], change, gh 
       return { number: 1, state: 'open', draft: false, title: gh.title ?? 'Change app', body: gh.body ?? 'Adds line four. Tests added.', author: gh.author ?? 'patel-om', labels: gh.labels ?? [], headSha: moved ? 'b'.repeat(40) : headSha, headRef: 'feature', headRepo: gh.headRepo ?? CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo };
     },
     async listReviews() { return (gh.reviews ?? []).map((r) => ({ ...r, commitId: r.commitId === 'HEAD' ? headSha : r.commitId })); },
-    async listCheckRuns() { return gh.checkRuns ?? CONFIG.required_ci.map((name) => ({ name, status: 'completed', conclusion: 'success', url: `https://ci/${name}`, completedAt: '2026-10-17T00:00:00Z' })); },
-    async createComment(n, body) { posts.push({ type: 'comment', body }); return { url: `https://github.example/pr/1#c${posts.length}` }; },
+    // CI runs, plus the check runs the review App posted on this head (as GitHub lists them).
+    async listCheckRuns() {
+      const ci = gh.checkRuns ?? CONFIG.required_ci.map((name, i) => ({ id: i + 1, name, status: 'completed', conclusion: 'success', url: `https://ci/${name}`, startedAt: '2026-10-16T23:50:00Z', completedAt: '2026-10-17T00:00:00Z', app: 'github-actions' }));
+      const mine = posts.filter((p) => p.type === 'check').map((c, i) => ({ id: 1000 + i, name: c.name, status: c.state === 'pending' ? 'in_progress' : 'completed', conclusion: c.state === 'pending' ? null : c.state, title: c.title, app: CONFIG.review_app_slug, startedAt: '2026-10-17T00:10:00Z' }));
+      return [...ci, ...mine];
+    },
+    async listComments() { return posts.filter((p) => p.type === 'comment').map((c, i) => ({ body: c.body, url: `https://github.example/pr/1#c${i + 1}`, author: `${CONFIG.review_app_slug}[bot]` })); },
+    async createComment(n, body) { posts.push({ type: 'comment', body }); return { url: `https://github.example/pr/1#c${posts.filter((p) => p.type === 'comment').length}` }; },
     async createCheckRun(c) { posts.push({ type: 'check', ...c }); },
     async createStatus(s) { posts.push({ type: 'status', ...s }); },
   };
@@ -424,14 +430,66 @@ test('specs and checklists are read from main: a PR that edits a lead spec is re
   } finally { t.cleanup(); }
 });
 
-test('CI not green: pending, no model call', async () => {
-  const t = setup({ gh: { checkRuns: [{ name: 'os-test', status: 'completed', conclusion: 'failure' }] } });
+const ciRun = (name, extra = {}) => ({ id: 1, name, status: 'completed', conclusion: 'success', url: `https://ci/${name}`, startedAt: '2026-10-17T00:00:00Z', completedAt: '2026-10-17T00:05:00Z', app: 'github-actions', ...extra });
+const greenExcept = (name, runs) => [...CONFIG.required_ci.filter((n) => n !== name).map((n) => ciRun(n)), ...runs];
+
+test('CI still running or missing: pending "waiting for CI", no model call', async () => {
+  const t = setup({ gh: { checkRuns: [ciRun('os-test', { status: 'in_progress', conclusion: null, completedAt: null })] } });
   try {
-    await t.run();
+    const r = await t.run();
     assert.equal(t.calls().length, 0);
+    assert.ok(r.waiting);
     assert.match(t.check('review/team-lead').title, /waiting for CI/);
+    assert.equal(t.check('review/team-lead').state, 'pending');
     noSuccess(t);
   } finally { t.cleanup(); }
+});
+
+test('CI that finished and failed: "CI failed; review not run" as action_required on both keys, no model call', async () => {
+  const t = setup({ gh: { checkRuns: greenExcept('os-test', [ciRun('os-test', { conclusion: 'failure' })]) } });
+  try {
+    const r = await t.run();
+    assert.equal(r.exit, EXIT.ok);
+    assert.ok(r.ciFailed && !r.waiting);
+    assert.equal(t.calls().length, 0, 'no model call');
+    for (const name of ['review/team-lead', 'review/executive']) {
+      const c = t.check(name);
+      assert.equal(c.state, 'action_required', 'terminal, and a conclusion that never satisfies a required check');
+      assert.match(c.title, new RegExp(`^CI failed on ${t.headSha.slice(0, 7)}: os-test failure; review not run`));
+      assert.doesNotMatch(c.title, /waiting/);
+    }
+    noSuccess(t);
+  } finally { t.cleanup(); }
+});
+
+test('a CI rerun in progress beats an older completed success: the review waits', async () => {
+  const runs = greenExcept('os-test', [
+    ciRun('os-test', { id: 10, startedAt: '2026-10-17T00:00:00Z', completedAt: '2026-10-17T00:05:00Z' }),
+    ciRun('os-test', { id: 11, status: 'in_progress', conclusion: null, startedAt: '2026-10-17T01:00:00Z', completedAt: null }),
+  ]);
+  const t = setup({ gh: { checkRuns: runs } });
+  try {
+    const r = await t.run();
+    assert.equal(t.calls().length, 0, 'never green while a newer run is in progress');
+    assert.match(r.waiting, /os-test in_progress/);
+    noSuccess(t);
+  } finally { t.cleanup(); }
+});
+
+test('the newest completed CI run decides: a newer failure beats an older success, a newer success beats an older failure', async () => {
+  const older = { id: 10, startedAt: '2026-10-17T00:00:00Z', completedAt: '2026-10-17T00:30:00Z' };
+  const newer = { id: 11, startedAt: '2026-10-17T01:00:00Z', completedAt: '2026-10-17T01:05:00Z' };
+  const a = setup({ gh: { checkRuns: greenExcept('os-test', [ciRun('os-test', { ...older, conclusion: 'success' }), ciRun('os-test', { ...newer, conclusion: 'failure' })]) } });
+  try {
+    const r = await a.run();
+    assert.ok(r.ciFailed);
+    assert.equal(a.calls().length, 0);
+  } finally { a.cleanup(); }
+  const b = setup({ gh: { checkRuns: greenExcept('os-test', [ciRun('os-test', { ...newer, conclusion: 'success' }), ciRun('os-test', { ...older, conclusion: 'failure' })]) } });
+  try {
+    await b.run();
+    assert.equal(b.check('review/team-lead').state, 'success');
+  } finally { b.cleanup(); }
 });
 
 test('hold label: key 2 passes but review/executive stays pending', async () => {
@@ -479,6 +537,76 @@ test('the lock: a live holder blocks a second review; a dead holder is cleared',
     mkdirSync(join(t.stateDir, 'review.lock'));
     writeFileSync(join(t.stateDir, 'review.lock', 'owner.json'), JSON.stringify({ repo: 'x', pr: 1, pid: 999999 }));
     assert.equal((await t.run()).exit, EXIT.ok);
+  } finally { t.cleanup(); }
+});
+
+test('a rerun with the same cached verdicts on the same head posts no second comment or check run', async () => {
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/app.js', line: 2, severity: 'critical', text: 'no test' }] }] });
+  try {
+    await t.run();
+    const first = t.posts.length;
+    assert.equal(t.posts.filter((p) => p.type === 'comment').length, 1);
+    const r = await t.run();
+    assert.equal(t.calls().length, 1, 'the verdict was reused');
+    assert.equal(t.posts.length, first, 'nothing posted again');
+    assert.equal(r.key1[0].url, 'https://github.example/pr/1#c1', 'the earlier comment is linked');
+    await t.run({ fresh: true });
+    assert.equal(t.calls().length, 2);
+    assert.equal(t.posts.length, first, 'an identical fresh verdict is not posted again either');
+  } finally { t.cleanup(); }
+});
+
+test('a changed result on the same head is still posted: the founder approves after the keys passed', async () => {
+  const gh = { reviews: [] };
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n'), gh });
+  try {
+    await t.run();
+    assert.equal(t.check('review/executive').state, 'pending');
+    const comments = () => t.posts.filter((p) => p.type === 'comment').length;
+    const before = comments();
+    gh.reviews.push({ login: 'nirmaansoftware', state: 'APPROVED', commitId: 'HEAD' });
+    await t.run();
+    assert.equal(t.calls().length, 2, 'cached verdicts, no new call');
+    assert.equal(comments(), before + 1, 'key 2 comment posted again: its founder note changed; key 1 comment not repeated');
+    assert.equal(t.check('review/executive').state, 'success');
+    assert.equal(t.checks().filter((c) => c.name === 'review/team-lead').length, 1, 'key 1 check not repeated');
+  } finally { t.cleanup(); }
+});
+
+test('worktrees: the per-run folder is removed too, on success and on early return', async () => {
+  const t = setup();
+  try {
+    await t.run();
+    assert.deepEqual(readdirSync(join(t.stateDir, 'worktrees')), [], 'no empty per-run folder left');
+  } finally { t.cleanup(); }
+  const w = setup({ gh: { checkRuns: [] } });
+  try {
+    await w.run();
+    assert.deepEqual(readdirSync(join(w.stateDir, 'worktrees')), []);
+  } finally { w.cleanup(); }
+});
+
+test('the lock: a folder with no owner file is stale after 30 minutes, held before; the owner file is written whole', async () => {
+  const t = setup();
+  try {
+    const dir = join(t.stateDir, 'review.lock');
+    mkdirSync(dir, { recursive: true });
+    const young = acquireLock(t.stateDir, { repo: 'x', pr: 1 });
+    assert.equal(young.ok, false, 'a fresh lock without its owner file may still be being written');
+    const old = new Date(Date.now() - 31 * 60 * 1000);
+    utimesSync(dir, old, old);
+    const got = acquireLock(t.stateDir, { repo: 'x', pr: 2 });
+    assert.ok(got.ok, 'an ownerless lock older than 30 minutes is cleared');
+    assert.deepEqual(readdirSync(dir), ['owner.json'], 'no temporary owner file left behind');
+    const owner = JSON.parse(readFileSync(join(dir, 'owner.json'), 'utf8'));
+    assert.equal(owner.pid, process.pid);
+    assert.equal(owner.pr, 2);
+    got.release();
+    assert.ok(!existsSync(dir));
+    mkdirSync(dir);
+    writeFileSync(join(dir, 'owner.json'), '{"repo": "x", "pid"');
+    utimesSync(dir, old, old);
+    assert.ok(acquireLock(t.stateDir, { repo: 'x', pr: 3 }).ok, 'an unreadable owner file in an old lock is stale too');
   } finally { t.cleanup(); }
 });
 
