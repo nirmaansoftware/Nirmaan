@@ -1,8 +1,12 @@
-# Nirmaan OS: test every change (typecheck, lint, unit tests). It deploys nothing:
-# the OS is paused (2026-10-17) and its deploy job was removed; see
-# docs/engineering/deployment.md. No path filter, so this can be a required check
-# without docs-only pull requests waiting on it forever. The public website isn't
-# touched here (Vercel deploys it on its own).
+# Nirmaan OS: test every change with the checks AGENTS.md requires before merge
+# (a fresh database from the committed migrations, typecheck, lint, unit tests,
+# next build). It deploys nothing: the OS is paused (2026-10-17) and its deploy
+# job was removed; see docs/engineering/deployment.md.
+#
+# The job id and name are both `os-test`, unique across the repository's
+# workflows, so a ruleset can require it by name. No path filter, so it can be a
+# required check without docs-only pull requests waiting on it forever. The
+# public website isn't touched here (Vercel publishes it on its own).
 # Actions are pinned by commit SHA, with the release in a comment.
 name: Nirmaan OS
 
@@ -20,20 +24,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  os-test:
+    name: os-test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: os
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: os/package-lock.json
-      - run: npm ci
-      - run: npx prisma migrate deploy
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
+      - name: Install (npm ci)
+        run: npm ci
+      # A fresh checkout has no database (prisma/dev.db is git-ignored), so this
+      # builds one from scratch out of the committed migrations (DATABASE_URL
+      # comes from the tracked, non-secret os/.env).
+      - name: Migrate a fresh database
+        run: npx prisma migrate deploy
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npx next build
