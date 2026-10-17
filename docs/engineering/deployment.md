@@ -23,8 +23,12 @@ stopped machine: it would bring back that old build. The only way back is the
 
 The rest of this section describes the setup as it ran, for the un-pause.
 
-One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and the campaign worker side by side
-(`os/scripts/start.sh`). The database (`/data/nirmaan.db`) and project files
+One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and, only when
+`NIRMAAN_WORKER` is exactly `on`, the campaign worker beside it (`os/scripts/start.sh`).
+`fly.toml` sets `NIRMAAN_WORKER = "off"`, so a deploy serves the web app alone. While
+the OS is paused (since 2026-10-17), `fly.toml` also keeps no machine running
+(`min_machines_running = 0`) and never starts one on a request
+(`auto_start_machines = false`). The database (`/data/nirmaan.db`) and project files
 (`/data/projects`) live on a persistent volume. Config: `fly.toml` and `Dockerfile.os`
 at the repo root; the image holds only `os/` and `agents/`.
 
@@ -48,12 +52,14 @@ client's redirect URIs.
 
 Deploys: while it ran, `.github/workflows/os.yml` tested every change and deployed
 merges to `main`. **That no longer happens:** the workflow has no deploy job any more
-(it keeps the tests), and the deploy credential was revoked. A
+(it only tests: typecheck, lint, unit tests, on every pull request and push to `main`,
+with no path filter), and the deploy credential was revoked. A
 deploy is now a deliberate act by the founder, at un-pause, with a newly issued
 deploy token. Logs: `fly logs`; while running, the worker's ticks appear there once a
 minute.
 
-Backups: while running, every night after 02:00 India time the worker emailed a
+Backups: while running, every night after 02:00 India time the worker (only when
+`NIRMAAN_WORKER` is `on`) emailed a
 gzipped copy of the whole database to our own mailbox ("Nirmaan OS backup <date>",
 `src/lib/backup.ts`; `BACKUP_EMAIL` to send it elsewhere). That stops with the
 machine. Fly keeps volume snapshots for only 5 days, so the copy that counts while
@@ -95,6 +101,8 @@ and the founder approves the restart.
       without re-sending, old approvals expire back to draft, and build inputs are
       pinned.
 - [ ] **Uptime and "machine started" alert in place** (N20).
+- [ ] **Worker switched back on:** `NIRMAAN_WORKER = "on"` in `fly.toml` (it is
+      `off` while paused, so a deploy serves the web app alone).
 - [ ] **Founder approval** for the restart, recorded with the date.
 
 Then deploy the patched build by hand with the new token, turn automatic start

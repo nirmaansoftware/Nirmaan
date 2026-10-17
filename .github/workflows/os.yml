@@ -1,13 +1,15 @@
-# Nirmaan OS: test every change to the OS, and deploy to Fly.io when it lands on main.
-# The public website isn't touched here (Vercel deploys it on its own).
+# Nirmaan OS: test every change (typecheck, lint, unit tests). It deploys nothing:
+# the OS is paused (2026-10-17) and its deploy job was removed; see
+# docs/engineering/deployment.md. No path filter, so this can be a required check
+# without docs-only pull requests waiting on it forever. The public website isn't
+# touched here (Vercel deploys it on its own).
+# Actions are pinned by commit SHA, with the release in a comment.
 name: Nirmaan OS
 
 on:
   pull_request:
-    paths: ["os/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
   push:
     branches: [main]
-    paths: ["os/**", "agents/**", "Dockerfile.os", "fly.toml", ".dockerignore", ".github/workflows/os.yml"]
   workflow_dispatch: {}
 
 permissions:
@@ -24,8 +26,8 @@ jobs:
       run:
         working-directory: os
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm
@@ -35,14 +37,3 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-
-  deploy:
-    needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --ha=false
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
