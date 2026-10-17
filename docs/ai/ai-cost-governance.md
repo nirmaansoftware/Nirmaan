@@ -7,7 +7,7 @@ success/error, lead/project.**
 Cost source, in order of trust:
 
 1. `REPORTED` by the provider (the `claude` CLI reports the real cost).
-2. `ESTIMATED` from real token counts × `costs/pricing.ts`.
+2. `ESTIMATED` from real token counts × `os/src/lib/ai/costs/pricing.ts`.
 3. `UNKNOWN`: stored as null. **Never guessed.**
 
 | Capability | Status |
