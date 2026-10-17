@@ -19,8 +19,18 @@ these decisions to the meeting. The founder still merges the page and signs each
   "Nirmaan Outreach".
 
 ### Status
-- **Early access, up to three businesses.** Not "live". No sign-up, no free trial.
-- We set it up and run it with each client. Results are not promised.
+- **Waitlist (OS paused 2026-10-17).** Not taking clients. No early access, no "up to three",
+  no sign-up, no free trial, no contract, no payment. The page keeps its URL and stays indexed.
+- Own use is past tense only: "We used it for our own outreach from September 2026." Never
+  "we use it". The page gives no reason for the pause and no opening date.
+- The page shows the planned price, labelled as the price when it opens. The early-access
+  price (`earlySetup` in `pricing.json`) stays in data but is not shown. No JSON-LD `Offer`.
+- No claim the code doesn't back: no "your voice" or "your real signature" until gate E1 closes,
+  no full export on leaving until gate E16 closes (only the message-log CSV exists).
+- The earlier status, "Early access, up to three businesses", is withdrawn. Where the "Page
+  changes" checklist below says early access, it is history from PR #59 and must not be
+  re-applied.
+- When it opens, we set it up and run it with each client. Results are not promised.
 
 ### Price
 - **One plan. No tiers.**
@@ -53,7 +63,7 @@ these decisions to the meeting. The founder still merges the page and signs each
 - It lives in `website/src/_data/pricing.json` and is rendered with the existing care-card pattern.
 
 ### Can the page go live now?
-- **Yes, as early access**, once the page changes below are done and the founder merges the PR.
+- **Superseded 2026-10-17: the page is a waitlist (see Status).** Originally: yes, as early access, once the page changes below are done and the founder merges the PR.
 - The page only collects enquiries. Work to get ready for clients happens in parallel.
 - No contract is signed until the client agreement is ready. No client email is sent until every
   item in "Before the first paying client" has passed.
@@ -63,6 +73,9 @@ these decisions to the meeting. The founder still merges the page and signs each
 - Add a small strip when the first early-access client is live.
 
 ## Page changes
+
+History from PR #59. Superseded by the waitlist Status above: do not re-apply any early-access,
+"up to three", "we use it", "your voice", "your real signature", full-export or `Offer` item.
 
 File: `website/src/outreach.njk` on branch `product/nirmaan-marketing` (PR #59), plus the files
 named below. Rebuild `website/public/` in the same PR.

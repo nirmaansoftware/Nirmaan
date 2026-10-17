@@ -2,9 +2,9 @@
 
 Two experiences, one data model, different permissions and UX.
 
-**Status:** the OS is paused since 2026-10-18 (see
-[deployment](../engineering/deployment.md#pause-and-un-pause)). "IMPLEMENTED" below
-means built and tested in the code, not running for clients today.
+**Status:** the OS runs with screens on and the worker off since 2026-10-18 (see
+[deployment](../engineering/deployment.md#worker-off-and-turning-it-back-on)). "IMPLEMENTED" below
+means built and tested in the code, not in use by clients today.
 
 ## Customer surfaces
 

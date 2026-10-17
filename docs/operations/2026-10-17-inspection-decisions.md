@@ -10,10 +10,21 @@ also left every live-infrastructure and account action (stopping the OS,
 revoking credentials, repo settings) for the founder to run or approve. Nothing
 was changed by the meeting itself.
 
-## 1. The OS is paused
+## 1. The OS: screens on, worker off
 
 The OS was meant to be paused (it was only ever used on Nirmaan itself, as a
 test) but was found running.
+
+**Founder decision, same day (overrules the meeting's full stop below):** the OS
+keeps its screens on, so the team can sign in with Google and see its data, and
+its worker stays off: nothing reads the inbox, sends email, runs AI or searches
+Google Places. In place since 2026-10-18: the patched build from `main` was
+deployed with the worker switched off, the old build was never restarted, and
+the email, inbox, Places and Claude credentials were removed from the host
+(Google sign-in kept). The machine wakes on a request and stops when idle. The
+rest of this section is the meeting's decision as taken; the backup, the
+checks before any restart and the credential steps still apply, now to turning
+the worker back on.
 
 - **Decision:** back up its data first, then stop it and turn off automatic
   start, so a web request cannot wake it. Keep the stopped machine and its
@@ -31,7 +42,7 @@ test) but was found running.
   arrived during the pause are processed before anything is sent, credentials
   are reissued, monitoring is in place, and the founder approves. The checklist
   lives in the deployment docs.
-- **Credentials** the OS held are retired at their providers while it is paused.
+- **Credentials** the OS held are retired at their providers while the worker is off.
 - The website does not depend on the OS; its contact form is unaffected.
 
 ## 2. Nirmaan Outreach becomes a waitlist
@@ -72,7 +83,7 @@ there.
 | ID | Item | P |
 |---|---|---|
 | N1 | Back up the OS data before the stop, checked by a local restore, encrypted, outside any repository | P0 |
-| N2 | Pause the OS: queue check, stop outside sending and backup hours, automatic start off, keep machine and storage | P0 |
+| N2 | Pause the OS: queue check, stop outside sending and backup hours, automatic start off, keep machine and storage (revised by the founder to screens on, worker off: see section 1) | P0 |
 | N3 | Remove the OS deploy credential from GitHub and revoke it at the host | P0 |
 | N4 | Cap or disable the OS's metered API key; confirm no usage and no billed extras | P0 |
 | N5 | OS dependency security update, merged, not deployed | P0 |

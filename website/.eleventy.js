@@ -92,7 +92,7 @@ module.exports = function (eleventyConfig) {
     return {
       plan: map(pricing.packages, (p) => ({ label: `${p.name} package`, detail: `from ${INR.format(p.from)} · ${p.weeks} weeks`, href: `/pricing/${p.id}.html`, budget: budgetFor(p.from) })),
       care: map(pricing.care, (c) => ({ label: `${c.name} care plan`, detail: `${INR.format(c.monthly)} / month`, href: `/pricing/care/${c.id}.html` })),
-      product: map(products.filter((p) => !p.external), (p) => ({ label: p.name, detail: p.tagline, href: p.href })),
+      product: map(products.filter((p) => !p.external), (p) => ({ label: p.name, detail: p.interestDetail || p.tagline, href: p.href })),
       service: map(serviceList, (s) => {
         const p = byId[s.plan];
         return { label: s.title, detail: p ? `usually ${p.name}, from ${INR.format(p.from)}` : 'a monthly care plan', href: `/services/${s.id}.html`, budget: p ? budgetFor(p.from) : '' };

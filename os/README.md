@@ -12,9 +12,13 @@ Next.js app, three audiences with different permissions:
   public website does not use it: its form sends enquiries by email through
   Web3Forms.
 
-**Paused since 2026-10-18.** It ran on Fly.io as the app `nirmaan-os`; the machine is
-stopped and its data kept. See [deployment](../docs/engineering/deployment.md#pause-and-un-pause)
-before restarting anything.
+**Screens on, worker off since 2026-10-18.** It runs on Fly.io as the app
+`nirmaan-os`: the patched build from `main` is deployed (the old v10 build was never
+restarted), people sign in with Google and see the data, and the campaign worker is
+off (`NIRMAAN_WORKER = "off"`). The email, inbox, Places and Claude credentials were
+removed, so nothing reads the inbox, sends email, runs Claude or calls Google Places.
+See [deployment](../docs/engineering/deployment.md#worker-off-and-turning-it-back-on)
+before turning the worker back on.
 This Next.js version has breaking changes: read [AGENTS.md](AGENTS.md) and the guides in
 `node_modules/next/dist/docs/` before changing code.
 

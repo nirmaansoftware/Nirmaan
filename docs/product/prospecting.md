@@ -1,9 +1,11 @@
-# Prospecting · IMPLEMENTED, PAUSED with the OS (since 2026-10-18)
+# Prospecting · IMPLEMENTED, WORKER OFF (since 2026-10-18)
 
-**Not running.** Prospecting lives in the Nirmaan OS, which is paused: no searches,
-drafts or sends happen until the OS is restarted through the
-[un-pause checklist](../engineering/deployment.md#pause-and-un-pause). The
-description below is how it works when running.
+**Not running.** Prospecting lives in the Nirmaan OS, which runs with screens on and
+the worker off: existing prospects and messages can be viewed, but no searches,
+drafts or sends happen (the worker is off and the email, inbox, Places and Claude
+credentials were removed) until the worker is turned back on through the
+[checklist](../engineering/deployment.md#worker-off-and-turning-it-back-on). The description below is how it works when
+running.
 
 Finding businesses Nirmaan could help, before they ask. Lives in the Nirmaan OS
 at **Pipeline → Prospects** (`/os/prospects`), code in `os/src/lib/prospecting/`.
