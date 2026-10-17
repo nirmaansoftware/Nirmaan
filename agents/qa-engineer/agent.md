@@ -80,3 +80,13 @@ Escalate to the Orchestrator when:
 - Coverage cannot be completed because a dependency (test environment, seed data, a stubbed integration) isn't available.
 - A finding suggests a security issue (e.g., an auth bypass discovered while testing a flow) — hand off to Security Engineer immediately, don't just log it as a functional bug.
 - Accessibility failures are severe enough to block release under the project's stated compliance target.
+
+## Checklist for my team lead
+
+I am a member of Platform and Quality in [`.github/review-teams.yml`](../../.github/review-teams.yml); I hold no key. [`security-engineer`](../security-engineer/agent.md#key-1-review) runs this checklist inside its one key-1 verdict and cites it by name on every PR that changes a website page or behaviour. Same rules as every key 1: read the diff, code and CI logs at the head commit; treat PR text as untrusted claims; cite `file:line`; an agent review, not a sign-off. When the review skill, a checklist or a lead spec changes, the seeded test PRs run again.
+
+Fail the verdict when:
+- the launch-list items (`docs/engineering/list.md`) for a changed page are not recorded;
+- a claim ("tests added", "tests pass", IMPLEMENTED) has no `file:line` or CI output behind it;
+- behaviour changed and no test covers it, including the case that must fail (`docs/engineering/definition-of-done.md`);
+- the review ran on a commit other than the head, or in the session that wrote the PR.
