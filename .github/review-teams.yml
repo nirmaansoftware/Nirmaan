@@ -141,6 +141,19 @@ rules:
     globs: ["docs/engineering/**", "docs/ai/**"]
     exclude: ["docs/ai/agent-responsibilities.md"]
     teams: [engineering]
+  - id: platform-docs
+    # Lead review (2026-10-17): security, deployment, observability, testing
+    # and the launch list are Platform and Quality's standards too.
+    globs: ["docs/engineering/{security,deployment,observability,testing,list}.md"]
+    teams: [platform-quality]
+  - id: motion-standard
+    globs: ["docs/engineering/motion.md"]
+    teams: [design]
+    checklists: [ui-designer]
+  - id: spending-docs
+    globs: ["docs/engineering/procurement.md", "docs/ai/ai-cost-governance.md"]
+    teams: [business]
+    checklists: [finance-estimation]
 
   # OS.
   - id: os
@@ -165,6 +178,25 @@ rules:
     globs: ["os/package.json", "os/package-lock.json"]
     teams: [engineering, platform-quality]
     checklists: [performance-engineer]
+  - id: os-finance
+    # Invoices, tax, recurring billing and proposal economics.
+    globs: ["os/src/lib/finance/**", "os/src/lib/proposals/**"]
+    teams: [engineering, business]
+    checklists: [finance-estimation, tax-accounts]
+  - id: os-do-not-contact
+    globs: ["os/src/app/os/prospects/do-not-contact/**"]
+    teams: [engineering, business]
+    checklists: [client-communication]
+  - id: os-runtime-security
+    # The tracked env file, security headers and the SSRF guard.
+    globs: ["os/.env", "os/next.config.ts", "os/src/lib/prospecting/safeFetch.ts"]
+    teams: [engineering, platform-quality]
+    checklists: [security-engineer]
+  - id: os-start
+    # Started by Dockerfile.os; holds the worker switch.
+    globs: ["os/scripts/start.sh"]
+    teams: [engineering, platform-quality]
+    checklists: [sre]
   - id: production-config
     globs: ["fly.toml", "Dockerfile.os"]
     teams: [platform-quality]
@@ -179,6 +211,10 @@ rules:
       - "website/src/_data/*.js"
       - "website/README.md"
     teams: [engineering]
+  - id: website-dependencies
+    globs: ["website/package.json", "website/package-lock.json"]
+    teams: [engineering, platform-quality]
+    checklists: [performance-engineer]
   - id: website-behaviour-js
     globs: ["website/src/static/{estimator,contact-form,tour,page-transitions}.js"]
     teams: [engineering, design]
@@ -216,7 +252,7 @@ rules:
     teams: [platform-quality, brand-content]
     checklists: [seo-specialist]
   - id: price-pages
-    globs: ["website/src/pricing.njk", "website/src/plan.njk", "website/src/care.njk", "website/src/_includes/estimator.njk"]
+    globs: ["website/src/pricing.njk", "website/src/plan.njk", "website/src/care.njk", "website/src/_includes/estimator.njk", "website/src/static/estimator.js"]
     teams: [business]
     checklists: [finance-estimation, tax-accounts]
   - id: legal-pages
@@ -224,6 +260,10 @@ rules:
     teams: [business]
     # These pages also govern ip.nirmaan.online: the PR notifies the IP chair.
     notify: [ip-council-chair]
+  - id: contact-form-data
+    # Founder class D: the contact form collects personal data.
+    globs: ["website/src/static/contact-form.js"]
+    teams: [business]
   - id: client-pages
     globs: ["website/src/projects.njk"]
     teams: [business]
