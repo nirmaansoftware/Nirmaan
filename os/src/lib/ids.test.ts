@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatCode, nextCode, prefixOf } from "./ids";
+import { formatCode, isCode, nextCode, prefixOf } from "./ids";
 
 test("formatCode pads to three digits and grows beyond", () => {
   assert.equal(formatCode("REQ", 4), "REQ-004");
@@ -14,6 +14,12 @@ test("prefixOf recognises only our prefixes", () => {
   assert.equal(prefixOf("NOPE-001"), null);
   assert.equal(prefixOf("REQ-1"), null);
   assert.equal(prefixOf("req-001"), null);
+});
+
+test("isCode accepts our codes and rejects others", () => {
+  assert.equal(isCode("REQ-104"), true);
+  assert.equal(isCode("NOPE-001"), false);
+  assert.equal(isCode("REQ-1"), false);
 });
 
 test("nextCode never hands out the same code twice, even concurrently", async () => {
