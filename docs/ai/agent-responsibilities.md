@@ -24,5 +24,8 @@ each `agents/<slug>/agent.md`). "R" = responsible, "A" = the human who approves.
 | Tax and accounts | `tax-accounts` (notes only) | GST, TDS and invoice notes, questions for the accountant | A chartered accountant reviews; the founder files |
 | Sales and partnerships | `sales-partnerships` (plans only) | Go-to-market and partner plans, call guides | Messages go through the OS with a person's approval; the founder signs deals |
 
-Unassigned by design: no agent can approve a gate, send a client
-communication, change a price, or deploy.
+Agents review pull requests as key 1 (the lead of each owning team) and key 2
+(the orchestrator), per [pr-review.md](../operations/pr-review.md). A passing
+key is an agent review, never a person's approval or sign-off. The founder
+approves founder classes A to F. Unassigned by design: no agent can send a
+client communication, change a price, or deploy.

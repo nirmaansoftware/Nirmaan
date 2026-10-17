@@ -10,6 +10,13 @@ convention and the founder merges every PR.** Automatic merge stays off until
 seeded test PRs show the mechanism behaves as written. This page moves to
 IMPLEMENTED after the first real PR merges through both keys.
 
+**The rule: every PR has at least two responsible reviewers.** The first is
+the lead of the team that owns the changed files (key 1; one lead per owning
+team). The second is the level above that manages those teams, the orchestrator
+(key 2), and it reviews with those teams' domain knowledge: their lead specs and
+checklists are loaded for its review. No PR, however small, merges on one
+review.
+
 **Agent reviews are reviews, not sign-off.** A passing key means an agent role
 reviewed the PR. It is never a person's approval, a legal sign-off, an
 engineering sign-off or a release decision.
