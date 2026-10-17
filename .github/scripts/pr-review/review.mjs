@@ -13,14 +13,18 @@
 //      and makes clean worktrees of both outside the repository.
 //   4. Computes owning teams, member checklists, founder classes and content
 //      hits from main's .github/review-teams.yml (never the PR's copy).
-//   5. Waits for green required CI on the head (posts pending otherwise).
+//   5. Waits for green required CI on the head: pending while a required job
+//      runs (the newest run of each job counts), "CI failed; review not run"
+//      (action_required, never green) when one finished without success.
 //   6. Key 1: one fresh `claude -p` per owning team, its lead's spec and
 //      checklists from main. Key 2: the orchestrator's spec plus every owning
 //      lead's spec and checklist, given key 1's results.
 //   7. Validates each JSON verdict (schema, head SHA, every cited file:line at
 //      the head); one backoff retry on a failed call, then "review deferred".
 //   8. Checks the head has not moved, then posts one comment per key and the
-//      checks review/team-lead and review/executive. review/executive is
+//      checks review/team-lead and review/executive. A comment or check run
+//      identical to the App's latest one for that key, team and head is not
+//      posted again (a rerun that reused its cached verdicts). review/executive is
 //      success only with key 2 pass, no `hold` label, and, for a founder-class
 //      PR, the founder's approval on this head SHA.
 //
@@ -40,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../review-teams.mjs';
 import {
   acquireLock, classify, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, nonce, parseNameStatusZ, parseVerdictText,
-  prTextBlock, renderComment, statusDescription, userPrompt, validateVerdict, VERDICT_SCHEMA,
+  prTextBlock, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict, VERDICT_SCHEMA,
 } from './lib.mjs';
 import { claudeArgs, reviewerEnv, runWithRetry } from './claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from './github.mjs';
@@ -79,6 +83,7 @@ export async function runReview(o) {
   }
   const worktrees = [];
   const posted = [];
+  let wtRoot = null;
   try {
     // 2. Eligibility.
     const pull = await o.github.getPull(o.pr);
@@ -99,7 +104,7 @@ export async function runReview(o) {
     const mainSha = git(o.repoRoot, ['rev-parse', 'refs/pr-review/main']).trim();
     const baseSha = git(o.repoRoot, ['merge-base', mainSha, headSha]).trim();
     mkdirSync(join(o.stateDir, 'worktrees'), { recursive: true });
-    const wtRoot = mkdtempSync(join(o.stateDir, 'worktrees', `${cfg.repo.replace('/', '_')}-${o.pr}-`));
+    wtRoot = mkdtempSync(join(o.stateDir, 'worktrees', `${cfg.repo.replace('/', '_')}-${o.pr}-`));
     const headDir = join(wtRoot, 'head'), mainDir = join(wtRoot, 'main');
     for (const [dir, sha] of [[headDir, headSha], [mainDir, mainSha]]) {
       git(o.repoRoot, ['worktree', 'add', '--quiet', '--detach', dir, sha]);
@@ -112,9 +117,26 @@ export async function runReview(o) {
       const now = (await o.github.getPull(o.pr)).headSha;
       if (now !== headSha) throw new HeadMoved(`the head moved from ${headSha.slice(0, 7)} to ${now.slice(0, 7)} during the review`);
     };
+    // What the review App already posted on this head, read once per run.
+    const appLogin = cfg.review_app_slug ? `${cfg.review_app_slug}[bot]` : null;
+    let headRuns = null, appComments = null;
+    const checkRunsOnHead = async () => (headRuns ??= await o.github.listCheckRuns(headSha));
+    const markerKey = (body) => body.split('\n')[0].replace(/ digest=[0-9a-f]+ -->$/, ' -->');
     const comment = async (body) => {
       await checkHead();
       if (o.post === 'none') { out(`----- comment (not posted)\n${body}`); posted.push({ type: 'comment', body }); return null; }
+      if (o.post === 'app' && appLogin) {
+        // The App's latest comment for this key, team and head; the same
+        // digest means the same verdict, so it is linked, not posted again.
+        appComments ??= (await o.github.listComments(o.pr)).filter((c) => c.author === appLogin);
+        const marker = body.split('\n')[0];
+        const last = appComments.filter((c) => markerKey(c.body ?? '') === markerKey(body)).pop();
+        if (last && (last.body ?? '').split('\n')[0] === marker) {
+          out(`pr-review: the same result is already posted for this key and head (${last.url}); not posted again.`);
+          posted.push({ type: 'comment', body, url: last.url, reused: true });
+          return last.url;
+        }
+      }
       const r = await o.github.createComment(o.pr, body);
       posted.push({ type: 'comment', body, url: r.url });
       return r.url;
@@ -125,12 +147,22 @@ export async function runReview(o) {
       const desc = statusDescription(description);
       if (o.post === 'none') { out(`----- check ${name}: ${state}: ${desc} (not posted)`); posted.push({ type: 'check', name, state, description: desc }); return; }
       if (o.post === 'app') {
+        // Not again when the App's latest run of this check on this head
+        // already says the same.
+        const want = state === 'pending' ? { status: 'in_progress', conclusion: null } : { status: 'completed', conclusion: state === 'success' || state === 'action_required' ? state : 'failure' };
+        const latest = (await checkRunsOnHead()).filter((r) => r.name === name && r.app === cfg.review_app_slug)
+          .sort((a, b) => String(b.startedAt ?? '').localeCompare(String(a.startedAt ?? '')) || (Number(b.id) || 0) - (Number(a.id) || 0))[0];
+        if (latest && latest.status === want.status && (latest.conclusion ?? null) === want.conclusion && latest.title === desc) {
+          out(`pr-review: check ${name} already says "${desc}" on this head; not posted again.`);
+          posted.push({ type: 'check', name, state, description: desc, reused: true });
+          return;
+        }
         await o.github.createCheckRun({ name, headSha, state, title: desc, summary: `${desc}\n\nAgent review, not a sign-off.${detailsUrl ? ` Comment: ${detailsUrl}` : ''}`, detailsUrl });
         posted.push({ type: 'check', name, state, description: desc });
       } else {
         // Dry run with the caller's login: never green, and a context name the
         // ruleset does not require.
-        const dryState = state === 'failure' ? 'failure' : 'pending';
+        const dryState = state === 'failure' || state === 'action_required' ? 'failure' : 'pending';
         await o.github.createStatus({ sha: headSha, context: `dry-run/${name}`, state: dryState, description: statusDescription(`dry run: ${description}`), targetUrl: detailsUrl });
         posted.push({ type: 'status', name: `dry-run/${name}`, state: dryState, description: `dry run: ${desc}` });
       }
@@ -154,20 +186,25 @@ export async function runReview(o) {
     ctx.classification = classification;
     out(`pr-review: #${o.pr} head ${headSha.slice(0, 7)}; owning teams: ${classification.teams.join(', ')}; founder classes: ${Object.keys(classification.founder).join(', ') || 'none'}`);
 
-    // 5. CI first.
-    const runs = await o.github.listCheckRuns(headSha);
-    const ci = cfg.required_ci.map((name) => {
-      const mine = runs.filter((r) => r.name === name).sort((a, b) => String(b.completedAt ?? '').localeCompare(String(a.completedAt ?? '')));
-      return { name, conclusion: mine[0] ? (mine[0].status === 'completed' ? mine[0].conclusion : mine[0].status) : 'missing', url: mine[0]?.url ?? null };
-    });
-    const notGreen = ci.filter((c) => c.conclusion !== 'success');
-    if (notGreen.length) {
-      const why = `waiting for CI on ${headSha.slice(0, 7)}: ${notGreen.map((c) => `${c.name} ${c.conclusion}`).join(', ')}`;
+    // 5. CI first: the newest run of each required job on the head.
+    const ciNow = requiredCi(cfg.required_ci, await checkRunsOnHead());
+    if (ciNow.state === 'failed') {
+      // Terminal: not "waiting". action_required is never green, and no
+      // review ran, so neither key says pass or fail.
+      const why = `CI failed on ${headSha.slice(0, 7)}: ${ciNow.text}; review not run`;
+      await check('key1', 'action_required', why, ciNow.failed[0]?.url ?? undefined);
+      await check('key2', 'action_required', why, ciNow.failed[0]?.url ?? undefined);
+      out(`pr-review: ${why}. No model was called.`);
+      return { exit: EXIT.ok, ciFailed: why, posted };
+    }
+    if (ciNow.state === 'pending') {
+      const why = `waiting for CI on ${headSha.slice(0, 7)}: ${ciNow.text}`;
       await check('key1', 'pending', why);
       await check('key2', 'pending', why);
       out(`pr-review: ${why}. No model was called.`);
       return { exit: EXIT.ok, waiting: why, posted };
     }
+    const ci = ciNow.jobs;
     ctx.ci = ci;
     ctx.files = files;
 
@@ -219,7 +256,7 @@ export async function runReview(o) {
       if (!o.fresh && existsSync(cacheFile)) {
         const cached = JSON.parse(readFileSync(cacheFile, 'utf8'));
         logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, model, attempt: 0, outcome: 'reused' });
-        return { ...cached, notes: [...(cached.notes ?? []), 'Verdict reused from an earlier run on the same head and main commits; no new model call.'] };
+        return { ...cached, notes: [...(cached.notes ?? []), REUSED_NOTE] };
       }
       const args = claudeArgs({ model, systemPrompt: system, addDirs: [mainDir], schema: VERDICT_SCHEMA });
       const r = await runWithRetry(
@@ -325,6 +362,8 @@ export async function runReview(o) {
     throw e;
   } finally {
     for (const dir of worktrees) { try { git(o.repoRoot, ['worktree', 'remove', '--force', dir]); } catch { rmSync(dir, { recursive: true, force: true }); } }
+    // The per-run parent folder too, or an empty one is left for every run.
+    if (wtRoot) { try { rmSync(wtRoot, { recursive: true, force: true }); } catch { /* best effort */ } }
     try { git(o.repoRoot, ['worktree', 'prune']); } catch { /* best effort */ }
     lock.release();
   }

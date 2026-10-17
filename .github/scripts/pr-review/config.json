@@ -19,5 +19,6 @@
   "include_pr_body": true,
   "max_diff_bytes": 200000,
   "check_names": { "key1": "review/team-lead", "key2": "review/executive" },
+  "review_app_slug": "nirmaan-review",
   "legal_teams": ["business"]
 }

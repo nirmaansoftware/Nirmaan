@@ -120,8 +120,12 @@ export function createClient({ repo, token, fetchImpl = fetch }) {
     },
     async listCheckRuns(sha) {
       return (await paged(`/commits/${sha}/check-runs`, 'check_runs')).map((c) => ({
-        name: c.name, status: c.status, conclusion: c.conclusion, url: c.html_url, app: c.app?.slug ?? null, completedAt: c.completed_at,
+        id: c.id, name: c.name, status: c.status, conclusion: c.conclusion, url: c.html_url, app: c.app?.slug ?? null,
+        title: c.output?.title ?? null, startedAt: c.started_at, completedAt: c.completed_at,
       }));
+    },
+    async listComments(n) {
+      return (await paged(`/issues/${n}/comments`)).map((c) => ({ body: c.body ?? '', url: c.html_url, author: c.user?.login ?? null }));
     },
     async createComment(n, body) {
       const r = await post(`/issues/${n}/comments`, { body });
@@ -131,7 +135,9 @@ export function createClient({ repo, token, fetchImpl = fetch }) {
       const body = { name, head_sha: headSha, output: { title, summary } };
       if (detailsUrl) body.details_url = detailsUrl;
       if (state === 'pending') body.status = 'in_progress';
-      else { body.status = 'completed'; body.conclusion = state === 'success' ? 'success' : 'failure'; }
+      // action_required: terminal, and (unlike neutral) never satisfies a
+      // required check. Used when CI failed and no review ran.
+      else { body.status = 'completed'; body.conclusion = state === 'success' ? 'success' : state === 'action_required' ? 'action_required' : 'failure'; }
       await post('/check-runs', body);
     },
     async createStatus({ sha, context, state, description, targetUrl }) {

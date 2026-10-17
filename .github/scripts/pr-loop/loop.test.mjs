@@ -98,6 +98,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     async addLabels(n, labels) { posts.push({ type: 'label', labels }); g.labels.push(...labels); },
     async listReviews() { return g.reviews; },
     async listCheckRuns(sha) { const c = g.ci(sha); return CONFIG.required_ci.map((name) => ({ name, status: c === 'pending' ? 'in_progress' : 'completed', conclusion: c === 'pending' ? null : c, completedAt: '2026-10-17T00:00:00Z' })); },
+    async listComments() { return []; },
     async createComment(n, body) { posts.push({ type: 'comment', body }); return { url: `https://github.example/pr/1#c${posts.length}` }; },
     async createCheckRun(c) { posts.push({ type: 'check', ...c }); },
     async createStatus(s) { posts.push({ type: 'status', ...s }); },
@@ -395,4 +396,16 @@ test('ciState: missing or running is pending, any other conclusion is a failure'
   assert.equal(ciState(req, [{ name: 'a', status: 'completed', conclusion: 'success' }]).state, 'pending');
   assert.equal(ciState(req, [{ name: 'a', status: 'completed', conclusion: 'success' }, { name: 'b', status: 'completed', conclusion: 'cancelled' }]).state, 'failed');
   assert.equal(ciState(req, [{ name: 'a', status: 'completed', conclusion: 'success' }, { name: 'b', status: 'completed', conclusion: 'success' }]).state, 'green');
+});
+
+test('ciState: the newest run of each job decides, and a rerun in progress is pending, never an older success', () => {
+  const req = ['a'];
+  const run = (id, startedAt, status, conclusion, completedAt) => ({ id, name: 'a', status, conclusion, startedAt, completedAt });
+  // A rerun has no completed_at while it runs; an older success must not win.
+  assert.equal(ciState(req, [run(1, '2026-10-17T00:00:00Z', 'completed', 'success', '2026-10-17T00:05:00Z'), run(2, '2026-10-17T01:00:00Z', 'in_progress', null, null)]).state, 'pending');
+  assert.equal(ciState(req, [run(2, '2026-10-17T01:00:00Z', 'queued', null, null), run(1, '2026-10-17T00:00:00Z', 'completed', 'failure', '2026-10-17T00:05:00Z')]).state, 'pending');
+  // Newest by start time (then id), not by completion time.
+  assert.equal(ciState(req, [run(1, '2026-10-17T00:00:00Z', 'completed', 'success', '2026-10-17T02:00:00Z'), run(2, '2026-10-17T01:00:00Z', 'completed', 'failure', '2026-10-17T01:05:00Z')]).state, 'failed');
+  assert.equal(ciState(req, [run(1, '2026-10-17T00:00:00Z', 'completed', 'failure', '2026-10-17T02:00:00Z'), run(2, '2026-10-17T01:00:00Z', 'completed', 'success', '2026-10-17T01:05:00Z')]).state, 'green');
+  assert.equal(ciState(req, [run(5, '2026-10-17T00:00:00Z', 'completed', 'failure', null), run(6, '2026-10-17T00:00:00Z', 'completed', 'success', null)]).state, 'green', 'same start: the higher id is newer');
 });

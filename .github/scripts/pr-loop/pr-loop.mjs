@@ -34,7 +34,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globMatch } from '../review-teams.mjs';
-import { acquireLock, logCall, nonce, parseNameStatusZ, parseVerdictText } from '../pr-review/lib.mjs';
+import { acquireLock, logCall, nonce, parseNameStatusZ, parseVerdictText, requiredCi } from '../pr-review/lib.mjs';
 import { reviewerEnv, runOnce } from '../pr-review/claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from '../pr-review/github.mjs';
 import { defaults, differsFromMain, EXIT, runReview } from '../pr-review/review.mjs';
@@ -77,17 +77,11 @@ function saveState(stateDir, repo, st) {
 
 // ---------------------------------------------------------------- CI
 
+// The same reading of CI as the review (lib.mjs requiredCi): the newest run
+// of each job, and a run still in progress is pending.
 export function ciState(required, runs) {
-  const jobs = required.map((name) => {
-    const mine = runs.filter((r) => r.name === name).sort((a, b) => String(b.completedAt ?? '').localeCompare(String(a.completedAt ?? '')));
-    const r = mine[0];
-    return { name, state: !r ? 'missing' : r.status !== 'completed' ? r.status : r.conclusion };
-  });
-  const failed = jobs.filter((j) => !['success', 'missing', 'queued', 'in_progress', 'pending', 'waiting', 'requested'].includes(j.state));
-  if (failed.length) return { state: 'failed', jobs, text: failed.map((j) => `${j.name} ${j.state}`).join(', ') };
-  const pending = jobs.filter((j) => j.state !== 'success');
-  if (pending.length) return { state: 'pending', jobs, text: pending.map((j) => `${j.name} ${j.state}`).join(', ') };
-  return { state: 'green', jobs, text: 'all required CI green' };
+  const ci = requiredCi(required, runs);
+  return { state: ci.state, jobs: ci.jobs.map((j) => ({ name: j.name, state: j.conclusion })), text: ci.text };
 }
 
 // ---------------------------------------------------------------- commands
@@ -207,6 +201,7 @@ export async function stepPr(o, listed) {
       if (r.exit === EXIT.refused) { st.done = { head, outcome: 'refused' }; saveState(o.stateDir, cfg.repo, st); return { outcome: 'skip', reason: r.reason }; }
       if (r.exit !== EXIT.ok) return await stop(head, `the review exited ${r.exit}`);
       if (r.waiting) return { outcome: 'wait', reason: r.waiting };
+      if (r.ciFailed) return st.lastFixHead === head ? await stop(head, `CI failed after fix round ${st.rounds} (${r.ciFailed})`) : skip(`${r.ciFailed}; the author fixes it`);
       if (r.deferred) return await stop(head, `review deferred: ${r.deferred}`);
       const k1 = r.key1 ?? [];
       const deferred = [...k1, ...(r.key2 ? [r.key2] : [])].filter((k) => k.status === 'deferred');

@@ -2,8 +2,8 @@
 // reviewer prompts, verdict validation, comment rendering, the cross-repo lock
 // and the call log. No network and no model here; review.mjs wires them up.
 
-import { randomBytes } from 'node:crypto';
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { owners, contentHits, founderClasses, globMatch } from '../review-teams.mjs';
 
@@ -106,6 +106,36 @@ export function classify(map, files, diffText, tracked) {
 }
 
 function globMatchSafe(g, p) { try { return globMatch(g, p); } catch { return false; } }
+
+// ---------------------------------------------------------------- CI
+
+// States of a check run that has not finished yet (plus "missing").
+const CI_WAITING = new Set(['missing', 'queued', 'in_progress', 'pending', 'waiting', 'requested']);
+
+// Newest first: by start time, then by id (a rerun gets a new, higher id). A
+// run that has not completed has no completed_at, so completion time would
+// rank an older finished run above a rerun still in progress.
+function newestFirst(a, b) {
+  return String(b.startedAt ?? '').localeCompare(String(a.startedAt ?? '')) || (Number(b.id) || 0) - (Number(a.id) || 0);
+}
+
+// The required CI jobs on one head: per job name the newest run, where any
+// run of that name not yet completed wins (CI is never green while a rerun
+// is running). State "failed" when a job finished without success, "pending"
+// when one is still running or missing, else "green".
+export function requiredCi(required, runs) {
+  const jobs = required.map((name) => {
+    const mine = runs.filter((r) => r.name === name).sort(newestFirst);
+    const r = mine.find((x) => x.status !== 'completed') ?? mine[0];
+    return { name, conclusion: !r ? 'missing' : r.status !== 'completed' ? r.status : r.conclusion, url: r?.url ?? null };
+  });
+  const failed = jobs.filter((j) => j.conclusion !== 'success' && !CI_WAITING.has(j.conclusion));
+  const pending = jobs.filter((j) => j.conclusion !== 'success' && CI_WAITING.has(j.conclusion));
+  const text = (list) => list.map((j) => `${j.name} ${j.conclusion}`).join(', ');
+  if (failed.length) return { state: 'failed', jobs, failed, text: text(failed) };
+  if (pending.length) return { state: 'pending', jobs, failed, text: text(pending) };
+  return { state: 'green', jobs, failed, text: 'all required CI green' };
+}
 
 // ---------------------------------------------------------------- verdict
 
@@ -323,6 +353,19 @@ export function userPrompt(ctx) {
 // ---------------------------------------------------------------- comment
 
 const MARK = 'nirmaan-pr-review';
+export const REUSED_NOTE = 'Verdict reused from an earlier run on the same head and main commits; no new model call.';
+
+// The marker that opens a review comment. `digest` covers everything the
+// comment says except the "verdict reused" note, so a rerun with the same
+// verdict on the same head finds its earlier comment and does not post again.
+export function commentMarker(r, ctx) {
+  const notes = list(r.notes).filter((n) => n !== REUSED_NOTE);
+  const digest = createHash('sha256').update(JSON.stringify({
+    main: ctx.mainSha, base: ctx.baseSha, status: r.status, reason: r.reason ?? null, model: r.model ?? null,
+    verdict: r.verdict ?? null, notes, founder: Object.keys(ctx.classification?.founder ?? {}), legal: !!r.legal, dryRun: !!ctx.dryRun,
+  })).digest('hex').slice(0, 16);
+  return `<!-- ${MARK} key=${r.key} team=${r.team ?? 'executive'} head=${ctx.headSha} digest=${digest} -->`;
+}
 
 function cell(s, max = 600) {
   let t = String(s ?? '').replace(/\r/g, '').replace(/<!--|-->/g, '').replace(/\n+/g, ' ').replace(/\|/g, '\\|').replace(/@/g, '@\u200b');
@@ -334,7 +377,7 @@ function cell(s, max = 600) {
 export function renderComment(r, ctx) {
   const verdictWord = r.status === 'pass' ? 'PASS' : r.status === 'fail' ? 'FAIL' : 'PENDING: review deferred';
   const lines = [
-    `<!-- ${MARK} key=${r.key} team=${r.team ?? 'executive'} head=${ctx.headSha} -->`,
+    commentMarker(r, ctx),
     `### Agent review: key ${r.key}, ${r.teamName}`,
     '',
     '| | |',
@@ -385,27 +428,40 @@ export function statusDescription(text) {
 
 // ---------------------------------------------------------------- lock
 
+// A lock folder with no readable owner file is stale once it is this old
+// (the process died between the mkdir and writing its owner file).
+export const OWNERLESS_LOCK_STALE_MS = 30 * 60 * 1000;
+
 // One review at a time across both repositories: an atomic mkdir in the
-// shared state directory. The owner file records pid and repo; a lock whose
-// pid is gone is stale and removed once.
-export function acquireLock(stateDir, owner) {
+// shared state directory. The owner file records pid and repo and is written
+// whole (a temporary file renamed inside the lock folder), so a reader never
+// sees half of it. A lock whose pid is gone is stale and removed once; so is
+// one with no readable owner file that is older than OWNERLESS_LOCK_STALE_MS.
+export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS, now = Date.now } = {}) {
   mkdirSync(stateDir, { recursive: true });
   const dir = join(stateDir, 'review.lock');
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       mkdirSync(dir);
-      writeFileSync(join(dir, 'owner.json'), JSON.stringify({ ...owner, pid: process.pid, started: new Date().toISOString() }));
-      return { ok: true, release: () => rmSync(dir, { recursive: true, force: true }) };
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
       let held = null;
-      try { held = JSON.parse(readFileSync(join(dir, 'owner.json'), 'utf8')); } catch { /* being written, or broken */ }
-      if (held && Number.isInteger(held.pid) && !pidAlive(held.pid)) {
+      try { held = JSON.parse(readFileSync(join(dir, 'owner.json'), 'utf8')); } catch { /* not written yet, or broken */ }
+      const deadPid = held && Number.isInteger(held.pid) && !pidAlive(held.pid);
+      let ownerlessAndOld = false;
+      if (!held || !Number.isInteger(held.pid)) {
+        try { ownerlessAndOld = now() - statSync(dir).mtimeMs > staleMs; } catch { /* removed meanwhile: retry */ ownerlessAndOld = true; }
+      }
+      if (deadPid || ownerlessAndOld) {
         rmSync(dir, { recursive: true, force: true });
         continue;
       }
       return { ok: false, holder: held };
     }
+    const tmp = join(dir, `.owner.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
+    writeFileSync(tmp, JSON.stringify({ ...owner, pid: process.pid, started: new Date().toISOString() }));
+    renameSync(tmp, join(dir, 'owner.json'));
+    return { ok: true, release: () => rmSync(dir, { recursive: true, force: true }) };
   }
   return { ok: false, holder: null };
 }
