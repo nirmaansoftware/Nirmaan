@@ -150,6 +150,11 @@ rules:
     globs: ["docs/engineering/motion.md"]
     teams: [design]
     checklists: [ui-designer]
+  - id: design-docs
+    # The visual direction Design key 1 checks against (T14).
+    globs: ["docs/design/**"]
+    teams: [design]
+    checklists: [design-system-engineer, ui-designer]
   - id: spending-docs
     globs: ["docs/engineering/procurement.md", "docs/ai/ai-cost-governance.md"]
     teams: [business]
