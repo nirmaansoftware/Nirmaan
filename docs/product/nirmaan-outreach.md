@@ -1,4 +1,4 @@
-# Nirmaan Outreach · WAITLIST (OS paused since 2026-10-18)
+# Nirmaan Outreach · WAITLIST (OS paused 2026-10-17; early access decided 2026-10-16, withdrawn)
 
 **Not taking businesses now.** Outreach runs on the Nirmaan OS, which is paused, so
 the product page is a waitlist (decided 2026-10-17,
