@@ -50,8 +50,14 @@ costs, per-unit AI arithmetic, or effort estimates.
 
 The meeting decides; the founder can overrule, and the record says so (the
 founder renamed the first product the meeting had named). These always wait for
-the founder: merging anything that publishes, signing a contract, spending
-money (including paying for legal counsel), and changing a public name.
+the founder: signing a contract, spending money (including paying for legal
+counsel), and changing a public name.
+
+Merging follows [pr-review.md](pr-review.md): every PR needs two keys, the lead
+of each owning team (key 1) and the orchestrator (key 2), and a PR in a founder
+class (A to F) also needs the founder's approval on GitHub. That mechanism is
+PLANNED: until the GitHub App and the ruleset are live, the founder merges every
+PR by hand.
 
 ## Lessons from the first meeting
 
