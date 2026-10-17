@@ -16,9 +16,10 @@
 //            finding, the round limit, a forbidden path, a failed local
 //            check, or any error: label `needs-founder` and say why;
 //   review   both keys (fresh read-only processes, review.mjs);
-//   merge    both keys passed: `gh pr merge --auto --merge` when the review
-//            App posts the checks and the repository allows auto-merge,
-//            otherwise a "ready" comment. Founder-class PRs are never merged
+//   merge    both keys passed: `gh pr merge --auto --merge` with the gh login
+//            when the review App posts the checks; a "ready" comment in a dry
+//            run or when GitHub answers that auto-merge is not allowed; any
+//            other merge error stops. Founder-class PRs are never merged
 //            by the loop: it waits for the founder's GitHub approval and the
 //            founder merges;
 //   fix      a key failed: a fresh fixer `claude -p` in a clean worktree of
@@ -42,6 +43,9 @@ import { findingsToFix, fixerArgs, fixerSystemPrompt, fixerUserPrompt, forbidden
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MARK = 'nirmaan-pr-loop';
+// GitHub's answer to `gh pr merge --auto` when the repository's "Allow
+// auto-merge" setting is off.
+const AUTO_MERGE_OFF = /auto[- ]?merge is not (allowed|enabled)/i;
 
 export function loopDefaults(env = process.env) {
   return {
@@ -210,7 +214,7 @@ export async function stepPr(o, listed) {
       const failed = [...k1, ...(r.key2 ? [r.key2] : [])].filter((k) => k.status === 'fail');
       log('reviewed', { key1: k1.map((k) => `${k.team}:${k.status}`).join(','), key2: r.key2?.status ?? 'not run' });
 
-      if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, log, founderApproval });
+      if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, founderApproval });
       return await fixRound(o, { n, head, pull, st, r, say, stop, log, out });
     } finally { lock.release(); }
   } catch (e) {
@@ -218,7 +222,7 @@ export async function stepPr(o, listed) {
   }
 }
 
-async function mergePath(o, { n, head, st, r, say, log, founderApproval }) {
+async function mergePath(o, { n, head, st, r, say, stop, log, founderApproval }) {
   const cfg = o.config;
   const sha7 = head.slice(0, 7);
   const classes = Object.keys(r.classification?.founder ?? {});
@@ -244,15 +248,24 @@ async function mergePath(o, { n, head, st, r, say, log, founderApproval }) {
     }
     return { outcome: 'founder-wait', reason: approved ? 'founder approved; the founder merges' : 'waiting for the founder' };
   }
-  const settings = await o.github.getRepoSettings();
-  const auto = o.post === 'app' && settings.allowAutoMerge;
-  if (auto) {
-    o.runGh(['pr', 'merge', String(n), '--repo', cfg.repo, '--auto', '--merge', '--match-head-commit', head]);
+  // The review App's token never sees the "Allow auto-merge" setting, so the
+  // loop does not read it: it asks for auto-merge with the gh login and reads
+  // GitHub's answer. "Not allowed" means the setting is off: ready, as before.
+  let why = o.post !== 'app' ? 'the review App is not configured (dry run)' : null;
+  if (!why) {
+    try {
+      o.runGh(['pr', 'merge', String(n), '--repo', cfg.repo, '--auto', '--merge', '--match-head-commit', head]);
+    } catch (e) {
+      const detail = `${e.stderr ?? ''} ${e.stdout ?? ''} ${e.message ?? ''}`.replace(/\s+/g, ' ').trim();
+      if (!AUTO_MERGE_OFF.test(detail)) return await stop(head, `gh pr merge --auto failed: ${detail.slice(0, 500)}`);
+      why = 'the repository does not allow auto-merge';
+    }
+  }
+  if (!why) {
     log('auto-merge');
     await say(`<!-- ${MARK} auto-merge head=${head} -->\n### Automated loop: both keys passed on \`${sha7}\`\n\nAuto-merge is on for this PR: GitHub merges it with a merge commit once every required check passes on this head.\n\n_Agent review, not a sign-off._`);
     st.done = { head, outcome: 'auto-merge' };
   } else {
-    const why = o.post !== 'app' ? 'the review App is not configured (dry run)' : 'the repository does not allow auto-merge';
     log('ready', { why });
     await say(`<!-- ${MARK} ready head=${head} -->\n### Automated loop: ready\n\nBoth keys passed on \`${sha7}\`, waiting for the founder's merge settings: ${why}. The founder merges this PR.\n\n_Agent review, not a sign-off._`);
     st.done = { head, outcome: 'ready' };
