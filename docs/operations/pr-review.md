@@ -46,9 +46,8 @@ legal-counsel never holds a key. Role specs are in [`agents/`](../../agents/READ
 
 ## Which teams own a PR
 
-Path ownership lives in one file: `.github/review-teams.yml`. **That file does
-not exist yet; it is added in a later rollout step.** This page does not copy
-its rules. Once it exists:
+Path ownership lives in one file: [`.github/review-teams.yml`](../../.github/review-teams.yml).
+This page does not copy its rules. In short:
 
 - The review reads it from `main`, never from the PR.
 - A PR is owned by every team with a rule matching a changed file. A file with
