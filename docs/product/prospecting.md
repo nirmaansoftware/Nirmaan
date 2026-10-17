@@ -1,4 +1,11 @@
-# Prospecting · IMPLEMENTED (EXPERIMENTAL until used on real outreach)
+# Prospecting · IMPLEMENTED, WORKER OFF (since 2026-10-17)
+
+**Not running.** Prospecting lives in the Nirmaan OS, which runs with screens on and
+the worker off: existing prospects and messages can be viewed, but no searches,
+drafts or sends happen (the worker is off and the email, inbox, Places and Claude
+credentials were removed) until the worker is turned back on through the
+[checklist](../engineering/deployment.md#worker-off-and-turning-it-back-on). The description below is how it works when
+running.
 
 Finding businesses Nirmaan could help, before they ask. Lives in the Nirmaan OS
 at **Pipeline → Prospects** (`/os/prospects`), code in `os/src/lib/prospecting/`.

@@ -8,9 +8,17 @@ Next.js app, three audiences with different permissions:
   library, AI usage, audit log, team.
 - **Clients** through private links: `/p/<token>` to review and approve a proposal,
   `/status/<token>` to follow progress.
-- **The public website's intake** at `POST /api/intake`.
+- **An intake API** at `POST /api/intake` that turns an enquiry into a lead. The
+  public website does not use it: its form sends enquiries by email through
+  Web3Forms.
 
-It runs on Fly.io as the app `nirmaan-os`; see [deployment](../docs/engineering/deployment.md).
+**Screens on, worker off since 2026-10-17.** It runs on Fly.io as the app
+`nirmaan-os`: the patched build from `main` is deployed (the old v10 build was never
+restarted), people sign in with Google and see the data, and the campaign worker is
+off (`NIRMAAN_WORKER = "off"`). The email, inbox, Places and Claude credentials were
+removed, so nothing reads the inbox, sends email, runs Claude or calls Google Places.
+See [deployment](../docs/engineering/deployment.md#worker-off-and-turning-it-back-on)
+before turning the worker back on.
 This Next.js version has breaking changes: read [AGENTS.md](AGENTS.md) and the guides in
 `node_modules/next/dist/docs/` before changing code.
 

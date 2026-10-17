@@ -14,22 +14,34 @@ empty folder on every pull request and push to `main` and fails if it differs fr
 committed files, then checks every internal link. Each 1 January the footer year
 changes, so rebuild and commit `public/` then (see the comment in the workflow).
 
-## Nirmaan OS on Fly.io · IMPLEMENTED (os.nirmaan.online)
+## Nirmaan OS on Fly.io · SCREENS ON, WORKER OFF (since 2026-10-17)
+
+**The screens run; the worker does not.** Founder decision of 2026-10-17 (it
+replaced the full stop agreed that morning): people can sign in with Google and see
+the OS's data, but nothing reads the inbox, sends email, runs Claude or calls Google
+Places. Since 2026-10-17 the deployed build is the patched one from `main` (the
+dependency security update and the worker switch), with `NIRMAAN_WORKER = "off"`.
+The old build (Fly release v10 of 2026-09-28) was never restarted. The email, inbox,
+Places and Claude credentials were removed from Fly; only the Google sign-in
+credentials remain, so even a button in the web app cannot send or run AI. The
+machine and its data volume are kept. Decision:
+[architecture decisions](architecture.md#decisions) and the
+[2026-10-17 decision record](../operations/2026-10-17-inspection-decisions.md).
 
 One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and, only when
 `NIRMAAN_WORKER` is exactly `on`, the campaign worker beside it (`os/scripts/start.sh`).
 `fly.toml` sets `NIRMAAN_WORKER = "off"`, so a deploy serves the web app alone, and
 the web app's "Run one tick now" button answers "This feature is paused" instead of
-doing the worker's work. Screens on, worker off (founder, 2026-10-17): a request wakes
-the machine (`auto_start_machines = true`), it stops again when idle
-(`auto_stop_machines = "stop"`), and none is kept running (`min_machines_running = 0`).
-In this state Fly holds only the Google sign-in secrets (`GOOGLE_CLIENT_ID`,
-`GOOGLE_CLIENT_SECRET`); without the email, inbox, Places and Claude secrets the
-screens still work and those features say they aren't set up. The database (`/data/nirmaan.db`) and project files
+doing the worker's work. A request wakes the machine (`auto_start_machines = true`),
+it stops again when idle (`auto_stop_machines = "stop"`), and none is kept running
+(`min_machines_running = 0`). Fly holds only `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` as secrets; `NIRMAAN_OS_URL` (the sign-in redirect address)
+is in `fly.toml`. Without the other secrets the screens still work and those features
+say they aren't set up. The database (`/data/nirmaan.db`) and project files
 (`/data/projects`) live on a persistent volume. Config: `fly.toml` and `Dockerfile.os`
 at the repo root; the image holds only `os/` and `agents/`.
 
-First setup (once):
+First setup (once; the full list of secrets is for when the worker runs):
 
 ```text
 brew install flyctl && fly auth login
@@ -50,16 +62,64 @@ client's redirect URIs.
 Nothing deploys by itself: `.github/workflows/os.yml` (job `os-test`) only tests (a
 fresh database from `prisma migrate deploy`, typecheck, lint, unit tests, `next build`)
 on every pull request and push to `main`, with no path filter, and has no deploy
-job. Deploying is a founder step (`fly deploy` from the repo root); never restart an
-older image. Turning the worker back on (`NIRMAAN_WORKER = "on"` and the secrets
-above) is a founder decision. Logs: `fly logs`. When the worker runs, its ticks appear
-there once a minute.
+job. The deploy credential was removed from GitHub. A deploy is a deliberate act by
+the founder (`fly deploy` from the repo root); never restart an older image. Logs:
+`fly logs`. When the worker runs, its ticks appear there once a minute.
 
-Backups: every night after 02:00 India time the worker (only when it runs) emails a gzipped copy of the
-whole database to our own mailbox ("Nirmaan OS backup <date>", `src/lib/backup.ts`;
-`BACKUP_EMAIL` to send it elsewhere). Fly also keeps daily volume snapshots for 5 days,
-and `fly ssh sftp get /data/nirmaan.db` downloads the live file. With the worker off
-there is no nightly backup email, so take backups by hand (volume snapshot or download).
+Backups: when the worker runs, every night after 02:00 India time it emails a
+gzipped copy of the whole database to our own mailbox ("Nirmaan OS backup <date>",
+`src/lib/backup.ts`; `BACKUP_EMAIL` to send it elsewhere). With the worker off that
+email does not come (if it does, the worker is running). Fly keeps volume snapshots
+for only 5 days, so the copy that counts is the encrypted backup taken on
+2026-10-17, checked locally (integrity check, row counts) and kept encrypted outside any repository; take
+further backups by hand (`fly volumes snapshots create`, or download
+`/data/nirmaan.db` with `fly ssh sftp get`).
+
+### Worker off, and turning it back on
+
+**How the worker was turned off** (Saturday 2026-10-17, about 15:00 India time).
+It was inside the sending hours, but no message was approved and all campaigns
+were paused, so nothing could be sent or half-sent:
+
+1. Checked the send queue for approved, failed and active-campaign items.
+2. Took a volume snapshot, downloaded the database and project files, checked
+   the database locally (integrity check, row counts), and stored them encrypted
+   outside any repository.
+3. Removed the email, inbox, Places and Claude credentials from Fly, deployed the
+   patched build from `main` with `NIRMAAN_WORKER = "off"`, and confirmed sign-in
+   works and the logs show the worker off with no inbox checks. The nightly backup
+   email should no longer arrive (if it does, the worker is running).
+
+**Checklist for turning the worker back on.** Every item, in order; the Principal
+Architect owns the list and the founder approves.
+
+- [ ] **Dependency security update deployed** (N5): the patched build is what
+      runs. Never restart the old v10 build.
+- [ ] **Backup restore checked** (N1): the 2026-10-17 backup is restored into a local
+      OS (`prisma migrate status` clean, app starts) and passes its integrity check, so there is a known-good copy before anything
+      changes.
+- [ ] **Approved queue cleared or re-reviewed:** every message left approved from
+      before the worker went off is cancelled or approved again by a person;
+      nothing old sends by itself.
+- [ ] **Credentials reissued:** the email, inbox, Places and Claude credentials
+      retired at their providers are issued again and set on the host
+      (`fly secrets set`), and, if CI should deploy again, a new deploy token is
+      created (`fly tokens create deploy`), scoped to this app only.
+- [ ] **Inbox processed before the first send:** replies and stop requests that
+      arrived while the worker was off are read, and every stop is on the
+      do-not-contact list, before any message goes out.
+- [ ] **Restart hardening merged** (N19): the worker stops cleanly mid-tick
+      without re-sending, old approvals expire back to draft, and build inputs are
+      pinned.
+- [ ] **Uptime and "machine started" alert in place** (N20).
+- [ ] **Worker switched back on:** `NIRMAAN_WORKER = "on"` in `fly.toml` (it is
+      `off` now, so a deploy serves the web app alone), with
+      `auto_stop_machines = "off"` and `min_machines_running = 1` so the machine,
+      and the worker in it, keeps running between requests.
+- [ ] **Founder approval**, recorded with the date.
+
+Then deploy by hand, watch the first worker ticks in `fly logs`, and update this
+section and the architecture decision row.
 
 ## Nirmaan OS: other hosts
 

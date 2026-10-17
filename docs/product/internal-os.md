@@ -7,10 +7,10 @@ library, Patterns, Finance, AI usage, Audit log, Team, Login. Clients sign in
 to a separate `/portal`. See `portal-architecture.md` for the map
 and `engineering/security.md` for who sees what.
 
-Getting started locally:
+Getting started locally (from the repo root):
 
 ```bash
-cd app && npm ci && npx prisma generate && npx prisma migrate deploy && npm run db:seed
+cd os && npm ci && npx prisma generate && npx prisma migrate deploy && npm run db:seed
 NIRMAAN_PASSWORD='a long passphrase' npm run user:create -- you@example.com "Your Name" FOUNDER
 npm run dev   # http://localhost:3000 → sign in
 ```
