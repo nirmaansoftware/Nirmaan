@@ -9,6 +9,11 @@ in `website/` and commit `public/`. `vercel.json` (in `website/src/static/`, cop
 `public/`) holds redirects, for example `/agency-os.html` → `/process.html#honest`, and
 baseline headers.
 
+CI (`.github/workflows/website.yml`, job `website-build`) rebuilds `public/` from an
+empty folder on every pull request and push to `main` and fails if it differs from the
+committed files, then checks every internal link. Each 1 January the footer year
+changes, so rebuild and commit `public/` then (see the comment in the workflow).
+
 ## Nirmaan OS on Fly.io · IMPLEMENTED (os.nirmaan.online)
 
 One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and, only when
