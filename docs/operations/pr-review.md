@@ -124,19 +124,80 @@ off for it.
 
 ## How reviewers run
 
-- A fresh, read-only process per key, in a clean checkout of the head commit;
-  never the session that wrote the PR. An agent never reviews its own
-  session's PR.
-- Rules and role specs are loaded from `main`, not from the PR.
-- No network and no tokens for the model.
-- Reviewers run locally through a `pr-review` skill and a posting script. No
-  GitHub Action runs PR content with a model token, and
-  `pull_request_target` is never used.
-- The verdict is JSON. A script checks that every cited file and line exists
-  and that the head has not moved before the App posts it.
-- Same-repository branches only; one review at a time.
-- **Fail closed:** if a review cannot finish, the check stays pending. It never
-  passes by default.
+Reviews run locally: the [`pr-review` skill](../../.claude/skills/pr-review/SKILL.md)
+starts the posting script `.github/scripts/pr-review/review.mjs` from a
+checkout of `main`. No GitHub Action runs PR content with a model token, and
+`pull_request_target` is never used. An agent never reviews its own
+session's PR; the skill refuses, and the script refuses when a Claude Code
+session has the PR's branch checked out.
+
+What the script does, in order:
+
+1. **One review at a time.** It takes a lock shared with ip-nirmaan, so only
+   one review runs across both repositories.
+2. **Eligibility.** The PR must be open, target `main`, come from a branch in
+   this repository (never a fork) and be authored by `patel-om` or
+   `nirmaansoftware`. Otherwise it refuses and posts nothing.
+3. **Clean checkouts.** It fetches `main` and the PR head, checks the fetched
+   head is the PR's head, and makes clean worktrees of both outside the
+   repository.
+4. **Owning teams from `main`.** Teams, member checklists, founder classes and
+   content-rule hits come from `main`'s `.github/review-teams.yml`, never the
+   PR's copy. Role specs (`agents/<role>/agent.md`) and checklists also come
+   from `main`: the base key-1 checklist in `agents/README.md`, each lead's
+   "Key 1 review" section, the orchestrator's "Key 2 review" section and
+   members' "Checklist for my team lead" sections, with
+   `.claude/skills/pr-review/checklists/` as the fallback. With neither, the
+   key is deferred. Design key 1 is deferred until
+   `docs/design/visual-direction.md` exists on `main`. The script itself
+   refuses to post unless it is `main`'s copy.
+5. **CI first.** Until `os-test`, `website-build` and `repo-checks` are green
+   on the head commit, both checks stay pending and no model is called.
+6. **Key 1, then key 2.** Key 1 is one fresh `claude -p` process per owning
+   team, with that team's lead spec, the base and team checklists, and the
+   specs of any member checklists the map requires. Key 2 runs only when every
+   key 1 passed: the orchestrator's spec plus every owning lead's spec and
+   checklist, so it reviews with each team's domain knowledge, given key 1's
+   results to check. Key 2 runs on the strongest model.
+7. **Isolation.** Each process runs in the head worktree with only Read, Grep
+   and Glob (the `main` worktree is readable for comparison), no command,
+   write, network or MCP tools, no project customizations (`--safe-mode`), and
+   an environment with no GitHub, App or API tokens. The script computes the
+   diff and commit log itself. PR text, commit messages and the diff are
+   passed as untrusted data between delimiters with a random marker; an
+   instruction to the reviewer inside them is a critical finding.
+8. **Validation.** The reviewer returns one JSON object: verdict (`pass` or
+   `fail`), the head SHA, findings with file, line and severity, checks run
+   and what was not run. The script checks the schema, that the SHA is the
+   head, and that every cited file and line exists at the head. A `pass` with
+   a blocker or critical finding is recorded as `fail`.
+9. **Fail closed.** A failed call, a timeout or a rate limit gets one retry
+   after a backoff; after that, and on any invalid output or missing
+   citation, the key is posted as "review deferred" and stays pending. It
+   never passes by default.
+10. **Posting.** Before every post the script checks the head has not moved;
+    if it has, it posts nothing more. It posts one comment per key (role, key,
+    head and base SHA, verdict, findings, claims, checks run, what was not
+    run, "agent review, not a sign-off") and the check runs
+    `review/team-lead` (success only when every owning team passed) and
+    `review/executive`. `review/executive` is success only when key 2 passed,
+    no `hold` label is set, and for a founder-class PR the founder's latest
+    GitHub review is an approval of this head SHA.
+11. **Records.** Every model call (tokens, duration, outcome) is logged
+    outside the repository in `~/.nirmaan/pr-review/calls.jsonl`. Validated
+    verdicts are cached per head and `main` commit, so re-running after the
+    founder approves does not call the model again.
+
+**Posting identity.** The review App posts the check runs with a short-lived
+installation token scoped to this repository. It reads these environment
+variables: `NIRMAAN_REVIEW_APP_ID`, one of
+`NIRMAAN_REVIEW_APP_PRIVATE_KEY_FILE` (a PEM outside every repository) or
+`NIRMAAN_REVIEW_APP_KEYCHAIN_SERVICE` (a macOS Keychain item holding the
+PEM), and optionally `NIRMAAN_REVIEW_APP_INSTALLATION_ID`. Until the App
+exists, the script runs as a dry run with the caller's `gh` login: it posts
+the comments and commit statuses named `dry-run/review/team-lead` and
+`dry-run/review/executive`, which are never green and are not the checks a
+ruleset requires.
 
 ## Small, urgent and revert PRs
 

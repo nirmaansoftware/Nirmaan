@@ -1,0 +1,23 @@
+{
+  "repo": "nirmaansoftware/Nirmaan",
+  "company": "Nirmaan",
+  "base_branch": "main",
+  "map_path": ".github/review-teams.yml",
+  "role_spec": "agents/{role}/agent.md",
+  "checklist_dir": ".claude/skills/pr-review/checklists",
+  "base_checklist": { "file": "agents/README.md", "heading": "Every key 1 (base checklist)" },
+  "lead_section": "Key 1 review",
+  "key2_section": "Key 2 review",
+  "member_section": "Checklist for my team lead",
+  "fail_closed_without": { "design": ["docs/design/visual-direction.md"] },
+  "key2_role": "orchestrator",
+  "key2_name": "Executive",
+  "required_ci": ["os-test", "website-build", "repo-checks"],
+  "allowed_authors": ["patel-om", "nirmaansoftware"],
+  "founder_login": "nirmaansoftware",
+  "hold_label": "hold",
+  "include_pr_body": true,
+  "max_diff_bytes": 200000,
+  "check_names": { "key1": "review/team-lead", "key2": "review/executive" },
+  "legal_teams": ["business"]
+}
