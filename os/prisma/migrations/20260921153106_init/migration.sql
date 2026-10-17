@@ -125,3 +125,4 @@ CREATE TABLE "Deployment" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Agent_slug_key" ON "Agent"("slug");
+-- reviewed 2026-10-17
