@@ -7,7 +7,7 @@
   `Actor` and calling `assertCan` first. Pages and actions stay thin.
 - **Errors are for people:** say what went wrong and how to fix it. Internal
   details (IDs, stack traces, Prisma codes) never reach the UI.
-- **Every mutation that matters is audited.**
+- **Every mutation that matters is audited** (`src/lib/audit.ts`).
 - **Honesty in code:** no fabricated numbers (cost `null` rather than a guess), no
   claims of success without evidence, no silent fallbacks.
 - **Tests for every rule** that protects money, access or truth, including the
