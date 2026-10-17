@@ -14,6 +14,11 @@ empty folder on every pull request and push to `main` and fails if it differs fr
 committed files, then checks every internal link. Each 1 January the footer year
 changes, so rebuild and commit `public/` then (see the comment in the workflow).
 
+After each push to `main`, `.github/workflows/site-smoke.yml` (job `site-smoke`) waits
+up to 5 minutes for the live site to match the committed `public/`, then checks that key
+pages answer 200 and a missing page answers 404. Rollback steps:
+[docs/operations/pr-review.md](../operations/pr-review.md#rollback).
+
 ## Nirmaan OS on Fly.io · SCREENS ON, WORKER OFF (since 2026-10-17)
 
 **The screens run; the worker does not.** Founder decision of 2026-10-17 (it
