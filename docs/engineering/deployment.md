@@ -11,8 +11,12 @@ baseline headers.
 
 ## Nirmaan OS on Fly.io · IMPLEMENTED (os.nirmaan.online)
 
-One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and the campaign worker side by side
-(`os/scripts/start.sh`). The database (`/data/nirmaan.db`) and project files
+One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and, only when
+`NIRMAAN_WORKER` is exactly `on`, the campaign worker beside it (`os/scripts/start.sh`).
+`fly.toml` sets `NIRMAAN_WORKER = "off"`, so a deploy serves the web app alone. While
+the OS is paused (since 2026-10-17), `fly.toml` also keeps no machine running
+(`min_machines_running = 0`) and never starts one on a request
+(`auto_start_machines = false`). The database (`/data/nirmaan.db`) and project files
 (`/data/projects`) live on a persistent volume. Config: `fly.toml` and `Dockerfile.os`
 at the repo root; the image holds only `os/` and `agents/`.
 
@@ -34,14 +38,13 @@ fly certs add os.nirmaan.online          # then add the DNS record it asks for
 Also add `https://os.nirmaan.online/api/auth/google/callback` to the Google OAuth
 client's redirect URIs.
 
-Later deploys happen by themselves: `.github/workflows/os.yml` tests every change to
-`os/`, `agents/` or the Fly files (typecheck, lint, unit tests) and, once it's merged
-to `main`, deploys it to Fly with the `FLY_API_TOKEN` repository secret (a deploy token
-for `nirmaan-os` only; renew yearly with `fly tokens create deploy -a nirmaan-os`).
-By hand, `fly deploy` from the repo root still works. Logs: `fly logs`. The worker's
-ticks appear there once a minute.
+Nothing deploys by itself: `.github/workflows/os.yml` only tests (typecheck, lint, unit
+tests) on every pull request and push to `main`, with no path filter, and has no deploy
+job. While the OS is paused, do not run `fly deploy`; a restart goes through the
+un-pause checklist. Logs: `fly logs`. When the worker runs, its ticks appear there
+once a minute.
 
-Backups: every night after 02:00 India time the worker emails a gzipped copy of the
+Backups: every night after 02:00 India time the worker (only when it runs) emails a gzipped copy of the
 whole database to our own mailbox ("Nirmaan OS backup <date>", `src/lib/backup.ts`;
 `BACKUP_EMAIL` to send it elsewhere). Fly also keeps daily volume snapshots for 5 days,
 and `fly ssh sftp get /data/nirmaan.db` downloads the live file.
