@@ -6,6 +6,12 @@
 */
 @layer reset, base, layout, components;
 
+/* Arial adjusted to each font's metrics, shown until the font loads (see
+   app/layout.tsx). Values as next/font/google generated them. */
+@font-face { font-family: "Archivo Fallback"; src: local(Arial); ascent-override: 88.96%; descent-override: 21.28%; line-gap-override: 0%; size-adjust: 98.7%; }
+@font-face { font-family: "Hanken Grotesk Fallback"; src: local(Arial); ascent-override: 99.07%; descent-override: 30.02%; line-gap-override: 0%; size-adjust: 100.94%; }
+@font-face { font-family: "JetBrains Mono Fallback"; src: local(Arial); ascent-override: 75.79%; descent-override: 22.29%; line-gap-override: 0%; size-adjust: 134.59%; }
+
 :root {
   --paper: #f5f5f1;
   --panel: #ffffff;
