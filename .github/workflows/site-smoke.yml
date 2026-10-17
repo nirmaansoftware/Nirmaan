@@ -1,0 +1,93 @@
+# Site smoke: after a push to main, check that www.nirmaan.online serves the
+# committed website. It deploys nothing, reads no secrets and only sends GET
+# requests to the public site.
+#
+# Vercel publishes website/public from main on its own, about a minute after
+# the push. This job first waits for that: it polls until the live copy of
+# every checked file is byte-for-byte the committed one, every 15 seconds for
+# at most 5 minutes. If the site never matches (a failed or stuck Vercel
+# deploy), the job fails. Then it checks that each key URL answers 200 with no
+# redirect, and that a page that does not exist answers 404.
+#
+# os.nirmaan.online is not checked: the OS is paused and sleeps when idle.
+#
+# A failure here means the live site may be broken or stale. Rollback steps are
+# in docs/operations/pr-review.md#rollback.
+#
+# Only the latest push is checked (cancel-in-progress), because an older run
+# would see the newer deploy and report a false mismatch.
+# Actions are pinned by commit SHA, with the release in a comment.
+name: Site smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-smoke
+  cancel-in-progress: true
+
+jobs:
+  site-smoke:
+    name: site-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE: https://www.nirmaan.online
+      # URL path and the committed file under website/public that it serves.
+      PAGES: |
+        / index.html
+        /contact.html contact.html
+        /pricing.html pricing.html
+        /products/outreach.html products/outreach.html
+        /privacy.html privacy.html
+        /terms.html terms.html
+        /sitemap.xml sitemap.xml
+        /robots.txt robots.txt
+      MISSING: /smoke-check-missing-page.html
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      # The query string skips any cached copy; Vercel serves the same file.
+      - name: Wait for Vercel to publish this commit
+        run: |
+          for attempt in $(seq 1 20); do
+            stale=""
+            while read -r path file; do
+              [ -n "$path" ] || continue
+              if ! curl -sS --max-time 20 "$SITE$path?smoke=$GITHUB_SHA" -o served.tmp \
+                || ! cmp -s served.tmp "website/public/$file"; then
+                stale="$stale $path"
+              fi
+            done <<< "$PAGES"
+            if [ -z "$stale" ]; then
+              echo "Live site matches website/public at $GITHUB_SHA (attempt $attempt)."
+              exit 0
+            fi
+            echo "Attempt $attempt/20: not yet live:$stale"
+            [ "$attempt" -lt 20 ] && sleep 15
+          done
+          echo "::error::After 5 minutes the live site still differs from website/public at $GITHUB_SHA:$stale. Check the Vercel deployment (nirmaan8 team)."
+          exit 1
+      - name: Key URLs answer 200, a missing page answers 404
+        run: |
+          failed=0
+          check() {
+            code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "$SITE$1" || true)"
+            if [ "$code" = "$2" ]; then
+              echo "ok   $code $1"
+            else
+              echo "::error::$1 answered $code, expected $2"
+              failed=1
+            fi
+          }
+          while read -r path file; do
+            [ -n "$path" ] && check "$path" 200
+          done <<< "$PAGES"
+          check "$MISSING" 404
+          exit "$failed"

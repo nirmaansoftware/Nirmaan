@@ -149,6 +149,45 @@ Branches must be up to date with `main` before merge, because Vercel publishes
 `main` directly and an untested combination would go live. PRs merge with a
 merge commit, one at a time.
 
+## Rollback
+
+After every push to `main`, the `site-smoke` workflow
+(`.github/workflows/site-smoke.yml`) waits up to 5 minutes for Vercel to
+publish, then checks that key www.nirmaan.online pages answer 200 and a
+missing page answers 404. If it fails, or a merged change is wrong for any
+other reason, roll back first and fix second, through the normal keys.
+
+1. **Revert the merge commit as a PR.** Anyone on Platform and Quality (sre
+   or devops-engineer) opens it:
+
+   ```sh
+   git switch main && git pull
+   git switch -c revert/<short-name>
+   git revert -m 1 <merge-commit-sha>
+   git push -u origin revert/<short-name>
+   ```
+
+   This is the exact-revert fast path: key 1 (any Platform and Quality
+   member) and key 2 (orchestrator) check only that it undoes the named merge
+   commit and nothing else. Nothing else may be added to the PR; the fix goes
+   in a later, normally reviewed PR. Until the keys are live, the founder
+   merges it like every other PR. When it merges, Vercel publishes the
+   reverted `main` and `site-smoke` runs again.
+2. **Vercel Instant Rollback, if the site must come back before the revert
+   merges.** The founder only, from the Vercel dashboard of the **nirmaan8**
+   team: the project's Deployments, the last good production deployment,
+   Instant Rollback. Never use the Vercel CLI for this: its default login on
+   the founder's machine belongs to a client, not to nirmaan8. Merge the
+   revert PR afterwards anyway, so `main` matches what is live; until then,
+   Vercel keeps serving the rolled-back deployment and does not publish new
+   pushes to `main` on its own, so promote the reverted `main` deployment from
+   the same dashboard once it is built. `site-smoke` fails on that push until
+   the promotion; run it again afterwards (Actions, Site smoke, Run workflow).
+
+Neither path applies to the OS (os.nirmaan.online), which is paused and
+deployed separately; see
+[docs/engineering/deployment.md](../engineering/deployment.md).
+
 ## Status
 
 PLANNED. The rollout order and owners are in
