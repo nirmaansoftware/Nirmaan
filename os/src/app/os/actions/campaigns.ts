@@ -8,7 +8,7 @@ import { str } from "@/lib/web/form";
 import { assertCan } from "@/lib/auth/permissions";
 import { linesToList } from "@/lib/proposals/model";
 import { planCampaign, setCampaignStatus, updateCampaign } from "@/lib/prospecting/campaigns";
-import { runTick } from "@/lib/prospecting/worker";
+import { runTick, workerOn, WORKER_PAUSED } from "@/lib/prospecting/worker";
 
 export async function planCampaignAction(_: ActionState, form: FormData): Promise<ActionState> {
   const actor = await requireActor();
@@ -59,11 +59,12 @@ export async function setCampaignStatusAction(_: ActionState, form: FormData): P
   }
 }
 
-/** One tick of the worker, from the browser (the same work `npm run campaigns:worker` does each minute). */
+/** One tick of the worker, from the browser (the same work `npm run campaigns:worker` does each minute). Refused while the worker switch is off. */
 export async function runTickAction(): Promise<ActionState> {
   const actor = await requireActor();
   try {
     assertCan(actor.role, "prospect:run");
+    if (!workerOn()) return { error: WORKER_PAUSED };
     const r = await runTick();
     revalidatePath("/os/campaigns");
     if (!r.ran) return { ok: "The worker is already in the middle of a tick; try again in a minute." };

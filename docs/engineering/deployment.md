@@ -18,10 +18,14 @@ changes, so rebuild and commit `public/` then (see the comment in the workflow).
 
 One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and, only when
 `NIRMAAN_WORKER` is exactly `on`, the campaign worker beside it (`os/scripts/start.sh`).
-`fly.toml` sets `NIRMAAN_WORKER = "off"`, so a deploy serves the web app alone. While
-the OS is paused (since 2026-10-17), `fly.toml` also keeps no machine running
-(`min_machines_running = 0`) and never starts one on a request
-(`auto_start_machines = false`). The database (`/data/nirmaan.db`) and project files
+`fly.toml` sets `NIRMAAN_WORKER = "off"`, so a deploy serves the web app alone, and
+the web app's "Run one tick now" button answers "This feature is paused" instead of
+doing the worker's work. Screens on, worker off (founder, 2026-10-17): a request wakes
+the machine (`auto_start_machines = true`), it stops again when idle
+(`auto_stop_machines = "stop"`), and none is kept running (`min_machines_running = 0`).
+In this state Fly holds only the Google sign-in secrets (`GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`); without the email, inbox, Places and Claude secrets the
+screens still work and those features say they aren't set up. The database (`/data/nirmaan.db`) and project files
 (`/data/projects`) live on a persistent volume. Config: `fly.toml` and `Dockerfile.os`
 at the repo root; the image holds only `os/` and `agents/`.
 
@@ -46,14 +50,16 @@ client's redirect URIs.
 Nothing deploys by itself: `.github/workflows/os.yml` (job `os-test`) only tests (a
 fresh database from `prisma migrate deploy`, typecheck, lint, unit tests, `next build`)
 on every pull request and push to `main`, with no path filter, and has no deploy
-job. While the OS is paused, do not run `fly deploy`; a restart goes through the
-un-pause checklist. Logs: `fly logs`. When the worker runs, its ticks appear there
-once a minute.
+job. Deploying is a founder step (`fly deploy` from the repo root); never restart an
+older image. Turning the worker back on (`NIRMAAN_WORKER = "on"` and the secrets
+above) is a founder decision. Logs: `fly logs`. When the worker runs, its ticks appear
+there once a minute.
 
 Backups: every night after 02:00 India time the worker (only when it runs) emails a gzipped copy of the
 whole database to our own mailbox ("Nirmaan OS backup <date>", `src/lib/backup.ts`;
 `BACKUP_EMAIL` to send it elsewhere). Fly also keeps daily volume snapshots for 5 days,
-and `fly ssh sftp get /data/nirmaan.db` downloads the live file.
+and `fly ssh sftp get /data/nirmaan.db` downloads the live file. With the worker off
+there is no nightly backup email, so take backups by hand (volume snapshot or download).
 
 ## Nirmaan OS: other hosts
 

@@ -7,7 +7,7 @@ import { FOUNDER } from "../testHelpers/businessFixtures";
 import { nextSearch, parseFollowUps, parsePlan, planCampaign, setCampaignStatus, updateCampaign, campaignStats } from "./campaigns";
 import { checkInbox, ownWords, wantsNoMore, type IncomingMail, type MailboxReader } from "./inbox";
 import { approveEmail, OPT_OUT_LINE, ourWhatsapp, signature } from "./outreach";
-import { inSendingWindow, nextGapSeconds, runTick } from "./worker";
+import { inSendingWindow, nextGapSeconds, runTick, workerOn, WORKER_PAUSED } from "./worker";
 import type { Mailer, OutgoingEmail } from "./mailer";
 import type { FetchedSite } from "./safeFetch";
 import type { FoundBusiness } from "./places";
@@ -96,6 +96,13 @@ test("pacing: India's working hours, Monday to Saturday, random gaps", () => {
   assert.equal(nextGapSeconds(() => 0), 45);
   assert.equal(nextGapSeconds(() => 1), 113);
   assert.equal(nextGapSeconds(() => 0, { OUTREACH_GAP_SECONDS: "120" } as unknown as NodeJS.ProcessEnv), 120);
+});
+
+test("worker switch: only NIRMAAN_WORKER exactly \"on\" lets the browser run a tick (same rule as start.sh)", () => {
+  const env = (v?: string) => (v === undefined ? {} : { NIRMAAN_WORKER: v }) as unknown as NodeJS.ProcessEnv;
+  assert.equal(workerOn(env("on")), true);
+  for (const v of [undefined, "", "off", "ON", "On", " on", "true", "1"]) assert.equal(workerOn(env(v)), false, `NIRMAAN_WORKER=${JSON.stringify(v)}`);
+  assert.match(WORKER_PAUSED, /^This feature is paused/);
 });
 
 test("voice: signed by a person, our WhatsApp in the email signature; WhatsApp only to mobiles", () => {
