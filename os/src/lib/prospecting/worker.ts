@@ -60,6 +60,21 @@ export interface TickReport {
 
 const LOCK = "campaign-tick";
 
+// ---------------------------------------------------------------- switch
+
+/**
+ * The worker switch, read exactly as os/scripts/start.sh reads it: only "on"
+ * turns the worker on; unset or anything else leaves it off. The web app's
+ * "Run one tick now" button checks it too, so a browser can't run the worker's
+ * work (inbox, sending, backup, searches, drafts) while the worker is off.
+ */
+export function workerOn(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NIRMAAN_WORKER === "on";
+}
+
+export const WORKER_PAUSED =
+  "This feature is paused: the campaign worker is off (NIRMAAN_WORKER is not \"on\"), so nothing reads the inbox, sends email, searches or drafts from here.";
+
 // ---------------------------------------------------------------- pacing
 
 /** Sending hours in India (OUTREACH_SEND_HOURS "10-19", OUTREACH_SEND_DAYS "1-6" = Mon–Sat). */
