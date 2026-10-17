@@ -54,7 +54,10 @@ If no review App is configured, say it was a dry run: the statuses are named
 ## 4. After a failure
 
 The author fixes and pushes; the new head voids both keys; run the skill again
-(from a session that did not write the fix). Founder-class PRs (A to F) also
+(from a session that did not write the fix). The automated loop
+(`.github/scripts/pr-loop/`, "Automated loop" in `docs/operations/pr-review.md`)
+does this on its own: a separate fixer process, checks, push, and both keys
+again, at most three rounds before it labels the PR `needs-founder`. Founder-class PRs (A to F) also
 need the founder's GitHub approval on the current head; the script keeps
 `review/executive` pending until it exists. A `hold` label keeps it pending.
 

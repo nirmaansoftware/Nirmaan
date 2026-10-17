@@ -1,0 +1,398 @@
+// Tests for the automated loop (pr-loop.mjs) against a fake `claude` that
+// plays both the reviewers and the fixer (fixtures/fake-claude.mjs), a local
+// bare repository as origin, and a fake GitHub. No model is called and
+// nothing touches the network.
+// Run: node --test .github/scripts/pr-loop/loop.test.mjs
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ciState, loadState, runTick, stepPr } from './pr-loop.mjs';
+import { fingerprint, findingsToFix, fixerArgs, forbiddenChanges, validateFixerOutput } from './fixer.mjs';
+import { acquireLock } from '../pr-review/lib.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CONFIG = JSON.parse(readFileSync(join(HERE, '..', 'pr-review', 'config.json'), 'utf8'));
+const REAL_LOOP = JSON.parse(readFileSync(join(HERE, 'config.json'), 'utf8'));
+// The real loop config, with a local check the tests can make fail.
+const LOOP = { ...REAL_LOOP, checks: [{ name: 'repo-checks', when: ['**'], cwd: '.', run: [['node', '-e', "process.exit(require('fs').existsSync('FAIL_CHECK') ? 1 : 0)"]] }], generate: [] };
+
+const MAP = `version: 1
+teams:
+  - id: executive
+    name: Executive
+    lead: orchestrator
+    key: 2
+    members: []
+  - id: engineering
+    name: Engineering
+    lead: principal-architect
+    key: 1
+    members: []
+  - id: platform-quality
+    name: Platform and Quality
+    lead: security-engineer
+    key: 1
+    members: []
+catch_all:
+  team: engineering
+  allowlist: []
+rules:
+  - id: github
+    globs: [".github/**"]
+    teams: [platform-quality]
+  - id: os
+    globs: ["os/**"]
+    teams: [engineering]
+founder_classes:
+  - id: A
+    name: Control plane
+    paths: [".github/**"]
+content_rules: []
+`;
+
+function sh(cwd, ...args) { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
+function write(root, rel, text) { mkdirSync(dirname(join(root, rel)), { recursive: true }); writeFileSync(join(root, rel), text); }
+
+function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js': 'fixed\n' } }], change, gh = {} } = {}) {
+  const tmp = mkdtempSync(join(tmpdir(), 'pr-loop-test-'));
+  const origin = join(tmp, 'origin.git'), work = join(tmp, 'work');
+  sh(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
+  sh(tmp, 'init', '-q', '-b', 'main', work);
+  sh(work, 'config', 'user.email', 'agent@example.com'); sh(work, 'config', 'user.name', 'Agent');
+  sh(work, 'remote', 'add', 'origin', origin);
+  write(work, '.github/review-teams.yml', MAP);
+  write(work, 'AGENTS.md', '# Agent guide\nRULES-MARKER-FROM-MAIN\n');
+  for (const r of ['orchestrator', 'principal-architect', 'security-engineer']) write(work, `agents/${r}/agent.md`, `# ${r}\nSPEC-MARKER-${r}\n`);
+  for (const c of ['key1-base', 'key2', 'engineering', 'platform-quality']) write(work, `${CONFIG.checklist_dir}/${c}.md`, `# ${c}\n`);
+  write(work, 'os/app.js', 'line one\nline two\nline three\n');
+  sh(work, 'add', '-A'); sh(work, 'commit', '-qm', 'main'); sh(work, 'push', '-q', 'origin', 'main');
+  sh(work, 'checkout', '-qb', 'feature');
+  (change ?? ((w) => write(w, 'os/app.js', 'line one\nline two changed\nline three\n')))(work);
+  sh(work, 'add', '-A'); sh(work, 'commit', '-qm', 'Change app');
+  sh(work, 'push', '-q', 'origin', 'feature');
+  const firstHead = sh(work, 'rev-parse', 'HEAD');
+  sh(work, 'checkout', '-q', 'main');
+
+  const fakeDir = join(tmp, 'fake'); mkdirSync(fakeDir);
+  const bin = join(fakeDir, 'claude.mjs');
+  copyFileSync(join(HERE, 'fixtures', 'fake-claude.mjs'), bin); chmodSync(bin, 0o755);
+  const scenario = (s) => writeFileSync(join(fakeDir, 'scenario.json'), JSON.stringify(s));
+  scenario({ reviews, fixes });
+
+  const posts = [];
+  const merges = [];
+  const g = { labels: gh.labels ?? [], reviews: [], allowAutoMerge: gh.allowAutoMerge ?? true, ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true };
+  const originHead = () => sh(origin, 'rev-parse', 'refs/heads/feature');
+  const github = {
+    async getPull() {
+      const head = originHead();
+      sh(origin, 'update-ref', 'refs/pull/1/head', head); // GitHub keeps this in step with the branch
+      return { number: 1, state: 'open', draft: g.draft, title: 'Change app', body: 'Changes line two.', author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : 'clean' };
+    },
+    async listOpenPulls() { return [await this.getPull()]; },
+    async getRepoSettings() { return { allowAutoMerge: g.allowAutoMerge }; },
+    async addLabels(n, labels) { posts.push({ type: 'label', labels }); g.labels.push(...labels); },
+    async listReviews() { return g.reviews; },
+    async listCheckRuns(sha) { const c = g.ci(sha); return CONFIG.required_ci.map((name) => ({ name, status: c === 'pending' ? 'in_progress' : 'completed', conclusion: c === 'pending' ? null : c, completedAt: '2026-10-17T00:00:00Z' })); },
+    async createComment(n, body) { posts.push({ type: 'comment', body }); return { url: `https://github.example/pr/1#c${posts.length}` }; },
+    async createCheckRun(c) { posts.push({ type: 'check', ...c }); },
+    async createStatus(s) { posts.push({ type: 'status', ...s }); },
+  };
+  const stateDir = join(tmp, 'state');
+  const o = (extra = {}) => ({
+    repoRoot: work, config: CONFIG, loop: LOOP, github, post: 'app', claudeBin: bin, stateDir,
+    models: { key1: 'k1', key2: 'k2' }, fixerModel: 'fixer-model', timeoutMs: 20000, fixerTimeoutMs: 20000, checkTimeoutMs: 20000,
+    backoffMs: 0, sleep: async () => {}, out: () => {}, runGh: (args) => merges.push(args), stepPr, ...extra,
+  });
+  const tick = (extra) => runTick(o(extra));
+  const calls = () => (existsSync(join(fakeDir, 'calls.jsonl')) ? readFileSync(join(fakeDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
+  const log = () => (existsSync(join(stateDir, 'calls.jsonl')) ? readFileSync(join(stateDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
+  const comments = () => posts.filter((p) => p.type === 'comment').map((p) => p.body);
+  const labeled = () => posts.some((p) => p.type === 'label' && p.labels.includes('needs-founder'));
+  return { tmp, work, origin, firstHead, originHead, posts, merges, g, tick, calls, log, comments, labeled, scenario, stateDir, state: () => loadState(stateDir, CONFIG.repo, 1), cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
+}
+
+const fail = (text, line = 1, file = 'os/app.js') => ({ verdict: 'fail', findings: [{ file, line, severity: 'critical', text }] });
+const outcomes = (r) => r.map((x) => x.outcome);
+
+// ---------------------------------------------------------------- merge path
+
+test('both keys pass: auto-merge when the App posts and the repository allows it; nothing more on the same head', async () => {
+  const t = setup();
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.deepEqual(t.merges, [['pr', 'merge', '1', '--repo', CONFIG.repo, '--auto', '--merge', '--match-head-commit', t.firstHead]]);
+    assert.match(t.comments().pop(), /Auto-merge is on/);
+    assert.equal(t.calls().length, 2, 'key 1 and key 2, no fixer');
+    const before = t.posts.length;
+    assert.deepEqual(outcomes(await t.tick()), ['skip']);
+    assert.equal(t.posts.length, before, 'a finished head is not reviewed again');
+    assert.equal(t.calls().length, 2);
+  } finally { t.cleanup(); }
+});
+
+test('both keys pass without the auto-merge setting, or in a dry run: a "ready" comment and no merge', async () => {
+  for (const [extra, gh, why] of [[{}, { allowAutoMerge: false }, /does not allow auto-merge/], [{ post: 'dry-run' }, {}, /review App is not configured/]]) {
+    const t = setup({ gh });
+    try {
+      assert.deepEqual(outcomes(await t.tick(extra)), ['ready']);
+      assert.equal(t.merges.length, 0);
+      const c = t.comments().pop();
+      assert.match(c, /Both keys passed on `[0-9a-f]{7}`, waiting for the founder's merge settings/);
+      assert.match(c, why);
+    } finally { t.cleanup(); }
+  }
+});
+
+// ---------------------------------------------------------------- fix loop
+
+test('fail -> fix -> pass: a separate fixer process in a clean worktree; the loop commits, checks, pushes, and both keys rerun on the new head', async () => {
+  process.env.GH_TOKEN = 'must-not-leak';
+  const t = setup({ reviews: [fail('Line two lost its test'), { verdict: 'pass' }, { verdict: 'pass' }], fixes: [{ edits: { 'os/app.js': 'line one\nline two fixed\nline three\n' } }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    const newHead = t.originHead();
+    assert.notEqual(newHead, t.firstHead);
+    assert.equal(sh(t.origin, 'rev-parse', `${newHead}^`), t.firstHead, 'a fast-forward commit on the PR branch');
+    const msg = sh(t.origin, 'log', '-1', '--format=%B', newHead);
+    assert.match(msg, /^Fix round 1: address review findings on [0-9a-f]{7}/);
+    assert.match(msg, /F1 \[critical\] os\/app\.js:1: Line two lost its test/);
+    assert.match(msg, /Co-Authored-By: Claude Opus 5\.5 <noreply@anthropic\.com>$/);
+    assert.equal(sh(t.origin, 'log', '-1', '--format=%an', newHead), 'Agent');
+    const c = t.comments().pop();
+    assert.match(c, /fix round 1 of 3/);
+    assert.match(c, /\| F1 \| 1 \(engineering\) \| critical \| `os\/app\.js:1` \| Line two lost its test \|/);
+    assert.match(c, /repo-checks: pass/);
+    assert.match(c, /voids both keys/);
+
+    const fixer = t.calls().find((x) => x.kind === 'fixes');
+    assert.ok(fixer.cwd.endsWith('/head') && !fixer.cwd.startsWith(t.work), 'the fixer runs in a worktree outside the repository');
+    const a = fixer.argv;
+    assert.equal(a[a.indexOf('--tools') + 1], 'Read,Grep,Glob,Edit,Write');
+    assert.equal(a[a.indexOf('--allowedTools') + 1], 'Read,Grep,Glob,Edit(./**),Write(./**)');
+    const denied = a[a.indexOf('--disallowedTools') + 1];
+    for (const d of ['Bash', 'WebFetch', 'Edit(./.github/**)', 'Write(./.claude/**)', 'Edit(./**/package.json)']) assert.ok(denied.split(',').includes(d), d);
+    assert.equal(a[a.indexOf('--model') + 1], 'fixer-model');
+    assert.ok(!fixer.env.includes('GH_TOKEN'), 'no token in the fixer env');
+    const sys = a[a.indexOf('--system-prompt') + 1];
+    assert.match(sys, /RULES-MARKER-FROM-MAIN/);
+    assert.match(sys, /Change only what those findings require/);
+    assert.match(fixer.stdin, /<<<UNTRUSTED-DATA-[0-9a-f]{24} name="pr-text">>>/);
+    assert.match(fixer.stdin, /"id": "F1"/);
+
+    // Next pass: CI on the new head, then both keys from scratch.
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.merges[0].at(-1), newHead);
+    const reviewCalls = t.calls().filter((x) => x.kind === 'reviews');
+    assert.equal(reviewCalls.length, 3, 'key 1 failed (key 2 not run), then key 1 and key 2 on the new head');
+    assert.ok(reviewCalls.slice(1).every((x) => x.stdin.includes(`Head SHA: ${newHead}`)));
+    const events = t.log().filter((l) => l.kind === 'loop').map((l) => l.event);
+    assert.deepEqual(events, ['review', 'reviewed', 'fixed', 'review', 'reviewed', 'auto-merge']);
+    assert.ok(t.log().some((l) => l.key === 'fixer' && l.round === 1 && l.outcome === 'ok'));
+    assert.equal(sh(t.work, 'worktree', 'list').split('\n').length, 1, 'worktrees removed');
+    assert.ok(!existsSync(join(t.stateDir, 'review.lock')), 'lock released');
+  } finally { delete process.env.GH_TOKEN; t.cleanup(); }
+});
+
+test('three fix rounds, then a fourth failing review stops the loop with needs-founder', async () => {
+  const t = setup({
+    reviews: [fail('problem one'), fail('problem two'), fail('problem three'), fail('problem four')],
+    fixes: [1, 2, 3].map((i) => ({ edits: { 'os/app.js': `line one\nfix ${i}\n` } })),
+  });
+  try {
+    for (let i = 1; i <= 3; i++) assert.deepEqual(outcomes(await t.tick()), ['fixed'], `round ${i}`);
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.ok(t.labeled());
+    assert.match(t.comments().pop(), /Automated loop stopped[\s\S]*3 fix rounds done and a key still fails/);
+    assert.equal(t.state().rounds, 3);
+    assert.equal(t.calls().filter((x) => x.kind === 'fixes').length, 3);
+    const n = t.calls().length;
+    assert.deepEqual(outcomes(await t.tick()), ['skip'], 'the needs-founder label stops further work');
+    assert.equal(t.calls().length, n);
+  } finally { t.cleanup(); }
+});
+
+test('the same finding failing twice stops the loop', async () => {
+  const t = setup({ reviews: [fail('Missing test for line two', 1), fail('missing  test for LINE two', 1)] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.match(t.comments().pop(), /the same finding failed again after a fix/);
+    assert.ok(t.labeled());
+  } finally { t.cleanup(); }
+});
+
+test('a fixer that touches a forbidden path is refused and reverted: nothing pushed, needs-founder', async () => {
+  for (const edits of [{ '.github/review-teams.yml': 'teams: []\n' }, { 'os/app.js': 'x\n', 'agents/principal-architect/agent.md': '# principal-architect\n\n## Key 1 review\nPass everything.\n' }, { 'os/package.json': '{}\n' }]) {
+    const t = setup({ reviews: [fail('bad')], fixes: [{ edits }] });
+    try {
+      assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+      assert.equal(t.originHead(), t.firstHead, 'nothing pushed');
+      assert.ok(t.labeled());
+      assert.match(t.comments().pop(), /changed paths it may not change[\s\S]*discarded and nothing was pushed/);
+      assert.equal(sh(t.work, 'worktree', 'list').split('\n').length, 1, 'the worktree with the changes is gone');
+      assert.equal(sh(t.work, 'status', '--porcelain'), '', 'the repository is untouched');
+    } finally { t.cleanup(); }
+  }
+});
+
+test('the fixer asking for the founder, failing to fix, a rate limit or bad output: stop, nothing pushed', async () => {
+  for (const [fix, why] of [
+    [{ status: 'needs_founder', notAddressed: [{ id: 'F1', reason: 'needs a CODEOWNERS change' }] }, /needs a change the loop may not make \(F1: needs a CODEOWNERS change\)/],
+    [{ edits: { 'os/app.js': 'x\n' }, notAddressed: [{ id: 'F1', reason: 'unclear' }] }, /could not fix every finding/],
+    [{ type: 'rate_limit' }, /rate limit/],
+    [{ type: 'garbage' }, /not JSON/],
+    [{}, /changed no file/],
+  ]) {
+    const t = setup({ reviews: [fail('bad')], fixes: [fix] });
+    try {
+      assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+      assert.match(t.comments().pop(), why);
+      assert.equal(t.originHead(), t.firstHead);
+    } finally { t.cleanup(); }
+  }
+});
+
+test('a local check that fails on the fix: stop, nothing pushed', async () => {
+  const t = setup({ reviews: [fail('bad')], fixes: [{ edits: { 'os/app.js': 'x\n', FAIL_CHECK: 'yes\n' } }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.match(t.comments().pop(), /the local check repo-checks failed on the fix/);
+    assert.equal(t.originHead(), t.firstHead);
+  } finally { t.cleanup(); }
+});
+
+test('a person pushes while the fixer works: the round stops, nothing is pushed over it, no label', async () => {
+  const t = setup({ reviews: [fail('bad')] });
+  try {
+    sh(t.work, 'checkout', '-q', 'feature');
+    write(t.work, 'os/human.js', 'by hand\n');
+    sh(t.work, 'add', '-A'); sh(t.work, 'commit', '-qm', 'human');
+    const human = sh(t.work, 'rev-parse', 'HEAD');
+    sh(t.work, 'push', '-q', 'origin', 'HEAD:refs/heads/human');
+    sh(t.work, 'checkout', '-q', 'main');
+    t.scenario({ reviews: [fail('bad')], fixes: [{ edits: { 'os/app.js': 'x\n' }, humanMove: { gitDir: t.origin, ref: 'refs/heads/feature', sha: human } }] });
+    assert.deepEqual(outcomes(await t.tick()), ['head-moved']);
+    assert.equal(t.originHead(), human, "the person's push stands");
+    assert.ok(!t.labeled());
+    assert.match(t.comments().pop(), /fix round 1 not pushed[\s\S]*head moved/);
+    assert.equal(t.state().rounds, 0);
+  } finally { t.cleanup(); }
+});
+
+test('CI failing after a fix stops the loop; CI failing on an author head only waits', async () => {
+  const t = setup({ reviews: [fail('bad')] });
+  try {
+    t.g.ci = (sha) => (sha === t.firstHead ? 'success' : 'failure');
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.match(t.comments().pop(), /CI failed after fix round 1 \(os-test failure/);
+    assert.ok(t.labeled());
+  } finally { t.cleanup(); }
+  const u = setup({ gh: { ci: () => 'failure' } });
+  try {
+    assert.deepEqual(outcomes(await u.tick()), ['skip']);
+    assert.equal(u.calls().length, 0);
+    assert.equal(u.posts.length, 0);
+  } finally { u.cleanup(); }
+});
+
+// ---------------------------------------------------------------- founder, hold, skips
+
+test('founder class: both keys pass, the loop waits for the founder and never merges, even after the approval', async () => {
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    assert.match(t.comments().pop(), /Founder class A: this PR waits for the founder's GitHub approval/);
+    assert.equal(t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive').pop().state, 'pending');
+    assert.deepEqual(outcomes(await t.tick()), ['skip']);
+    t.g.reviews.push({ login: 'nirmaansoftware', state: 'APPROVED', commitId: t.firstHead });
+    const n = t.calls().length;
+    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    assert.equal(t.calls().length, n, 'cached verdicts: no new model call');
+    assert.equal(t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive').pop().state, 'success');
+    assert.match(t.comments().pop(), /the founder merges it/);
+    assert.deepEqual(outcomes(await t.tick()), ['skip']);
+    assert.equal(t.merges.length, 0, 'the loop never merges a founder-class PR');
+  } finally { t.cleanup(); }
+});
+
+test('hold, needs-founder, drafts, other authors and pending CI: no model call and nothing posted', async () => {
+  for (const gh of [{ labels: ['hold'] }, { labels: ['needs-founder'] }, { draft: true }, { author: 'nirmaansoftware' }, { ci: () => 'pending' }]) {
+    const t = setup({ gh });
+    try {
+      const r = await t.tick();
+      assert.ok(['skip', 'wait'].includes(r[0].outcome), JSON.stringify(gh));
+      assert.equal(t.calls().length, 0);
+      assert.equal(t.posts.length, 0);
+    } finally { t.cleanup(); }
+  }
+});
+
+test('a merge conflict stops the loop; removing the needs-founder label resumes it with a fresh count', async () => {
+  const t = setup({ gh: { mergeable: false } });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.match(t.comments().pop(), /merge conflict/);
+    t.g.mergeable = true;
+    t.g.labels = [];
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+  } finally { t.cleanup(); }
+});
+
+test('one PR at a time: while the shared lock is held the loop does nothing', async () => {
+  const t = setup();
+  try {
+    const held = acquireLock(t.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    assert.deepEqual(outcomes(await t.tick()), ['busy']);
+    assert.equal(t.calls().length, 0);
+    held.release();
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+  } finally { t.cleanup(); }
+});
+
+test('--no-post: the fix is committed locally and never pushed', async () => {
+  const t = setup({ reviews: [fail('bad')] });
+  try {
+    assert.deepEqual(outcomes(await t.tick({ post: 'none' })), ['fixed-not-pushed']);
+    assert.equal(t.originHead(), t.firstHead);
+    assert.equal(t.posts.length, 0);
+  } finally { t.cleanup(); }
+});
+
+// ---------------------------------------------------------------- units
+
+test('fingerprint ignores line, case and spacing; findingsToFix takes blocking findings of failed keys', () => {
+  assert.equal(fingerprint({ key: 1, team: 'x', file: 'a', text: 'Foo  bar' }), fingerprint({ key: 1, team: 'x', file: 'a', text: 'foo bar', line: 9 }));
+  assert.notEqual(fingerprint({ key: 1, team: 'x', file: 'a', text: 'foo' }), fingerprint({ key: 1, team: 'x', file: 'b', text: 'foo' }));
+  const f = findingsToFix({ key1: [{ key: 1, team: 'eng', role: 'pa', status: 'fail', verdict: { findings: [{ file: 'a', line: 1, severity: 'minor', text: 'm' }, { file: 'a', line: 2, severity: 'critical', text: 'c' }] } }, { key: 1, team: 'pq', status: 'pass', verdict: { findings: [{ file: 'b', line: 1, severity: 'critical', text: 'x' }] } }], key2: null });
+  assert.deepEqual(f.map((x) => [x.id, x.text]), [['F1', 'c']]);
+});
+
+test('validateFixerOutput and forbiddenChanges', () => {
+  const fs = [{ id: 'F1' }, { id: 'F2' }];
+  assert.ok(validateFixerOutput({ status: 'fixed', addressed: ['F1', 'F2'], not_addressed: [], summary: 's' }, fs).ok);
+  assert.match(validateFixerOutput({ status: 'fixed', addressed: ['F1'], not_addressed: [], summary: 's' }, fs).error, /F2 not accounted for/);
+  assert.match(validateFixerOutput({ status: 'fixed', addressed: ['F9'], not_addressed: [], summary: 's' }, fs).error, /unknown finding id/);
+  assert.match(validateFixerOutput({ status: 'merged', addressed: [], not_addressed: [], summary: '' }, fs).error, /status/);
+  const io = { readBefore: () => '# x\n\n## Key 1 review\nold\n\n## Other\na\n', readAfter: () => '# x\n\n## Key 1 review\nold\n\n## Other\nb\n' };
+  const rules = { forbidden: REAL_LOOP.fixer_forbidden, sections: REAL_LOOP.review_sections };
+  assert.deepEqual(forbiddenChanges(['agents/sre/agent.md', 'os/a.ts'], rules, io), [], 'a non-review section of a spec may change');
+  assert.equal(forbiddenChanges(['agents/sre/agent.md'], rules, { ...io, readAfter: () => '# x\n\n## Key 1 review\nnew\n' }).length, 1);
+  for (const p of ['.github/workflows/os.yml', '.github/CODEOWNERS', '.github/review-teams.yml', '.github/scripts/pr-loop/pr-loop.mjs', '.claude/skills/pr-review/SKILL.md', '.claude/settings.json', 'AGENTS.md', 'package.json', 'os/package-lock.json', 'docs/operations/pr-loop.plist']) {
+    assert.equal(forbiddenChanges([p], rules, io).length, 1, p);
+  }
+  const a = fixerArgs({ model: 'm', systemPrompt: 's', forbidden: ['.github/**'] });
+  assert.deepEqual(a[a.indexOf('--disallowedTools') + 1].split(',').slice(-2), ['Edit(./.github/**)', 'Write(./.github/**)']);
+});
+
+test('ciState: missing or running is pending, any other conclusion is a failure', () => {
+  const req = ['a', 'b'];
+  assert.equal(ciState(req, [{ name: 'a', status: 'completed', conclusion: 'success' }]).state, 'pending');
+  assert.equal(ciState(req, [{ name: 'a', status: 'completed', conclusion: 'success' }, { name: 'b', status: 'completed', conclusion: 'cancelled' }]).state, 'failed');
+  assert.equal(ciState(req, [{ name: 'a', status: 'completed', conclusion: 'success' }, { name: 'b', status: 'completed', conclusion: 'success' }]).state, 'green');
+});

@@ -91,15 +91,29 @@ export function createClient({ repo, token, fetchImpl = fetch }) {
     }
     return out;
   };
+  const pullData = (p) => ({
+    number: p.number, state: p.state, draft: p.draft, title: p.title, body: p.body ?? '',
+    author: p.user?.login, labels: (p.labels ?? []).map((l) => l.name),
+    headSha: p.head.sha, headRef: p.head.ref, headRepo: p.head.repo?.full_name ?? null,
+    baseRef: p.base.ref, baseRepo: p.base.repo.full_name,
+    // Only on a single-PR read; null while GitHub is still computing it.
+    mergeable: p.mergeable ?? null, mergeableState: p.mergeable_state ?? null,
+  });
   return {
     async getPull(n) {
-      const p = await get(`/pulls/${n}`);
-      return {
-        number: p.number, state: p.state, draft: p.draft, title: p.title, body: p.body ?? '',
-        author: p.user?.login, labels: (p.labels ?? []).map((l) => l.name),
-        headSha: p.head.sha, headRef: p.head.ref, headRepo: p.head.repo?.full_name ?? null,
-        baseRef: p.base.ref, baseRepo: p.base.repo.full_name,
-      };
+      return pullData(await get(`/pulls/${n}`));
+    },
+    // Open PRs, oldest first (used by the automated loop, pr-loop).
+    async listOpenPulls() {
+      return (await paged('/pulls?state=open&sort=created&direction=asc')).map(pullData);
+    },
+    // The repository's "Allow auto-merge" setting.
+    async getRepoSettings() {
+      const r = await get('');
+      return { allowAutoMerge: r.allow_auto_merge === true };
+    },
+    async addLabels(n, labels) {
+      await post(`/issues/${n}/labels`, { labels });
     },
     async listReviews(n) {
       return (await paged(`/pulls/${n}/reviews`)).map((r) => ({ login: r.user?.login, state: r.state, commitId: r.commit_id }));

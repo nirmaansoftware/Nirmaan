@@ -66,11 +66,13 @@ class HeadMoved extends Error {}
 
 // Runs the whole review. `o` = { repoRoot, pr, config, github, post: 'app' |
 // 'dry-run' | 'none', claudeBin, stateDir, models, timeoutMs, backoffMs,
-// fresh, callerBranch, inClaudeSession, sleep, out }.
+// fresh, callerBranch, inClaudeSession, sleep, out, heldLock }.
 export async function runReview(o) {
   const out = o.out ?? ((s) => console.log(s));
   const cfg = o.config;
-  const lock = acquireLock(o.stateDir, { repo: cfg.repo, pr: o.pr });
+  // The automated loop (pr-loop) passes the lock it already holds, so the
+  // review and the fix round it belongs to are one turn of the shared lock.
+  const lock = o.heldLock ? { ok: true, release: () => {} } : acquireLock(o.stateDir, { repo: cfg.repo, pr: o.pr });
   if (!lock.ok) {
     out(`pr-review: another review is running (${lock.holder ? `${lock.holder.repo} #${lock.holder.pr}, pid ${lock.holder.pid}` : 'unknown holder'}). Try again when it finishes.`);
     return { exit: EXIT.busy };
