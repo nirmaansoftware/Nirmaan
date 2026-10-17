@@ -85,16 +85,16 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
 
   const posts = [];
   const merges = [];
-  const g = { labels: gh.labels ?? [], reviews: [], allowAutoMerge: gh.allowAutoMerge ?? true, ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true };
+  const g = { labels: gh.labels ?? [], reviews: [], mergeError: gh.mergeError ?? null, body: 'Changes line two.', ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true };
   const originHead = () => sh(origin, 'rev-parse', 'refs/heads/feature');
   const github = {
     async getPull() {
       const head = originHead();
       sh(origin, 'update-ref', 'refs/pull/1/head', head); // GitHub keeps this in step with the branch
-      return { number: 1, state: 'open', draft: g.draft, title: 'Change app', body: 'Changes line two.', author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : 'clean' };
+      return { number: 1, state: 'open', draft: g.draft, title: 'Change app', body: g.body, author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : 'clean' };
     },
     async listOpenPulls() { return [await this.getPull()]; },
-    async getRepoSettings() { return { allowAutoMerge: g.allowAutoMerge }; },
+    async updatePullBody(n, body) { posts.push({ type: 'body', body }); g.body = body; },
     async addLabels(n, labels) { posts.push({ type: 'label', labels }); g.labels.push(...labels); },
     async listReviews() { return g.reviews; },
     async listCheckRuns(sha) { const c = g.ci(sha); return CONFIG.required_ci.map((name) => ({ name, status: c === 'pending' ? 'in_progress' : 'completed', conclusion: c === 'pending' ? null : c, completedAt: '2026-10-17T00:00:00Z' })); },
@@ -107,7 +107,14 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   const o = (extra = {}) => ({
     repoRoot: work, config: CONFIG, loop: LOOP, github, post: 'app', claudeBin: bin, stateDir,
     models: { key1: 'k1', key2: 'k2' }, fixerModel: 'fixer-model', timeoutMs: 20000, fixerTimeoutMs: 20000, checkTimeoutMs: 20000,
-    backoffMs: 0, sleep: async () => {}, out: () => {}, runGh: (args) => merges.push(args), stepPr, ...extra,
+    backoffMs: 0, sleep: async () => {}, out: () => {}, stepPr, ...extra,
+    // `gh pr merge` with the gh login: records the call, and fails the way gh
+    // does (non-zero exit, message on stderr) when the test sets mergeError.
+    runGh: (args) => {
+      merges.push(args);
+      if (g.mergeError) { const e = new Error(`Command failed: gh ${args.join(' ')}`); e.stderr = g.mergeError; throw e; }
+      return '';
+    },
   });
   const tick = (extra) => runTick(o(extra));
   const calls = () => (existsSync(join(fakeDir, 'calls.jsonl')) ? readFileSync(join(fakeDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
@@ -136,17 +143,41 @@ test('both keys pass: auto-merge when the App posts and the repository allows it
   } finally { t.cleanup(); }
 });
 
-test('both keys pass without the auto-merge setting, or in a dry run: a "ready" comment and no merge', async () => {
-  for (const [extra, gh, why] of [[{}, { allowAutoMerge: false }, /does not allow auto-merge/], [{ post: 'dry-run' }, {}, /review App is not configured/]]) {
-    const t = setup({ gh });
-    try {
-      assert.deepEqual(outcomes(await t.tick(extra)), ['ready']);
-      assert.equal(t.merges.length, 0);
-      const c = t.comments().pop();
-      assert.match(c, /Both keys passed on `[0-9a-f]{7}`, waiting for the founder's merge settings/);
-      assert.match(c, why);
-    } finally { t.cleanup(); }
-  }
+test('both keys pass and GitHub says auto-merge is not allowed for the repository: a "ready" comment, no stop', async () => {
+  const t = setup({ gh: { mergeError: 'GraphQL: Pull request Auto merge is not allowed for this repository (enablePullRequestAutoMerge)' } });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['ready']);
+    assert.deepEqual(t.merges, [['pr', 'merge', '1', '--repo', CONFIG.repo, '--auto', '--merge', '--match-head-commit', t.firstHead]], 'the loop tries the merge itself; no settings read');
+    const c = t.comments().pop();
+    assert.match(c, /Both keys passed on `[0-9a-f]{7}`, waiting for the founder's merge settings/);
+    assert.match(c, /does not allow auto-merge/);
+    assert.ok(!t.labeled());
+    assert.deepEqual(outcomes(await t.tick()), ['skip'], 'ready on this head: nothing more');
+    assert.equal(t.merges.length, 1);
+  } finally { t.cleanup(); }
+});
+
+test('both keys pass and gh pr merge fails for any other reason: stop with needs-founder', async () => {
+  const t = setup({ gh: { mergeError: 'GraphQL: Head branch was modified. Review and try the merge again. (enablePullRequestAutoMerge)' } });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.equal(t.merges.length, 1);
+    assert.ok(t.labeled());
+    const c = t.comments().pop();
+    assert.match(c, /Automated loop stopped[\s\S]*gh pr merge --auto failed[\s\S]*Head branch was modified/);
+    assert.ok(!t.comments().some((b) => /Auto-merge is on|### Automated loop: ready/.test(b)));
+  } finally { t.cleanup(); }
+});
+
+test('a dry run (no review App): a "ready" comment and gh is never called', async () => {
+  const t = setup();
+  try {
+    assert.deepEqual(outcomes(await t.tick({ post: 'dry-run' })), ['ready']);
+    assert.equal(t.merges.length, 0);
+    const c = t.comments().pop();
+    assert.match(c, /Both keys passed on `[0-9a-f]{7}`, waiting for the founder's merge settings/);
+    assert.match(c, /review App is not configured/);
+  } finally { t.cleanup(); }
 });
 
 // ---------------------------------------------------------------- fix loop
@@ -308,6 +339,9 @@ test('founder class: both keys pass, the loop waits for the founder and never me
   const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
   try {
     assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    assert.equal(t.merges.length, 0, 'gh pr merge is never called for a founder-class PR');
+    assert.match(t.g.body, /^<!-- review:founder-class -->Founder class: A \(Control plane\); waits for the founder's approval\.<!-- \/review:founder-class -->\n\nChanges line two\.$/, 'the driver declared the class in the PR body');
+    assert.equal(t.calls().filter((x) => x.kind === 'reviews').every((x) => x.stdin.includes('review:founder-class')), true, 'the reviewers saw the declaration');
     assert.match(t.comments().pop(), /Founder class A: this PR waits for the founder's GitHub approval/);
     assert.equal(t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive').pop().state, 'pending');
     assert.deepEqual(outcomes(await t.tick()), ['skip']);
