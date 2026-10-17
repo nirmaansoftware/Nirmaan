@@ -10,8 +10,8 @@
     5. Scroll scenes, all driven from one rAF-throttled scroll loop:
          [data-scene="stack"]     layer tower builds as you scroll (pinned); on
                                   narrower screens the layer you're reading lights up
-         [data-scene="rail"]      services track moves sideways (pinned above phone
-                                  width); on phones it's a plain swipe row
+         [data-scene="rail"]      services track moves sideways (pinned on every
+                                  screen tall enough; phones get a shorter stretch)
          [data-scene="line"]      process timeline fills as it passes
          [data-scene="spy"]       process index highlights the step in view
          [data-scene="build"]     problem → system story, scrubbed by scroll (pinned)
