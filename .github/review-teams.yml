@@ -30,6 +30,7 @@
 # agents/<role>/agent.md; or a content rule's examples or markers do not match.
 #
 # Changing this file is founder class A.
+# (Seed S11: a comment-only change, to test code owner review. Do not merge.)
 
 version: 1
 
