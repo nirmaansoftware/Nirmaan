@@ -1,4 +1,9 @@
-# Prospecting · IMPLEMENTED (EXPERIMENTAL until used on real outreach)
+# Prospecting · IMPLEMENTED, PAUSED with the OS (since 2026-10-18)
+
+**Not running.** Prospecting lives in the Nirmaan OS, which is paused: no searches,
+drafts or sends happen until the OS is restarted through the
+[un-pause checklist](../engineering/deployment.md#pause-and-un-pause). The
+description below is how it works when running.
 
 Finding businesses Nirmaan could help, before they ask. Lives in the Nirmaan OS
 at **Pipeline → Prospects** (`/os/prospects`), code in `os/src/lib/prospecting/`.

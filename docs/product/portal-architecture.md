@@ -2,12 +2,16 @@
 
 Two experiences, one data model, different permissions and UX.
 
+**Status:** the OS is paused since 2026-10-18 (see
+[deployment](../engineering/deployment.md#pause-and-un-pause)). "IMPLEMENTED" below
+means built and tested in the code, not running for clients today.
+
 ## Customer surfaces
 
 | Surface | Where | Status |
 |---|---|---|
 | Positioning, services, process, work | nirmaan.online (static) | IMPLEMENTED |
-| Problem-first intake (3 progressive steps) | nirmaan.online/contact → OS `/api/intake` | IMPLEMENTED (the endpoint goes live when the OS is deployed) |
+| Problem-first intake (3 progressive steps) | nirmaan.online/contact → Web3Forms (email) | IMPLEMENTED. The OS `/api/intake` endpoint exists but the site does not use it. |
 | Proposal review: approve / request changes / decline | OS `/p/<token>` | IMPLEMENTED |
 | Project progress | OS `/status/<token>` | IMPLEMENTED |
 | Invoices due and paid, with payment instructions | OS `/status/<token>` | IMPLEMENTED (Phase 3) |

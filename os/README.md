@@ -8,9 +8,13 @@ Next.js app, three audiences with different permissions:
   library, AI usage, audit log, team.
 - **Clients** through private links: `/p/<token>` to review and approve a proposal,
   `/status/<token>` to follow progress.
-- **The public website's intake** at `POST /api/intake`.
+- **An intake API** at `POST /api/intake` that turns an enquiry into a lead. The
+  public website does not use it: its form sends enquiries by email through
+  Web3Forms.
 
-It runs on Fly.io as the app `nirmaan-os`; see [deployment](../docs/engineering/deployment.md).
+**Paused since 2026-10-18.** It ran on Fly.io as the app `nirmaan-os`; the machine is
+stopped and its data kept. See [deployment](../docs/engineering/deployment.md#pause-and-un-pause)
+before restarting anything.
 This Next.js version has breaking changes: read [AGENTS.md](AGENTS.md) and the guides in
 `node_modules/next/dist/docs/` before changing code.
 

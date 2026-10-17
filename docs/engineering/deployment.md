@@ -9,7 +9,19 @@ in `website/` and commit `public/`. `vercel.json` (in `website/src/static/`, cop
 `public/`) holds redirects, for example `/agency-os.html` → `/process.html#honest`, and
 baseline headers.
 
-## Nirmaan OS on Fly.io · IMPLEMENTED (os.nirmaan.online)
+## Nirmaan OS on Fly.io · PAUSED (decided 2026-10-17, stopped 2026-10-18)
+
+**The OS is not running.** Its one machine is stopped with automatic start turned
+off, so a request to os.nirmaan.online does not wake it. The machine and its data
+volume are kept; nothing was deleted. The last deployed build is **Fly release v10
+of 2026-09-28, commit `790a0c6`**; later commits on `main` were never deployed.
+CI no longer deploys, and the deploy credential has been removed. Do not start the
+stopped machine: it would bring back that old build. The only way back is the
+[un-pause checklist](#pause-and-un-pause). Decision:
+[architecture decisions](architecture.md#decisions) and the
+[2026-10-17 decision record](../operations/2026-10-17-inspection-decisions.md).
+
+The rest of this section describes the setup as it ran, for the un-pause.
 
 One machine in Singapore (`sin`, the nearest region offered to this account) runs the web app and the campaign worker side by side
 (`os/scripts/start.sh`). The database (`/data/nirmaan.db`) and project files
@@ -34,17 +46,60 @@ fly certs add os.nirmaan.online          # then add the DNS record it asks for
 Also add `https://os.nirmaan.online/api/auth/google/callback` to the Google OAuth
 client's redirect URIs.
 
-Later deploys happen by themselves: `.github/workflows/os.yml` tests every change to
-`os/`, `agents/` or the Fly files (typecheck, lint, unit tests) and, once it's merged
-to `main`, deploys it to Fly with the `FLY_API_TOKEN` repository secret (a deploy token
-for `nirmaan-os` only; renew yearly with `fly tokens create deploy -a nirmaan-os`).
-By hand, `fly deploy` from the repo root still works. Logs: `fly logs`. The worker's
-ticks appear there once a minute.
+Deploys: while it ran, `.github/workflows/os.yml` tested every change and deployed
+merges to `main`. **That no longer happens:** the workflow has no deploy job any more
+(it keeps the tests), and the deploy credential was revoked. A
+deploy is now a deliberate act by the founder, at un-pause, with a newly issued
+deploy token. Logs: `fly logs`; while running, the worker's ticks appear there once a
+minute.
 
-Backups: every night after 02:00 India time the worker emails a gzipped copy of the
-whole database to our own mailbox ("Nirmaan OS backup <date>", `src/lib/backup.ts`;
-`BACKUP_EMAIL` to send it elsewhere). Fly also keeps daily volume snapshots for 5 days,
-and `fly ssh sftp get /data/nirmaan.db` downloads the live file.
+Backups: while running, every night after 02:00 India time the worker emailed a
+gzipped copy of the whole database to our own mailbox ("Nirmaan OS backup <date>",
+`src/lib/backup.ts`; `BACKUP_EMAIL` to send it elsewhere). That stops with the
+machine. Fly keeps volume snapshots for only 5 days, so the copy that counts while
+paused is the encrypted backup taken before the stop and checked by a local restore,
+kept outside any repository.
+
+### Pause and un-pause
+
+**How it was paused** (2026-10-18, outside the sending hours of Mon to Sat 10:00 to
+19:00 India time and the nightly backup, so no message was half-sent):
+
+1. Checked the send queue for approved, failed and active-campaign items.
+2. Backed up the database and project files, downloaded them, checked them with a
+   local restore (integrity check, row counts), and stored them encrypted outside
+   any repository.
+3. Stopped the machine and turned its automatic start off; confirmed a request to
+   os.nirmaan.online does not wake it, no new logs appear, and the nightly backup
+   email stops (if that email comes back, the OS is running).
+
+**Un-pause checklist.** Every item, in order; the Principal Architect owns the list
+and the founder approves the restart.
+
+- [ ] **Dependency security update deployed** (N5): the patched build, not the
+      paused release, is what gets deployed. Never restart the stopped machine on
+      the old build.
+- [ ] **Backup restore checked** (N1): the pre-pause backup restores locally and
+      passes its integrity check, so there is a known-good copy before anything
+      changes.
+- [ ] **Approved queue cleared or re-reviewed:** every message left approved from
+      before the pause is cancelled or approved again by a person; nothing old
+      sends by itself.
+- [ ] **Credentials reissued:** the credentials retired at their providers during
+      the pause are issued again and set on the host, and a new deploy token is
+      created (`fly tokens create deploy`), scoped to this app only.
+- [ ] **Inbox processed before the first send:** replies and stop requests that
+      arrived during the pause are read, and every stop is on the do-not-contact
+      list, before any message goes out.
+- [ ] **Restart hardening merged** (N19): the worker stops cleanly mid-tick
+      without re-sending, old approvals expire back to draft, and build inputs are
+      pinned.
+- [ ] **Uptime and "machine started" alert in place** (N20).
+- [ ] **Founder approval** for the restart, recorded with the date.
+
+Then deploy the patched build by hand with the new token, turn automatic start
+back on only if wanted, watch the first worker ticks in `fly logs`, and update this
+section and the architecture decision row.
 
 ## Nirmaan OS: other hosts
 
