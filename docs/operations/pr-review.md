@@ -199,6 +199,131 @@ the comments and commit statuses named `dry-run/review/team-lead` and
 `dry-run/review/executive`, which are never green and are not the checks a
 ruleset requires.
 
+## Automated loop
+
+The loop (`.github/scripts/pr-loop/pr-loop.mjs`, the "driver") runs the whole
+cycle without anyone starting the review by hand: wait for CI, run both keys,
+fix what a key found, review again, and take the merge path when both keys
+pass. It never replaces a key and never bypasses the founder: founder-class PRs
+still need the founder's GitHub approval, and the loop never merges them.
+
+**Which PRs.** Open PRs to `main` from a branch in this repository, authored by
+the agents' account (`patel-om`, in `.github/scripts/pr-loop/config.json`).
+Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
+
+**Each step, per PR:**
+
+1. **CI.** Until `os-test`, `website-build` and `repo-checks` are green on the
+   head commit, the loop waits and calls no model. CI failing on a head the
+   loop pushed stops the loop; CI failing on the author's head only waits.
+2. **Review.** The review script above runs unchanged: one fresh read-only
+   process per owning team (key 1), then the orchestrator (key 2), specs from
+   `main`, comments and checks posted.
+3. **Both keys pass.** If the PR is in a founder class, the loop posts that it
+   waits for the founder's approval of this head and does nothing else; after
+   the founder approves, it runs the review again (cached verdicts, no model
+   call) so `review/executive` turns green, and the founder merges. Otherwise,
+   when the review App posts the checks and the repository's "Allow
+   auto-merge" setting is on, the loop runs `gh pr merge --auto --merge
+   --match-head-commit <head>`, so GitHub merges only when every required
+   check passes on that head. Until then (a dry run, or auto-merge off) it
+   posts "ready: both keys passed, waiting for the founder's merge settings",
+   and the founder merges.
+4. **A key fails.** The loop starts a **fixer**: a separate, fresh `claude -p`
+   process, never a reviewer process and never the session that reviewed. It
+   runs in a clean worktree of the head commit, with Read, Grep, Glob, Edit and
+   Write allowed only inside that worktree, no shell, no network, no MCP and
+   no token in its environment. Its task is the structured list of blocker and
+   critical findings from the failed keys; the PR text and each finding's
+   wording are passed as data, not instructions. It gets `AGENTS.md` and
+   `CLAUDE.md` from `main` and is told to change only what the findings
+   require.
+5. **The loop, not the model, finishes the round.** It throws the fix away
+   and stops if the fixer changed anything it may not change: `.github/**`
+   (the review map, `CODEOWNERS`, workflows, the review and loop scripts),
+   `.claude/**` (the `pr-review` skill and settings), `AGENTS.md`,
+   `CLAUDE.md`, `.gitignore`, this page, the decision record, the loop's
+   plist, any `package.json` or `package-lock.json`, or a review section of
+   an agent spec ("Key 1 review", "Key 2 review", "Checklist for my team
+   lead", the base checklist in `agents/README.md`). A fixer that says a
+   finding needs such a change stops the loop the same way. Otherwise the
+   loop regenerates `website/public` when `website/src` changed, commits with
+   the `Co-Authored-By` line, runs the local checks for the changed paths
+   (review map coverage, migration rule and secret scan always; the OS
+   install, migrations, typecheck, lint and tests for `os/**`) in a
+   token-free environment, checks the head has not moved, pushes to the PR
+   branch with `--force-with-lease` on the reviewed head, and posts "fix
+   round N" listing the findings addressed.
+6. **Again from scratch.** The new head voids both keys, so the next step
+   waits for CI on it and runs both reviews again.
+
+**When it stops.** The loop labels the PR `needs-founder` and comments why when:
+three fix rounds are done and a key still fails; the same finding (same key,
+team, file and wording) fails again after a fix; CI fails after a fix; the
+branch has a merge conflict; a key is deferred (rate limit, bad output,
+missing spec); the fixer hits a rate limit, gives no valid answer, cannot
+fix every finding or changes nothing; a local check fails; or any error.
+Nothing is pushed in any of these cases. If someone pushes while the fixer
+works, the round is dropped without a label and the new head is reviewed from
+scratch. Removing the `needs-founder` label lets the loop resume with a fresh
+round count.
+
+**One PR at a time.** The loop holds the review lock (shared with ip-nirmaan)
+for a whole review and fix round. A PR the loop is fixing goes first, and each
+pass ends after the first PR that ran a review or a fix.
+
+**Records.** Every review call, fixer call and loop step (review, reviewed,
+fixed, ready, auto-merge, founder-wait, stopped) is a line in
+`~/.nirmaan/pr-review/calls.jsonl`. Per-PR loop state (rounds, findings seen,
+the last head it pushed) is in `~/.nirmaan/pr-review/loop/`.
+
+**Running it.** It runs on the founder's Mac with the Mac's own `claude` login
+(the plan) and `gh` login, so it adds no spend and no secret in GitHub
+Actions. Like the review script, it refuses to post unless it is `main`'s
+copy. Three ways to run it:
+
+- **Once, by hand**, from a checkout of `origin/main`:
+  `node .github/scripts/pr-loop/pr-loop.mjs --once` (add `--pr <n>` for one
+  PR, `--no-post` to print instead of posting, labelling or pushing; a fix is
+  then committed only in a temporary worktree).
+- **Continuously in a terminal:** `node .github/scripts/pr-loop/pr-loop.mjs
+  --watch --interval-minutes 5`. It exits when `main`'s copy of the loop
+  changes; start it again from the updated checkout.
+- **launchd (survives restarts).** Make a dedicated clone, then install the
+  plist [`pr-loop.plist`](pr-loop.plist):
+
+  ```sh
+  mkdir -p ~/.nirmaan/pr-loop
+  git clone https://github.com/nirmaansoftware/Nirmaan.git ~/.nirmaan/pr-loop/Nirmaan
+  cp ~/.nirmaan/pr-loop/Nirmaan/docs/operations/pr-loop.plist ~/Library/LaunchAgents/online.nirmaan.pr-loop.plist
+  launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/online.nirmaan.pr-loop.plist
+  ```
+
+  Every 5 minutes it resets the clone to `origin/main` and runs `--once`;
+  output goes to `~/.nirmaan/pr-review/loop.log`. `node`, `git`, `gh` and
+  `claude` must be on the login shell's `PATH`. To stop it:
+  `launchctl bootout gui/$(id -u)/online.nirmaan.pr-loop`.
+- **Claude Code `/loop`:** in a session opened in the dedicated clone, run
+  `/loop 10m git fetch origin main && git reset --hard origin/main && node
+  .github/scripts/pr-loop/pr-loop.mjs --once, then report its last line`. The
+  session only starts the script; it never reviews or fixes a PR itself. It
+  spends a little of the plan on the session's own turns, which launchd does
+  not.
+
+**Settings** (environment): `NIRMAAN_LOOP_MODEL_FIXER` (default `sonnet`),
+`NIRMAAN_LOOP_FIXER_TIMEOUT_SECONDS` (1800),
+`NIRMAAN_LOOP_CHECK_TIMEOUT_SECONDS` (1200), `NIRMAAN_LOOP_GIT_NAME` and
+`NIRMAAN_LOOP_GIT_EMAIL` (the commit identity; otherwise the clone's git
+config, otherwise the PR head commit's author), plus the review script's
+variables above. The local checks, forbidden paths, round limit and authors
+are in `.github/scripts/pr-loop/config.json`.
+
+**What the loop does not do.** It never merges a founder-class PR, never
+changes review configuration or workflows, never pushes over someone else's
+push, never runs on a fork or another author's PR, never turns auto-merge on
+for the repository, and never treats a deferred review as a pass. A fix the
+loop pushed is an agent's change like any other: both keys review it again.
+
 ## Small, urgent and revert PRs
 
 - **Size never changes the number of keys.** A typo fix still gets both keys;

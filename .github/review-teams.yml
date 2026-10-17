@@ -104,6 +104,7 @@ rules:
     globs:
       - "docs/operations/decision-meetings.md"
       - "docs/operations/pr-review.md"
+      - "docs/operations/pr-loop.plist"
       - "docs/company/principles.md"
       - "docs/ai/agent-responsibilities.md"
     teams: [product]
@@ -335,6 +336,7 @@ founder_classes:
       - ".dockerignore"
       - "docs/operations/decision-meetings.md"
       - "docs/operations/pr-review.md"
+      - "docs/operations/pr-loop.plist"
       - "docs/company/principles.md"
       - "docs/ai/agent-responsibilities.md"
   - id: B

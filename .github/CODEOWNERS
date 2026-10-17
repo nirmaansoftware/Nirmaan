@@ -16,6 +16,7 @@
 /.dockerignore @nirmaansoftware
 /docs/operations/decision-meetings.md @nirmaansoftware
 /docs/operations/pr-review.md @nirmaansoftware
+/docs/operations/pr-loop.plist @nirmaansoftware
 /docs/company/principles.md @nirmaansoftware
 /docs/ai/agent-responsibilities.md @nirmaansoftware
 

@@ -1,0 +1,59 @@
+{
+  "authors": ["patel-om"],
+  "max_fix_rounds": 3,
+  "needs_founder_label": "needs-founder",
+  "co_author": "Claude Opus 5.5 <noreply@anthropic.com>",
+  "rules_files": ["AGENTS.md", "CLAUDE.md"],
+  "fixer_forbidden": [
+    ".github/**",
+    ".claude/**",
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".gitignore",
+    ".gitattributes",
+    "docs/operations/pr-review.md",
+    "docs/operations/pr-review-decisions.md",
+    "docs/operations/pr-loop.plist",
+    "**/package.json",
+    "**/package-lock.json"
+  ],
+  "review_sections": {
+    "files": ["agents/*/agent.md", "agents/README.md"],
+    "headings": ["Key 1 review", "Key 2 review", "Checklist for my team lead", "Every key 1 (base checklist)"]
+  },
+  "checks": [
+    {
+      "name": "repo-checks",
+      "when": ["**"],
+      "cwd": ".",
+      "run": [
+        ["node", ".github/scripts/review-teams.mjs"],
+        ["node", ".github/scripts/check-migrations.mjs", "{main}"],
+        ["node", ".github/scripts/secret-scan.mjs", "{main}"]
+      ]
+    },
+    {
+      "name": "os-test",
+      "when": ["os/**"],
+      "cwd": "os",
+      "run": [
+        ["npm", "ci", "--no-audit", "--no-fund"],
+        ["npx", "prisma", "migrate", "deploy"],
+        ["npm", "run", "typecheck"],
+        ["npm", "run", "lint"],
+        ["npm", "test"]
+      ]
+    }
+  ],
+  "generate": [
+    {
+      "name": "website-build",
+      "when": ["website/src/**"],
+      "cwd": "website",
+      "run": [
+        ["npm", "ci", "--no-audit", "--no-fund"],
+        ["npm", "run", "build"]
+      ]
+    }
+  ]
+}
