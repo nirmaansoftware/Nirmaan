@@ -1,0 +1,482 @@
+# Review teams: which teams own which files, for the two-key PR review.
+#
+# This file is the only source of path ownership (decision record:
+# docs/operations/pr-review-decisions.md; how the review works:
+# docs/operations/pr-review.md). Docs link here and never copy it. The review
+# reads it from main, never from the PR under review.
+#
+# How a PR's owning teams are computed:
+#   1. Every changed file is matched against every rule in `rules` and every
+#      entry in `named_files`. Matching is a union, not first match: a file
+#      that matches rules of two teams needs both leads' key 1.
+#   2. A generated file under website/public/ has no rule of its own. It takes
+#      the teams of its source, found through `generated`.
+#   3. A file nothing matches belongs to the `catch_all` team (Engineering).
+#   4. `content_rules` scan the diff's added and removed lines and add teams
+#      (and founder classes) that a path cannot show.
+#   5. Founder classes A to F need the founder's GitHub approval on the head
+#      commit as a third key. Their path globs are mirrored exactly in
+#      .github/CODEOWNERS (a test checks the two agree).
+#
+# Glob syntax: `*` matches within one path segment, `**` matches any number of
+# segments (including none), `?` one character, `{a,b}` either name. Founder
+# class globs use no braces, so they can be copied into CODEOWNERS as written.
+# Globs are always quoted (a bare `*` starts a YAML alias).
+#
+# The coverage test (.github/scripts/review-teams.mjs, run by repo-checks)
+# fails when: a tracked file maps to no rule and is not on the catch-all
+# allowlist; a rule, named file, generated mapping or founder glob matches no
+# tracked file; a lead, member or checklist names a role with no
+# agents/<role>/agent.md; or a content rule's examples or markers do not match.
+#
+# Changing this file is founder class A.
+
+version: 1
+
+teams:
+  - id: executive
+    name: Executive
+    lead: orchestrator
+    key: 2 # key 2 on every PR; never key 1
+    members: []
+  - id: product
+    name: Product
+    lead: product-manager
+    key: 1
+    members: [business-analyst, market-research]
+  - id: brand-content
+    name: Brand and Content
+    lead: brand-strategist
+    key: 1
+    members: [content-strategist, technical-writer, seo-specialist]
+  - id: design
+    name: Design
+    lead: creative-director
+    key: 1
+    members: [ux-designer, ui-designer, design-system-engineer]
+  - id: engineering
+    name: Engineering
+    lead: principal-architect
+    key: 1
+    members: [frontend-engineer, backend-engineer, database-engineer, ai-ml-engineer]
+  - id: platform-quality
+    name: Platform and Quality
+    lead: security-engineer
+    key: 1
+    members: [sre, devops-engineer, qa-engineer, performance-engineer]
+  - id: business
+    name: Business
+    lead: legal-compliance
+    key: 1
+    members: [finance-estimation, tax-accounts, legal-counsel, sales-partnerships, client-communication]
+
+# legal-counsel is a Business member for its checklist and comments only; it
+# never holds a key.
+no_key_roles: [legal-counsel]
+
+# Every file no rule matches belongs to this team. Files on the allowlist may
+# rely on the catch-all alone; any other file must match an explicit rule, so
+# the catch-all stays a safety net and not a hiding place.
+catch_all:
+  team: engineering
+  allowlist: []
+
+# Path rules. `checklists` names member checklists that key 1 must run and
+# cite for files the rule matches. `exclude` removes files from one rule only.
+rules:
+  # Control plane.
+  - id: github
+    globs: [".github/**"]
+    teams: [platform-quality]
+  - id: ci-workflows-engineering
+    globs: [".github/workflows/os.yml", ".github/workflows/website.yml"]
+    teams: [engineering]
+  - id: agent-rules
+    globs: [".claude/**", "AGENTS.md", "CLAUDE.md", ".gitignore", ".dockerignore"]
+    teams: [platform-quality]
+  - id: agent-specs
+    # Loaded at runtime by os/src/lib/agents/loadAgent.ts.
+    globs: ["agents/**"]
+    teams: [engineering]
+
+  # Docs.
+  - id: governance-docs
+    globs:
+      - "docs/operations/decision-meetings.md"
+      - "docs/operations/pr-review.md"
+      - "docs/company/principles.md"
+      - "docs/ai/agent-responsibilities.md"
+    teams: [product]
+  - id: decision-records
+    # Dated records: adding is normal; editing one fails key 1 unless the diff
+    # only adds a dated "Superseded by" note.
+    globs: ["docs/operations/*-decisions.md", "docs/product/*-decisions.md", "docs/history/**"]
+    teams: [product]
+    frozen: true
+  - id: repo-claims
+    globs: ["README.md", "CHANGELOG.md", "docs/README.md", "docs/assessment/**"]
+    teams: [product]
+  - id: product-docs
+    globs: ["docs/product/**", "docs/strategy/**"]
+    teams: [product]
+    checklists: [business-analyst, market-research]
+  - id: projects
+    # Fixtures only. Real client data here fails key 1 outright.
+    globs: ["projects/**"]
+    teams: [product]
+  - id: operations-process
+    globs: ["docs/operations/{lead-to-project,project-lifecycle,change-requests,client-handover,maintenance}.md"]
+    teams: [product]
+  - id: company-brand
+    globs: ["docs/company/{positioning,mission,vision}.md"]
+    teams: [brand-content]
+  - id: company-business
+    globs: ["docs/company/{business-model,ideal-customer-profile}.md"]
+    teams: [product]
+  - id: finance-docs
+    globs: ["docs/finance/**"]
+    teams: [business]
+    checklists: [finance-estimation, tax-accounts]
+  - id: engineering-docs
+    globs: ["docs/engineering/**", "docs/ai/**"]
+    exclude: ["docs/ai/agent-responsibilities.md"]
+    teams: [engineering]
+  - id: platform-docs
+    # Lead review (2026-10-17): security, deployment, observability, testing
+    # and the launch list are Platform and Quality's standards too.
+    globs: ["docs/engineering/{security,deployment,observability,testing,list}.md"]
+    teams: [platform-quality]
+  - id: motion-standard
+    globs: ["docs/engineering/motion.md"]
+    teams: [design]
+    checklists: [ui-designer]
+  - id: spending-docs
+    globs: ["docs/engineering/procurement.md", "docs/ai/ai-cost-governance.md"]
+    teams: [business]
+    checklists: [finance-estimation]
+
+  # OS.
+  - id: os
+    globs: ["os/**"]
+    teams: [engineering]
+  - id: os-database
+    globs: ["os/prisma/**"]
+    teams: [engineering]
+    checklists: [database-engineer]
+  - id: os-auth-security
+    globs: ["os/src/lib/auth/**", "os/src/app/api/auth/**", "os/src/proxy.ts", "os/src/lib/security/**"]
+    teams: [engineering, platform-quality]
+    checklists: [security-engineer, backend-engineer]
+  - id: os-send-gate
+    globs:
+      - "os/src/lib/prospecting/outreach.ts"
+      - "os/src/lib/prospecting/mailer.ts"
+      - "os/src/lib/prospecting/worker.ts"
+    teams: [engineering, business]
+    checklists: [client-communication, backend-engineer]
+  - id: os-dependencies
+    globs: ["os/package.json", "os/package-lock.json"]
+    teams: [engineering, platform-quality]
+    checklists: [performance-engineer]
+  - id: os-finance
+    # Invoices, tax, recurring billing and proposal economics.
+    globs: ["os/src/lib/finance/**", "os/src/lib/proposals/**"]
+    teams: [engineering, business]
+    checklists: [finance-estimation, tax-accounts]
+  - id: os-do-not-contact
+    globs: ["os/src/app/os/prospects/do-not-contact/**"]
+    teams: [engineering, business]
+    checklists: [client-communication]
+  - id: os-runtime-security
+    # The tracked env file, security headers and the SSRF guard.
+    globs: ["os/.env", "os/next.config.ts", "os/src/lib/prospecting/safeFetch.ts"]
+    teams: [engineering, platform-quality]
+    checklists: [security-engineer]
+  - id: os-start
+    # Started by Dockerfile.os; holds the worker switch.
+    globs: ["os/scripts/start.sh"]
+    teams: [engineering, platform-quality]
+    checklists: [sre]
+  - id: production-config
+    globs: ["fly.toml", "Dockerfile.os"]
+    teams: [platform-quality]
+
+  # Website build.
+  - id: website-build
+    globs:
+      - "website/.eleventy.js"
+      - "website/package.json"
+      - "website/package-lock.json"
+      - "website/scripts/**"
+      - "website/src/_data/*.js"
+      - "website/README.md"
+    teams: [engineering]
+  - id: website-dependencies
+    globs: ["website/package.json", "website/package-lock.json"]
+    teams: [engineering, platform-quality]
+    checklists: [performance-engineer]
+  - id: website-behaviour-js
+    globs: ["website/src/static/{estimator,contact-form,tour,page-transitions}.js"]
+    teams: [engineering, design]
+  - id: website-forms-and-flow
+    globs: ["website/src/static/contact-form.js", "website/src/static/page-transitions.js", "website/src/_includes/nav.njk"]
+    teams: [design]
+    checklists: [ux-designer]
+
+  # Website look.
+  - id: website-assets
+    globs:
+      - "website/src/static/assets/**"
+      - "website/src/static/favicon.svg"
+      - "website/src/static/og-image.png"
+      - "website/src/static/apple-touch-icon.png"
+    teams: [design]
+  - id: brand-files
+    globs: ["website/brand/**"]
+    teams: [design, brand-content]
+  - id: includes
+    globs: ["website/src/_includes/**"]
+    teams: [design, brand-content]
+
+  # Website content and SEO.
+  - id: pages
+    globs: ["website/src/*.njk"]
+    teams: [brand-content, design]
+    checklists: [content-strategist]
+  - id: seo
+    globs: ["website/src/static/robots.txt", "website/src/sitemap.njk", "website/src/_includes/base.njk"]
+    teams: [brand-content]
+    checklists: [seo-specialist]
+  - id: headers-and-redirects
+    globs: ["website/src/static/vercel.json"]
+    teams: [platform-quality, brand-content]
+    checklists: [seo-specialist]
+  - id: price-pages
+    globs: ["website/src/pricing.njk", "website/src/plan.njk", "website/src/care.njk", "website/src/_includes/estimator.njk", "website/src/static/estimator.js"]
+    teams: [business]
+    checklists: [finance-estimation, tax-accounts]
+  - id: legal-pages
+    globs: ["website/src/privacy.njk", "website/src/terms.njk"]
+    teams: [business]
+    # These pages also govern ip.nirmaan.online: the PR notifies the IP chair.
+    notify: [ip-council-chair]
+  - id: contact-form-data
+    # Founder class D: the contact form collects personal data.
+    globs: ["website/src/static/contact-form.js"]
+    teams: [business]
+  - id: client-pages
+    globs: ["website/src/projects.njk"]
+    teams: [business]
+    checklists: [client-communication]
+  - id: site-data
+    globs: ["website/src/_data/{site,navLinks,services}.json"]
+    teams: [brand-content]
+
+# Files with more than one owner, named one by one so nobody has to work the
+# owners out from overlapping globs. They add to the rules above.
+named_files:
+  - id: pricing-data
+    paths: ["website/src/_data/pricing.json"]
+    teams: [business, brand-content]
+    checklists: [finance-estimation, tax-accounts]
+  - id: products
+    paths: ["website/src/_data/products.json", "website/src/products.njk", "website/src/outreach.njk"]
+    teams: [product, brand-content]
+  - id: shared-layer
+    # Copied byte for byte into ip.nirmaan.online (ip-nirmaan site/README.md).
+    # A PR touching these must carry an "IP site impact" line naming the IP
+    # pages affected. Nirmaan merges first; an IP sync PR copies the files.
+    paths: ["website/src/static/styles.css", "website/src/static/site.js", "website/src/static/hero.js"]
+    teams: [design, engineering]
+    checklists: [design-system-engineer]
+    ip_site_impact: true
+
+# Generated output follows its source. Checked in order; the first entry whose
+# output glob matches wins. `mirror` maps website/public/<x> to
+# website/src/static/<x> (Eleventy's passthrough copy).
+generated:
+  - output: "website/public/pricing/care/*.html"
+    source: "website/src/care.njk"
+  - output: "website/public/pricing/*.html"
+    source: "website/src/plan.njk"
+  - output: "website/public/services/*.html"
+    source: "website/src/service.njk"
+  - output: "website/public/products/outreach.html"
+    source: "website/src/outreach.njk"
+  - output: "website/public/index.html"
+    source: "website/src/index.njk"
+  - output: "website/public/sitemap.xml"
+    source: "website/src/sitemap.njk"
+  - output: "website/public/*.html"
+    source: "website/src/<name>.njk" # <name> is the output file's name without .html
+  - output: "website/public/**"
+    mirror: "website/src/static/"
+
+# Founder classes: the founder's GitHub approval on the head commit is a third
+# key. `paths` are enforced by CODEOWNERS (each glob appears there, naming
+# @nirmaansoftware, and nothing else does); `content_rules` with a
+# `founder_class` are enforced by the review script. Generated outputs of a
+# founder-class source are listed too, so CODEOWNERS covers them.
+founder_classes:
+  - id: A
+    name: Control plane
+    paths:
+      - ".github/**"
+      - ".claude/**"
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "agents/**"
+      - ".gitignore"
+      - ".dockerignore"
+      - "docs/operations/decision-meetings.md"
+      - "docs/operations/pr-review.md"
+      - "docs/company/principles.md"
+      - "docs/ai/agent-responsibilities.md"
+  - id: B
+    name: Production config
+    paths:
+      - "website/src/static/vercel.json"
+      - "website/public/vercel.json"
+      - "fly.toml"
+      - "Dockerfile.os"
+  - id: C
+    name: Money
+    paths:
+      - "website/src/_data/pricing.json"
+      - "website/src/static/estimator.js"
+      - "website/public/estimator.js"
+      - "website/src/_includes/estimator.njk"
+      - "website/src/pricing.njk"
+      - "website/src/plan.njk"
+      - "website/src/care.njk"
+      - "website/public/pricing.html"
+      - "website/public/pricing/**"
+  - id: D
+    name: Legal and data
+    paths:
+      - "website/src/privacy.njk"
+      - "website/src/terms.njk"
+      - "website/public/privacy.html"
+      - "website/public/terms.html"
+      - "website/src/static/contact-form.js"
+      - "website/public/contact-form.js"
+  - id: E
+    name: Public names, products, clients
+    paths:
+      - "website/brand/**"
+      - "website/src/static/favicon.svg"
+      - "website/src/static/og-image.png"
+      - "website/src/static/apple-touch-icon.png"
+      - "website/public/favicon.svg"
+      - "website/public/og-image.png"
+      - "website/public/apple-touch-icon.png"
+      - "docs/company/positioning.md"
+      - "docs/company/mission.md"
+      - "docs/company/vision.md"
+      - "website/src/_data/products.json"
+      - "website/src/products.njk"
+      - "website/src/outreach.njk"
+      - "website/src/projects.njk"
+      - "website/public/products.html"
+      - "website/public/products/**"
+      - "website/public/projects.html"
+  - id: F
+    name: The human send gate
+    paths:
+      - "os/src/lib/prospecting/outreach.ts"
+      - "os/src/lib/prospecting/mailer.ts"
+      - "os/src/lib/prospecting/worker.ts"
+
+# Content rules: what a path cannot show. The review script runs each rule's
+# patterns (JavaScript regular expressions, case-insensitive) over the diff's
+# changed lines in files matching `applies_to` (every file when absent). A hit
+# adds `adds_teams` and, when set, makes the PR `founder_class`.
+# `trigger: added_files` fires on a new file matching `applies_to` instead.
+# `examples` must each match a pattern (a test of the pattern itself);
+# `markers` name tracked files where a pattern must match today, so a rule
+# whose words drift away from the repository fails the coverage test.
+content_rules:
+  - id: money
+    adds_teams: [business]
+    founder_class: C
+    checklists: [finance-estimation, tax-accounts]
+    patterns:
+      - "₹\\s?\\d"
+      - "\\b(rs\\.?|inr|usd)\\s?\\d"
+      - "\\binr\\b"
+      - "\\$\\s?\\d"
+      - "\\bgst\\b"
+      - "\\b(price[sd]?|pricing|discounts?|refunds?|guarantee[sd]?|payments?|invoices?|fees?)\\b"
+    examples: ["Starter from ₹25,000", "Rs. 4999 per month", "prices exclude GST", "full refund within 7 days"]
+    markers:
+      - file: "website/src/_data/pricing.json"
+      - file: "website/src/terms.njk"
+  - id: new-spending
+    adds_teams: [business]
+    founder_class: C
+    applies_to: ["os/package.json", "website/package.json", ".github/workflows/**", "fly.toml", "Dockerfile.os"]
+    patterns:
+      - "\\b(paid plan|subscription|billing|per seat|per month|/mo\\b)"
+      - "runs-on:\\s*(?!ubuntu-latest)\\S+"
+    examples: ["runs-on: macos-14-xlarge", "a paid plan per month"]
+  - id: client-names
+    # Named clients, partners and prospects that appear publicly. Add a name
+    # here when consent is recorded and it first appears in the repository.
+    adds_teams: [business]
+    founder_class: E
+    checklists: [client-communication, sales-partnerships]
+    patterns:
+      - "\\bsudaangeo\\b"
+      - "\\b(client|partner|prospect|case study)\\s*[:·]"
+    examples: ["Client · Sudaangeo.in", "Case study: Acme"]
+    markers:
+      - file: "website/src/projects.njk"
+  - id: market-claims
+    adds_teams: [product]
+    checklists: [market-research]
+    founder_class: E
+    patterns:
+      - "\\b(competitors?|compared (to|with)|versus|vs\\.?)\\b"
+      - "\\bmarket (size|share|leader)\\b"
+      - "\\b\\d+(\\.\\d+)?\\s?% of (businesses|companies|users|customers|smes)\\b"
+    examples: ["Faster than competitors", "60% of businesses in India", "Nirmaan vs. agencies"]
+  - id: public-page
+    # A new page under website/src is founder class E (a new public page).
+    adds_teams: [brand-content]
+    founder_class: E
+    trigger: added_files
+    applies_to: ["website/src/*.njk"]
+    examples: []
+  - id: legal-and-data
+    adds_teams: [business]
+    founder_class: D
+    checklists: [legal-compliance]
+    applies_to: ["website/src/**", "os/src/app/api/**"]
+    patterns:
+      - "<(input|textarea|select)\\b"
+      - "\\b(analytics|gtag|cookie|tracking pixel|personal data)\\b"
+      - "<script[^>]+src=[\"']https?://"
+    examples: ["<input type=\"email\" name=\"email\">", "load Google Analytics", "<script src=\"https://example.com/x.js\">"]
+    markers:
+      - file: "website/src/_includes/estimator.njk"
+      - file: "website/src/privacy.njk"
+  - id: deploy-switch
+    adds_teams: [platform-quality]
+    founder_class: B
+    applies_to: ["fly.toml", "Dockerfile.os", "os/scripts/start.sh", ".github/workflows/**"]
+    patterns:
+      - "NIRMAAN_WORKER\\s*=\\s*\"?on"
+      - "\\bmin_machines_running\\s*=\\s*[1-9]"
+      - "\\b(fly deploy|vercel deploy|flyctl deploy)\\b"
+    examples: ["NIRMAAN_WORKER = \"on\"", "min_machines_running = 1", "run: fly deploy"]
+  - id: send-gate-roles
+    adds_teams: [business]
+    founder_class: F
+    checklists: [client-communication]
+    applies_to: ["os/src/**"]
+    patterns:
+      - "outreach:(send|approve)"
+    examples: ["assertCan(actor.role, \"outreach:send\")"]
+    markers:
+      - file: "os/src/lib/auth/permissions.ts"
+      - file: "os/src/lib/prospecting/outreach.ts"

@@ -6,6 +6,9 @@
 #     does any change to migration_lock.toml.
 #   - Secret scan: added lines matching common secret formats, and added .env,
 #     key or database files, fail.
+#   - Review teams coverage: .github/review-teams.yml maps every tracked file
+#     to a team with no dead rule, and .github/CODEOWNERS equals its
+#     founder-class paths.
 #
 # Both compare the change against its base: on a pull request, the target
 # branch (origin/<base>...HEAD); on a push to main, the previous tip. The logic
@@ -44,7 +47,7 @@ jobs:
         with:
           node-version: 22
       - name: Script tests
-        run: node --test .github/scripts/repo-checks.test.mjs
+        run: node --test .github/scripts/repo-checks.test.mjs .github/scripts/review-teams.test.mjs
       # Event data goes through env, never straight into the script.
       - name: Pick the base to compare against
         id: base
@@ -75,9 +78,8 @@ jobs:
         env:
           BASE: ${{ steps.base.outputs.ref }}
         run: node .github/scripts/secret-scan.mjs "$BASE"
-      # PLACEHOLDER (T10): review-teams coverage test. T10 adds
-      # .github/review-teams.yml and a step here that runs its coverage test:
-      # every tracked file maps to an explicit rule or is on the catch-all
-      # allowlist, no rule matches zero files, every lead and member has
-      # agents/<role>/agent.md, and every content-rule marker exists.
-      # Nothing runs for it yet.
+      # Every tracked file maps to a review team, no rule is dead, every role
+      # exists, content rules still match, and CODEOWNERS names exactly the
+      # founder-class paths. Runs on the whole tree, not the diff.
+      - name: Review teams coverage
+        run: node .github/scripts/review-teams.mjs
