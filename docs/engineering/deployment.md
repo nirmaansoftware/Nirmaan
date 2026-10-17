@@ -38,8 +38,9 @@ fly certs add os.nirmaan.online          # then add the DNS record it asks for
 Also add `https://os.nirmaan.online/api/auth/google/callback` to the Google OAuth
 client's redirect URIs.
 
-Nothing deploys by itself: `.github/workflows/os.yml` only tests (typecheck, lint, unit
-tests) on every pull request and push to `main`, with no path filter, and has no deploy
+Nothing deploys by itself: `.github/workflows/os.yml` (job `os-test`) only tests (a
+fresh database from `prisma migrate deploy`, typecheck, lint, unit tests, `next build`)
+on every pull request and push to `main`, with no path filter, and has no deploy
 job. While the OS is paused, do not run `fly deploy`; a restart goes through the
 un-pause checklist. Logs: `fly logs`. When the worker runs, its ticks appear there
 once a minute.

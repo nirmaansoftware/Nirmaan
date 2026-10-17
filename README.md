@@ -25,7 +25,8 @@ Deployment:
   runs no build. Rebuild and commit `website/public/` after any change to `website/src/`.
 - **os.nirmaan.online**: Fly.io app `nirmaan-os`. `Dockerfile.os` and `fly.toml` sit at
   the root because the image needs both `os/` and `agents/`. CI in
-  `.github/workflows/os.yml` tests pull requests and deploys merges to `main`.
+  `.github/workflows/os.yml` (job `os-test`) tests pull requests and pushes to `main`;
+  it deploys nothing.
 
 Working on it:
 
