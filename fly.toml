@@ -20,11 +20,12 @@ primary_region = "sin"
 [http_service]
   internal_port = 3000
   force_https = true
-  # PAUSED (2026-10-17): the OS is stopped and must not wake on a request. No machine
-  # is kept running and the proxy never starts one. Restart only through the un-pause
-  # checklist in docs/engineering/deployment.md.
+  # Screens on, worker off (founder, 2026-10-17): a request wakes the machine and it
+  # stops again when idle; NIRMAAN_WORKER above stays "off". Email, inbox, Places and
+  # Claude credentials are not set on Fly. Turning the worker back on: the checklist
+  # in docs/engineering/deployment.md.
   auto_stop_machines = "stop"
-  auto_start_machines = false
+  auto_start_machines = true
   min_machines_running = 0
 
   [[http_service.checks]]
