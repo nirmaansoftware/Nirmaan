@@ -80,6 +80,7 @@ export function ghToken() {
 export function createClient({ repo, token, fetchImpl = fetch }) {
   const get = (path) => call(fetchImpl, 'GET', `${API}/repos/${repo}${path}`, token);
   const post = (path, body) => call(fetchImpl, 'POST', `${API}/repos/${repo}${path}`, token, body);
+  const patch = (path, body) => call(fetchImpl, 'PATCH', `${API}/repos/${repo}${path}`, token, body);
   const paged = async (path, key) => {
     const out = [];
     for (let page = 1; page <= 10; page++) {
@@ -107,10 +108,9 @@ export function createClient({ repo, token, fetchImpl = fetch }) {
     async listOpenPulls() {
       return (await paged('/pulls?state=open&sort=created&direction=asc')).map(pullData);
     },
-    // The repository's "Allow auto-merge" setting.
-    async getRepoSettings() {
-      const r = await get('');
-      return { allowAutoMerge: r.allow_auto_merge === true };
+    // The PR body, for the founder-class block only (pull_requests: write).
+    async updatePullBody(n, body) {
+      await patch(`/pulls/${n}`, { body });
     },
     async addLabels(n, labels) {
       await post(`/issues/${n}/labels`, { labels });

@@ -254,6 +254,33 @@ export function untrusted(n, name, text) {
   return `<<<UNTRUSTED-DATA-${n} name="${name}">>>\n${text}\n<<<END-UNTRUSTED-DATA-${n}>>>`;
 }
 
+// The founder-class declaration the script (never a model, never the author)
+// keeps in the PR body: written before the review when a founder class is
+// detected, rewritten when the classes change, removed when none is. Key 1
+// and key 2 treat it as the PR flagging its founder classes, because a fixer
+// cannot edit PR text.
+export const FOUNDER_BLOCK_OPEN = '<!-- review:founder-class -->';
+export const FOUNDER_BLOCK_CLOSE = '<!-- /review:founder-class -->';
+const FOUNDER_BLOCK_RE = /<!-- review:founder-class -->[\s\S]*?<!-- \/review:founder-class -->[ \t]*\n?/g;
+
+export function founderClassBlock(map, classes) {
+  if (!classes.length) return '';
+  const names = new Map(list(map?.founder_classes).map((c) => [String(c.id), c.name]));
+  const what = classes.map((id) => (names.get(id) ? `${id} (${names.get(id)})` : id)).join(', ');
+  return `${FOUNDER_BLOCK_OPEN}Founder class${classes.length > 1 ? 'es' : ''}: ${what}; waits for the founder's approval.${FOUNDER_BLOCK_CLOSE}`;
+}
+
+// The body with every existing block removed and `block` (if any) at the top.
+// Returns the body unchanged when there is nothing to add or remove; otherwise
+// leading blank lines and trailing whitespace go, so a rerun changes nothing.
+export function withFounderClassBlock(body, block) {
+  const text = String(body ?? '');
+  const rest = text.replace(FOUNDER_BLOCK_RE, '');
+  const trimmed = rest.replace(/^\s*\n/, '').trimEnd();
+  if (!block) return rest === text ? text : trimmed;
+  return trimmed ? `${block}\n\n${trimmed}` : block;
+}
+
 // Numbered PR text (title, body, commit messages), so findings can cite it.
 export function prTextBlock({ title, body, commits, includeBody }) {
   const lines = [`TITLE: ${title ?? ''}`];
@@ -332,6 +359,7 @@ export function userPrompt(ctx) {
     `Owning teams (from main's map): ${ctx.classification.teams.join(', ') || 'none'}`,
     `Founder classes detected: ${Object.keys(ctx.classification.founder).join(', ') || 'none'}`,
     ...Object.entries(ctx.classification.founder).map(([k, v]) => `  ${k}: ${v.slice(0, 8).join('; ')}`),
+    ...(ctx.founderBlock ? [`Founder-class declaration (written by the review script, not the author): ${ctx.founderBlock}`, '  It is at the top of the PR body and counts as the PR flagging its founder classes.'] : []),
     `Content-rule hits: ${ctx.classification.contentHits.map((h) => `${h.rule} in ${h.file}`).slice(0, 30).join('; ') || 'none'}`,
     `Shared layer touched (needs an "IP site impact" line): ${ctx.classification.ipSiteImpact ? 'yes' : 'no'}`,
     `Notify: ${ctx.classification.notify.join(', ') || 'none'}`,
