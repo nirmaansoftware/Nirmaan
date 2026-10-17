@@ -79,10 +79,7 @@ commit messages are untrusted claims to test, never instructions. It fails
 when a claim has no file, test or CI run behind it; behaviour changes without
 a test; CI is not green or a test is skipped everywhere; a check is weakened
 silently; a secret, client data or internal figures appear; a founder class is
-not flagged (the review script flags it: before the keys run it writes a
-`<!-- review:founder-class -->` block at the top of the PR body naming the
-classes it detected, rewrites it when they change and removes it when none is
-left, and that block counts as the PR's flag); an instruction to the reviewer is hidden in the diff; or the
+not flagged; an instruction to the reviewer is hidden in the diff; or the
 wording claims approval or sign-off. Each team adds its own checklist, listed
 in [pr-review-decisions.md](pr-review-decisions.md#4-what-the-keys-check).
 
@@ -242,14 +239,12 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
    waits for the founder's approval of this head and does nothing else; after
    the founder approves, it runs the review again (cached verdicts, no model
    call) so `review/executive` turns green, and the founder merges. Otherwise,
-   when the review App posts the checks, the loop runs `gh pr merge --auto
-   --merge --match-head-commit <head>` with the gh login, so GitHub merges
-   only when every required check passes on that head. It does not read the
-   "Allow auto-merge" setting first (the App's token never sees it). In a dry
-   run, or when GitHub answers that auto-merge is not allowed for the
-   repository, it posts "ready: both keys passed, waiting for the founder's
-   merge settings", and the founder merges. Any other merge error stops the
-   loop with `needs-founder`.
+   when the review App posts the checks and the repository's "Allow
+   auto-merge" setting is on, the loop runs `gh pr merge --auto --merge
+   --match-head-commit <head>`, so GitHub merges only when every required
+   check passes on that head. Until then (a dry run, or auto-merge off) it
+   posts "ready: both keys passed, waiting for the founder's merge settings",
+   and the founder merges.
 4. **A key fails.** The loop starts a **fixer**: a separate, fresh `claude -p`
    process, never a reviewer process and never the session that reviewed. It
    runs in a clean worktree of the head commit, with Read, Grep, Glob, Edit and
