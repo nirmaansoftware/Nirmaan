@@ -24,7 +24,7 @@ export async function nextCode(prefix: IdPrefix, db: Db = prisma): Promise<strin
 }
 
 export function formatCode(prefix: IdPrefix, n: number): string {
-  return `${prefix}-${String(n).padStart(3, "0")}`;
+  return `${prefix}-${String(n).padStart(4, "0")}`;
 }
 
 /** The prefix of a code, or null if it isn't one of ours ("REQ-104" -> "REQ"). */
