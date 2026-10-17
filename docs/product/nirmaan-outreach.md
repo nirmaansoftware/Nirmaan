@@ -1,13 +1,13 @@
 # Nirmaan Outreach · WAITLIST (OS paused 2026-10-17; early access decided 2026-10-16, withdrawn)
 
+Decisions on price, status, page copy and the gates before the first paying client:
+[nirmaan-outreach-decisions.md](nirmaan-outreach-decisions.md). Where this brief and the
+decisions differ, the decisions win.
+
 **Not taking businesses now.** Outreach runs on the Nirmaan OS, which is paused, so
 the product page is a waitlist (decided 2026-10-17,
 [decision record](../operations/2026-10-17-inspection-decisions.md)). It was offered
 as early access from 2026-10-16 until then.
-
-Decisions on price, status, page copy and the gates before the first paying client:
-[nirmaan-outreach-decisions.md](nirmaan-outreach-decisions.md). Where this brief and the
-decisions differ, the decisions win.
 
 A product page on nirmaan.online for the outbound marketing engine inside the
 Nirmaan OS ([prospecting](prospecting.md)). Nirmaan built it to find its own
