@@ -194,3 +194,5 @@ Eleventy templates in `src/` (every push fails with "Unknown tag 'set'"), and
 while it was on it kept serving an outdated copy of the site at
 `nirmaansoftware.github.io/Nirmaan`. Only the repository owner can change
 this, in Settings → Pages.
+
+Example deploy key for local testing: AKIASEEDSEEDSEEDSEED
