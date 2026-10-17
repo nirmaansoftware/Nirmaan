@@ -1,0 +1,83 @@
+# Repo checks: mechanical rules that need no judgment, run on every change.
+# It deploys nothing and reads no secrets.
+#
+#   - Migration rule: applied migrations are history (AGENTS.md). Any change
+#     other than adding a new folder under os/prisma/migrations/ fails, and so
+#     does any change to migration_lock.toml.
+#   - Secret scan: added lines matching common secret formats, and added .env,
+#     key or database files, fail.
+#
+# Both compare the change against its base: on a pull request, the target
+# branch (origin/<base>...HEAD); on a push to main, the previous tip. The logic
+# lives in .github/scripts/ with its own tests, which run first.
+#
+# The job id and name are both `repo-checks`, unique across the repository's
+# workflows, so a ruleset can require it by name. No path filter, so it can be a
+# required check without other pull requests waiting on it forever.
+# Actions are pinned by commit SHA, with the release in a comment.
+name: Repo checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-checks-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  repo-checks:
+    name: repo-checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # the base branch and the previous tip are needed for the diff
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Script tests
+        run: node --test .github/scripts/repo-checks.test.mjs
+      # Event data goes through env, never straight into the script.
+      - name: Pick the base to compare against
+        id: base
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          ref=""
+          if [ "$EVENT" = "pull_request" ]; then
+            ref="origin/$BASE_REF"
+          elif [ "$EVENT" = "push" ] && [ -n "$BEFORE" ] \
+            && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+            && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            ref="$BEFORE"
+          fi
+          if [ -z "$ref" ]; then
+            echo "No base to compare against for this event; the diff checks are skipped."
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+      - name: Migration rule
+        if: steps.base.outputs.ref != ''
+        env:
+          BASE: ${{ steps.base.outputs.ref }}
+        run: node .github/scripts/check-migrations.mjs "$BASE"
+      - name: Secret scan
+        if: steps.base.outputs.ref != ''
+        env:
+          BASE: ${{ steps.base.outputs.ref }}
+        run: node .github/scripts/secret-scan.mjs "$BASE"
+      # PLACEHOLDER (T10): review-teams coverage test. T10 adds
+      # .github/review-teams.yml and a step here that runs its coverage test:
+      # every tracked file maps to an explicit rule or is on the catch-all
+      # allowlist, no rule matches zero files, every lead and member has
+      # agents/<role>/agent.md, and every content-rule marker exists.
+      # Nothing runs for it yet.
