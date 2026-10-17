@@ -14,12 +14,12 @@ empty folder on every pull request and push to `main` and fails if it differs fr
 committed files, then checks every internal link. Each 1 January the footer year
 changes, so rebuild and commit `public/` then (see the comment in the workflow).
 
-## Nirmaan OS on Fly.io · SCREENS ON, WORKER OFF (since 2026-10-18)
+## Nirmaan OS on Fly.io · SCREENS ON, WORKER OFF (since 2026-10-17)
 
 **The screens run; the worker does not.** Founder decision of 2026-10-17 (it
 replaced the full stop agreed that morning): people can sign in with Google and see
 the OS's data, but nothing reads the inbox, sends email, runs Claude or calls Google
-Places. Since 2026-10-18 the deployed build is the patched one from `main` (the
+Places. Since 2026-10-17 the deployed build is the patched one from `main` (the
 dependency security update and the worker switch), with `NIRMAAN_WORKER = "off"`.
 The old build (Fly release v10 of 2026-09-28) was never restarted. The email, inbox,
 Places and Claude credentials were removed from Fly; only the Google sign-in
@@ -71,30 +71,32 @@ gzipped copy of the whole database to our own mailbox ("Nirmaan OS backup <date>
 `src/lib/backup.ts`; `BACKUP_EMAIL` to send it elsewhere). With the worker off that
 email does not come (if it does, the worker is running). Fly keeps volume snapshots
 for only 5 days, so the copy that counts is the encrypted backup taken on
-2026-10-18, checked by a local restore and kept outside any repository; take
+2026-10-17, checked locally (integrity check, row counts) and kept encrypted outside any repository; take
 further backups by hand (`fly volumes snapshots create`, or download
 `/data/nirmaan.db` with `fly ssh sftp get`).
 
 ### Worker off, and turning it back on
 
-**How the worker was turned off** (2026-10-18, outside the sending hours of Mon to
-Sat 10:00 to 19:00 India time and the nightly backup, so no message was half-sent):
+**How the worker was turned off** (Saturday 2026-10-17, about 15:00 India time).
+It was inside the sending hours, but no message was approved and all campaigns
+were paused, so nothing could be sent or half-sent:
 
 1. Checked the send queue for approved, failed and active-campaign items.
-2. Backed up the database and project files, downloaded them, checked them with a
-   local restore (integrity check, row counts), and stored them encrypted outside
-   any repository.
+2. Took a volume snapshot, downloaded the database and project files, checked
+   the database locally (integrity check, row counts), and stored them encrypted
+   outside any repository.
 3. Removed the email, inbox, Places and Claude credentials from Fly, deployed the
    patched build from `main` with `NIRMAAN_WORKER = "off"`, and confirmed sign-in
-   works, the logs show no worker ticks, and the nightly backup email stops.
+   works and the logs show the worker off with no inbox checks. The nightly backup
+   email should no longer arrive (if it does, the worker is running).
 
 **Checklist for turning the worker back on.** Every item, in order; the Principal
 Architect owns the list and the founder approves.
 
 - [ ] **Dependency security update deployed** (N5): the patched build is what
       runs. Never restart the old v10 build.
-- [ ] **Backup restore checked** (N1): the 2026-10-18 backup restores locally and
-      passes its integrity check, so there is a known-good copy before anything
+- [ ] **Backup restore checked** (N1): the 2026-10-17 backup is restored into a local
+      OS (`prisma migrate status` clean, app starts) and passes its integrity check, so there is a known-good copy before anything
       changes.
 - [ ] **Approved queue cleared or re-reviewed:** every message left approved from
       before the worker went off is cancelled or approved again by a person;

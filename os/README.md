@@ -12,7 +12,7 @@ Next.js app, three audiences with different permissions:
   public website does not use it: its form sends enquiries by email through
   Web3Forms.
 
-**Screens on, worker off since 2026-10-18.** It runs on Fly.io as the app
+**Screens on, worker off since 2026-10-17.** It runs on Fly.io as the app
 `nirmaan-os`: the patched build from `main` is deployed (the old v10 build was never
 restarted), people sign in with Google and see the data, and the campaign worker is
 off (`NIRMAAN_WORKER = "off"`). The email, inbox, Places and Claude credentials were

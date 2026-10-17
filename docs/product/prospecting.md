@@ -1,4 +1,4 @@
-# Prospecting · IMPLEMENTED, WORKER OFF (since 2026-10-18)
+# Prospecting · IMPLEMENTED, WORKER OFF (since 2026-10-17)
 
 **Not running.** Prospecting lives in the Nirmaan OS, which runs with screens on and
 the worker off: existing prospects and messages can be viewed, but no searches,

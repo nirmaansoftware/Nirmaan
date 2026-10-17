@@ -1,4 +1,4 @@
-# Nirmaan Outreach · WAITLIST (OS worker off since 2026-10-18; early access decided 2026-10-16, withdrawn)
+# Nirmaan Outreach · WAITLIST (OS worker off since 2026-10-17; early access decided 2026-10-16, withdrawn)
 
 Decisions on price, status, page copy and the gates before the first paying client:
 [nirmaan-outreach-decisions.md](nirmaan-outreach-decisions.md). Where this brief and the

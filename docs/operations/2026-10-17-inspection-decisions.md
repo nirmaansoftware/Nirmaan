@@ -18,7 +18,7 @@ test) but was found running.
 **Founder decision, same day (overrules the meeting's full stop below):** the OS
 keeps its screens on, so the team can sign in with Google and see its data, and
 its worker stays off: nothing reads the inbox, sends email, runs AI or searches
-Google Places. In place since 2026-10-18: the patched build from `main` was
+Google Places. In place since 2026-10-17: the patched build from `main` was
 deployed with the worker switched off, the old build was never restarted, and
 the email, inbox, Places and Claude credentials were removed from the host
 (Google sign-in kept). The machine wakes on a request and stops when idle. The
@@ -141,8 +141,8 @@ accuracy study and supports no accuracy claim.
 
 ## Founder's answers
 
-- 2026-10-17: start the repository work now; the stop runs on Sunday 2026-10-18
-  in the daytime; Outreach was used on real prospects, so the page says "we used
+- 2026-10-17: start the repository work now; the change was planned for Sunday
+  2026-10-17 and then, at the founder's request, done on Saturday 2026-10-17; Outreach was used on real prospects, so the page says "we used
   it".
 
 The founder can overrule any decision here; this record will say so.

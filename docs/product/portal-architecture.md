@@ -2,7 +2,7 @@
 
 Two experiences, one data model, different permissions and UX.
 
-**Status:** the OS runs with screens on and the worker off since 2026-10-18 (see
+**Status:** the OS runs with screens on and the worker off since 2026-10-17 (see
 [deployment](../engineering/deployment.md#worker-off-and-turning-it-back-on)). "IMPLEMENTED" below
 means built and tested in the code, not in use by clients today.
 
