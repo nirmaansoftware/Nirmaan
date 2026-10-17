@@ -33,3 +33,8 @@ export function prefixOf(code: string): IdPrefix | null {
   if (!match) return null;
   return (ID_PREFIXES as readonly string[]).includes(match[1]) ? (match[1] as IdPrefix) : null;
 }
+
+/** True when a string is one of our codes ("REQ-104"), false otherwise. */
+export function isCode(code: string): boolean {
+  return prefixOf(code) !== null;
+}
