@@ -42,3 +42,5 @@ Website intake / call ─► LEAD-### (NEW)
   CLARIFICATION_REQUESTED. Sending again issues a new link and retires the old one.
 - **Decline:** needs a short reason. The lead returns to QUALIFIED.
 - Expired proposals (past "valid until") can't be approved.
+
+<!-- Seed S10: hand-posted status test. Do not merge. -->
