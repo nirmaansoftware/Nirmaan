@@ -15,3 +15,10 @@
 - **Comments explain why**, not what. Keep the surrounding file's style.
 - **No new dependency** without a line in the PR saying why the platform
   can't do it.
+- **A changed font file gets a new file name.** `vercel.json` serves
+  `/assets/fonts/*` with `Cache-Control: public, max-age=31536000, immutable`,
+  so a browser that has a font keeps it for a year without asking again. To
+  change a font, add it under a new name (for example `archivo-2.woff2`),
+  point the `@font-face` rule in `styles.css` and the preload in `base.njk` at
+  it, and delete the old file. Never overwrite a font in place: returning
+  visitors would keep the old one.
