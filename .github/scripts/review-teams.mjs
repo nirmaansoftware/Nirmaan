@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Review-teams coverage test (.github/review-teams.yml) and the CODEOWNERS
-// check (.github/CODEOWNERS).
+// Review-teams coverage test (.github/review-teams.yml), and the check that
+// .github/CODEOWNERS stays absent.
 //
 // Fails when:
 //   - a tracked file maps to no team other than through the catch-all, and is
@@ -13,8 +13,11 @@
 //     founder class differs from its source's;
 //   - a content rule's pattern does not compile, an example does not match,
 //     or a marker file no longer contains a match;
-//   - CODEOWNERS is not exactly the founder-class globs, each owned by
-//     @nirmaansoftware alone.
+//   - .github/CODEOWNERS exists. The founder's delegation of 2026-10-18 made
+//     the Founder Proxy (agent) the third reviewer of founder classes in place
+//     of the founder's code-owner review, so a CODEOWNERS file would bring
+//     back a human gate the review script no longer expects. Adding one back
+//     is the founder's decision (founder class A), made by changing this check.
 //
 // The map is plain data in a small YAML subset (block mappings and lists,
 // flow lists of scalars, quoted or plain scalars, comments). The parser here
@@ -26,12 +29,11 @@
 // fails, 2 on a usage, parse or git error.
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const MAP_PATH = '.github/review-teams.yml';
 export const CODEOWNERS_PATH = '.github/CODEOWNERS';
-export const FOUNDER_OWNER = '@nirmaansoftware';
 
 // ---------------------------------------------------------------- YAML subset
 
@@ -360,10 +362,7 @@ export function checkMap(map, files, { roleExists, readFile }) {
   for (const c of list(map.founder_classes)) {
     if (classIds.has(c.id)) p(`founder class ${c.id}: duplicate`);
     classIds.add(c.id);
-    for (const g of list(c.paths)) {
-      if (/[{}]/.test(g)) p(`founder class ${c.id}: "${g}" uses braces, which CODEOWNERS cannot read`);
-      deadGlob(`founder class ${c.id}`, g);
-    }
+    for (const g of list(c.paths)) deadGlob(`founder class ${c.id}`, g);
   }
   for (const want of ['A', 'B', 'C', 'D', 'E', 'F']) if (!classIds.has(want)) p(`founder class ${want} is missing`);
 
@@ -394,28 +393,12 @@ export function checkMap(map, files, { roleExists, readFile }) {
   return problems;
 }
 
-export function parseCodeowners(text) {
-  return text.split('\n').map((l, i) => ({ raw: l.trim(), no: i + 1 }))
-    .filter(({ raw }) => raw && !raw.startsWith('#'))
-    .map(({ raw, no }) => { const [pattern, ...owners] = raw.split(/\s+/); return { pattern, owners, no }; });
-}
-
-// CODEOWNERS must name exactly the founder-class globs, each anchored at the
-// root and owned by the founder alone.
-export function checkCodeowners(map, entries) {
-  const problems = [];
-  const want = new Set(list(map.founder_classes).flatMap((c) => list(c.paths)));
-  const have = new Set();
-  for (const e of entries) {
-    if (!e.pattern.startsWith('/')) problems.push(`CODEOWNERS line ${e.no}: "${e.pattern}" must start with "/" (anchored at the root)`);
-    if (e.owners.length !== 1 || e.owners[0] !== FOUNDER_OWNER) problems.push(`CODEOWNERS line ${e.no}: owner must be exactly ${FOUNDER_OWNER}`);
-    const path = e.pattern.replace(/^\//, '');
-    if (have.has(path)) problems.push(`CODEOWNERS line ${e.no}: "${e.pattern}" is listed twice`);
-    have.add(path);
-    if (!want.has(path)) problems.push(`CODEOWNERS line ${e.no}: "${e.pattern}" is not a founder-class path in ${MAP_PATH}`);
-  }
-  for (const path of want) if (!have.has(path)) problems.push(`CODEOWNERS: founder-class path "/${path}" is missing`);
-  return problems;
+// No CODEOWNERS file: founder-class pull requests are reviewed by the Founder
+// Proxy (agent), not held for a code owner. `tracked` is the list of tracked
+// paths.
+export function checkNoCodeowners(tracked) {
+  const found = ['CODEOWNERS', '.github/CODEOWNERS', 'docs/CODEOWNERS'].filter((p) => tracked.includes(p));
+  return found.map((p) => `${p} exists: founder classes are reviewed by the Founder Proxy (agent) since the founder's delegation of 2026-10-18; bringing back a code-owner gate is the founder's decision and changes this check`);
 }
 
 export function summary(map, files) {
@@ -449,11 +432,7 @@ function main(argv) {
     roleExists: (slug) => tracked.has(`agents/${slug}/agent.md`),
     readFile: (path) => readFileSync(path, 'utf8'),
   });
-  if (existsSync(CODEOWNERS_PATH)) {
-    problems.push(...checkCodeowners(map, parseCodeowners(readFileSync(CODEOWNERS_PATH, 'utf8'))));
-  } else {
-    problems.push(`${CODEOWNERS_PATH} is missing`);
-  }
+  problems.push(...checkNoCodeowners(files));
   if (argv.includes('--summary') || problems.length === 0) {
     const s = summary(map, files);
     console.log(`${s.files} tracked files. Files per team (a file can count for several):`);

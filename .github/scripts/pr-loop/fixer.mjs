@@ -59,17 +59,18 @@ export function fixerArgs({ model, systemPrompt, forbidden }) {
 
 const BLOCKING = new Set(['blocker', 'critical']);
 
-// The findings of every failed key, as the fixer's task. Blocker and critical
-// findings are what fail a key, so only they are given; when a key failed with
-// none (the reviewer said fail on lesser findings), all of that key's are.
+// The findings of every failed key, and of a failed Founder Proxy (agent), as
+// the fixer's task. Blocker and critical findings are what fail a key, so only
+// they are given; when a key failed with none (the reviewer said fail on
+// lesser findings), all of that key's are.
 export function findingsToFix(review) {
-  const failed = [...(review.key1 ?? []), ...(review.key2 ? [review.key2] : [])].filter((r) => r.status === 'fail' && r.verdict);
+  const failed = [...(review.key1 ?? []), ...(review.key2 ? [review.key2] : []), ...(review.proxy ? [review.proxy] : [])].filter((r) => r.status === 'fail' && r.verdict);
   const out = [];
   for (const r of failed) {
     const all = r.verdict.findings ?? [];
     const blocking = all.filter((f) => BLOCKING.has(f.severity));
     for (const f of blocking.length ? blocking : all) {
-      out.push({ key: r.key, team: r.team ?? 'executive', role: r.role, file: f.file, line: f.line, severity: f.severity, text: f.text });
+      out.push({ key: r.key, team: r.team ?? (r.key === 'proxy' ? 'founder-proxy' : 'executive'), role: r.role, file: f.file, line: f.line, severity: f.severity, text: f.text });
     }
   }
   return out.map((f, i) => ({ id: `F${i + 1}`, ...f, fingerprint: fingerprint(f) }));

@@ -35,7 +35,8 @@ Options: `--no-post` prints the comments and checks instead of posting
 verdicts cached for the same head and main commits and the same PR title and body.
 
 It takes a while: one model call per owning team for key 1, then one for
-key 2, one at a time. Run it in the background and wait for it to exit.
+key 2, then, for a founder-class PR whose key 2 passed, one for the Founder
+Proxy (agent), one at a time. Run it in the background and wait for it to exit.
 
 ## 3. Report what it printed, nothing more
 
@@ -46,8 +47,10 @@ moved during the review (nothing posted; run again on the new head).
 
 Tell the user the verdict per key, the head SHA, and the comment links. Use
 the script's words: "agent review", "pass", "fail", "review deferred",
-"waits for founder approval". Never say approved, signed off or compliant;
-a pass is an agent review, not a sign-off. A deferred review is not a pass.
+"needs the founder". The Founder Proxy is "Founder Proxy (agent), acting
+under the founder's delegation of 2026-10-18; not the founder": never say
+the founder approved anything because the proxy passed. Never say approved,
+signed off or compliant; a pass is an agent review, not a sign-off. A deferred review is not a pass.
 If no review App is configured, say it was a dry run: the statuses are named
 `dry-run/...` and never count.
 
@@ -58,8 +61,11 @@ The author fixes and pushes; the new head voids both keys; run the skill again
 (`.github/scripts/pr-loop/`, "Automated loop" in `docs/operations/pr-review.md`)
 does this on its own: a separate fixer process, checks, push, and both keys
 again, at most three rounds before it labels the PR `needs-founder`. Founder-class PRs (A to F) also
-need the founder's GitHub approval on the current head; the script keeps
-`review/executive` pending until it exists. A `hold` label keeps it pending.
+get the Founder Proxy (agent) after key 2; `review/executive` passes only when
+key 2 and the proxy pass. A proxy fail goes to the fixer like a key's; a proxy
+"needs-founder" keeps `review/executive` pending until the founder's own
+GitHub review approves the head, and the loop labels the PR `needs-founder`.
+A `hold` label keeps it pending.
 
 ## Where things are
 
@@ -74,7 +80,7 @@ need the founder's GitHub approval on the current head; the script keeps
   call) until `docs/design/visual-direction.md` exists on `main`.
 - Env: `NIRMAAN_CLAUDE_CODE` (claude path), `NIRMAAN_REVIEW_MODEL_KEY1`
   (default `sonnet`), `NIRMAAN_REVIEW_MODEL_KEY2` (default `opus`, the
-  strongest), `NIRMAAN_REVIEW_TIMEOUT_SECONDS` (1200),
+  strongest), `NIRMAAN_REVIEW_MODEL_PROXY` (default `opus`), `NIRMAAN_REVIEW_TIMEOUT_SECONDS` (1200),
   `NIRMAAN_REVIEW_BACKOFF_SECONDS` (90), `NIRMAAN_REVIEW_STATE_DIR`
   (`~/.nirmaan/pr-review`: lock, call log `calls.jsonl`, cached verdicts,
   temporary worktrees). The review App's variables are listed in

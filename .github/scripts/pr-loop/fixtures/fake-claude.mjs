@@ -6,7 +6,8 @@
 //
 // scenario.json: { reviews: [response...], fixes: [fix...] }, each list used
 // in order (the last entry repeats).
-//   review response: { verdict, findings?, sha? } or { type: 'rate_limit' }
+//   review response: { verdict, findings?, sha?, extra? } or { type: 'rate_limit' }
+//     (extra adds keys, such as the Founder Proxy's founder_reasons)
 //   fix: { status?, edits?: {path: text}, notAddressed?: [{id, reason}],
 //          humanMove?: {gitDir, ref, sha}, type?: 'rate_limit' | 'garbage' }
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -35,7 +36,7 @@ process.stdin.on('end', () => {
   if (r.type === 'rate_limit') { out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'API Error: 429 rate limit exceeded' }); return; }
   if (!isFixer) {
     const head = /Head SHA: ([0-9a-f]{40})/.exec(stdin)?.[1];
-    ok({ verdict: r.verdict ?? 'pass', sha: r.sha ?? head, findings: r.findings ?? [], checks_run: ['read the diff'], not_run: ['tests (no command tools)'] });
+    ok({ verdict: r.verdict ?? 'pass', sha: r.sha ?? head, findings: r.findings ?? [], checks_run: ['read the diff'], not_run: ['tests (no command tools)'], ...(r.extra ?? {}) });
     return;
   }
   if (r.type === 'garbage') { out({ type: 'result', subtype: 'success', is_error: false, result: 'I fixed it!' }); return; }
