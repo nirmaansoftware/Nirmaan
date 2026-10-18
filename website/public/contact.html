@@ -140,9 +140,8 @@
 </section>
 
 <section class="section" aria-label="Enquiry">
-  <div class="wrap contact">
-
-    <form class="form intake" id="enquiry" data-enquiry novalidate
+  <div class="wrap contact"><form class="form intake" id="enquiry" data-enquiry
+          action="https://api.web3forms.com/submit" method="post"
           data-endpoint="https://api.web3forms.com/submit"
           data-format="web3forms"
           data-access-key="6fc1653d-556b-48b5-b7ee-4bf4955296d3"
@@ -165,7 +164,12 @@
       <div class="hp-field" aria-hidden="true">
         <label for="gotcha">Leave this empty</label>
         <input type="text" id="gotcha" name="_gotcha" tabindex="-1" autocomplete="off" />
-      </div>
+      </div><noscript>
+        <input type="hidden" name="access_key" value="6fc1653d-556b-48b5-b7ee-4bf4955296d3" />
+        <input type="hidden" name="subject" value="New enquiry (sent without JavaScript) (nirmaan.online)" />
+        <input type="hidden" name="from_name" value="Nirmaan website" />
+        <div class="hp-field" aria-hidden="true"><input type="checkbox" name="botcheck" tabindex="-1" /></div>
+      </noscript>
 
       <fieldset class="intake__step" data-step="1">
         <legend class="intake__legend" tabindex="-1"><span class="mono intake__count">Step 1 of 3</span> The problem</legend>

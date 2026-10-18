@@ -18,8 +18,13 @@ head:
 <section class="section" aria-label="Enquiry">
   <div class="wrap contact">
 
-    <form class="form intake" id="enquiry" data-enquiry novalidate
+    {#- Without JavaScript the browser validates (required, minlength,
+        type="email") and posts the form straight to Web3Forms, which shows
+        its own sent or not-sent page. contact-form.js turns the browser's
+        validation off and sends with fetch instead. -#}
+    <form class="form intake" id="enquiry" data-enquiry
           {%- if site.web3formsKey %}
+          action="https://api.web3forms.com/submit" method="post"
           data-endpoint="https://api.web3forms.com/submit"
           data-format="web3forms"
           data-access-key="{{ site.web3formsKey }}"
@@ -51,6 +56,20 @@ head:
         <label for="gotcha">Leave this empty</label>
         <input type="text" id="gotcha" name="_gotcha" tabindex="-1" autocomplete="off" />
       </div>
+
+      {#- Fields for the post without JavaScript. Inside <noscript> they are not
+          in the page when scripts run, so contact-form.js never sends them.
+          botcheck is Web3Forms' own honeypot: a bot that ticks it is rejected. -#}
+      <noscript>
+        {%- if site.web3formsKey %}
+        <input type="hidden" name="access_key" value="{{ site.web3formsKey }}" />
+        <input type="hidden" name="subject" value="New enquiry (sent without JavaScript) (nirmaan.online)" />
+        <input type="hidden" name="from_name" value="Nirmaan website" />
+        <div class="hp-field" aria-hidden="true"><input type="checkbox" name="botcheck" tabindex="-1" /></div>
+        {%- elif site.email %}
+        <p class="form__note">This form needs JavaScript to send. Please email your problem to <a href="mailto:{{ site.email }}">{{ site.email }}</a>.</p>
+        {%- endif %}
+      </noscript>
 
       <fieldset class="intake__step" data-step="1">
         <legend class="intake__legend" tabindex="-1"><span class="mono intake__count">Step 1 of 3</span> The problem</legend>
