@@ -16,6 +16,10 @@ Vercel serves only that folder, so the sources (`src/`, `.eleventy.js`, `package
     npm run watch      # rebuilds on save and serves at http://localhost:8080
     npm run build      # one-off rebuild of public/
 
+Commit a source change before you build: `sitemap.xml` dates each page by the
+last commit that changed its template (pages made from data also count
+`src/_data`), so a build made before the commit carries the old date.
+
 ## Where things live
 
 | Path | What it is |
