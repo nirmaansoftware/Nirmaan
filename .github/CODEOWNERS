@@ -3,8 +3,8 @@
 # founder_classes paths in .github/review-teams.yml; repo-checks fails when the
 # two differ. Every other path has no code owner on purpose.
 #
-# This file has no effect until the ruleset on main requires code owner review.
-# Changing it is founder class A.
+# The ruleset on main requires code owner review, so these paths wait for the
+# founder's approval. Changing it is founder class A.
 
 # A. Control plane
 /.github/** @nirmaansoftware
