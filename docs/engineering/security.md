@@ -15,7 +15,7 @@
 | Client access | Capability links scoped to one object and one action, 256-bit, stored hashed, shown once, revocable, invalidated on use or re-send; pages send `no-referrer` |
 | Public intake | Hand-written validation with length caps and control-character stripping, honeypot, 32 KB body cap, CORS locked to the site's origins, 5 per 10 minutes per IP |
 | Audit | Append-only `AuditLog` of sign-ins, decisions, links, status changes and user management; details pass through secret redaction |
-| Headers | `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, a restrictive `Permissions-Policy`, and COOP on the OS; a sensible baseline on the public site |
+| Headers | `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, a restrictive `Permissions-Policy`, and COOP on the OS; a sensible baseline on the public site, plus a Content-Security-Policy (inline scripts allowed by sha256 hash only, checked in CI by `.github/scripts/check-csp.mjs`), sent as Report-Only until a preview check passes |
 | Secrets | Nothing in git (`.env*` ignored); the first account's password comes from an env var, not argv; agent model calls have no tool access (`--allowedTools ""`) |
 | Data separation | Client and lead data only in the database (gitignored), never in `/projects` or `/docs` |
 | Internal data | Economics never in client components; AI prompts and agent specs are never served to clients |

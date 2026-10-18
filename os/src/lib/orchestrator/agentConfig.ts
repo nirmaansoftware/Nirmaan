@@ -35,6 +35,7 @@ export const AGENT_TASK_TYPES: Record<string, TaskType> = {
   "legal-counsel": "architecture", // contract drafting is high-stakes reasoning, like security review
   "tax-accounts": "content",
   "sales-partnerships": "content",
+  "founder-proxy": "architecture", // reviews founder-class PRs only; the strongest tier, like key 2
 };
 
 /**
@@ -86,6 +87,7 @@ export const AGENT_OUTPUT_PATHS: Record<string, string> = {
   "legal-counsel": "reports/legal-draft.md",
   "tax-accounts": "reports/tax-notes.md",
   "sales-partnerships": "reports/sales-plan.md",
+  "founder-proxy": "reports/founder-proxy-review.md",
 };
 
 /** Artifact.type value each agent's primary output is recorded as. */
@@ -118,6 +120,7 @@ export const AGENT_ARTIFACT_TYPES: Record<string, string> = {
   "legal-counsel": "LEGAL_DRAFT",
   "tax-accounts": "TAX_NOTES",
   "sales-partnerships": "SALES_PLAN",
+  "founder-proxy": "FOUNDER_PROXY_REVIEW",
 };
 
 export function requireTaskType(agentSlug: string): TaskType {
