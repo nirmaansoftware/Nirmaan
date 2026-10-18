@@ -22,6 +22,5 @@
   "max_diff_bytes": 200000,
   "check_names": { "key1": "review/team-lead", "key2": "review/executive" },
   "review_app_slug": "nirmaan-review",
-  "legal_teams": ["business"],
-  "carry_over_void_paths": [".github/review-teams.yml", ".github/scripts/review-teams.mjs", ".github/scripts/pr-review/", "agents/", ".claude/skills/pr-review/", "docs/design/visual-direction.md"]
+  "legal_teams": ["business"]
 }
