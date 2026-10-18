@@ -12,7 +12,7 @@
   Detail pages are paginated from data: /pricing/<package>.html (plan.njk),
   /pricing/care/<plan>.html (care.njk) and /services/<id>.html (service.njk).
 */
-const { execFileSync } = require('node:child_process');
+const { createLastModified } = require('./scripts/last-modified');
 
 const GLYPH = /^[01]{5}(\/[01]{5}){4}$/;
 
@@ -114,33 +114,9 @@ module.exports = function (eleventyConfig) {
   );
 
   // {{ p.inputPath | lastModified(p.data.pagination) }} → "2026-10-17": the UTC
-  // day of the last commit that changed the page's template (and, for a page
-  // generated from data, anything under src/_data), for the sitemap's
-  // <lastmod>. It uses author dates of non-merge commits: a rebase, an amend
-  // or a merge keeps them, so every full-history checkout builds the same
-  // sitemap. A file with no commit yet (a new page before its first commit)
-  // gets today, with a warning; build again after committing it. In a
-  // shallow clone every file looks last changed by the one commit fetched.
-  const gitDays = new Map();
-  const gitDay = (path) => {
-    if (!gitDays.has(path)) {
-      let latest = 0;
-      try {
-        const out = execFileSync('git', ['log', '--no-merges', '--format=%at', '--', path], { encoding: 'utf8' });
-        latest = Math.max(0, ...out.split('\n').filter(Boolean).map(Number));
-      } catch (err) {
-        console.warn(`[lastModified] git log failed for ${path}: ${err.message}`);
-      }
-      if (!latest) console.warn(`[lastModified] ${path} has no commit; using today. Build again after committing it.`);
-      gitDays.set(path, new Date(latest ? latest * 1000 : Date.now()).toISOString().slice(0, 10));
-    }
-    return gitDays.get(path);
-  };
-  eleventyConfig.addFilter('lastModified', (inputPath, pagination) => {
-    const days = [gitDay(inputPath)];
-    if (pagination) days.push(gitDay('src/_data'));
-    return days.sort().pop();
-  });
+  // day of the page's last commit, for the sitemap's <lastmod>. See
+  // scripts/last-modified.js.
+  eleventyConfig.addFilter('lastModified', createLastModified());
 
   // Hand-written site files (CSS, JS, images, robots.txt, vercel.json) ship as-is.
   eleventyConfig.addPassthroughCopy({ 'src/static': '.' });
