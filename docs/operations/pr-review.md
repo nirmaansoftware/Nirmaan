@@ -319,9 +319,23 @@ works, the round is dropped without a label and the new head is reviewed from
 scratch. Removing the `needs-founder` label lets the loop resume with a fresh
 round count.
 
-**One PR at a time.** The loop holds the review lock (shared with ip-nirmaan)
-for a whole review and fix round. A PR the loop is fixing goes first, and each
-pass ends after the first PR that ran a review or a fix.
+**One review at a time, every PR each pass.** The loop holds the review lock
+(shared with ip-nirmaan) for a whole review and fix round. Each pass takes one
+step on every open PR, a PR the loop is fixing first, then by number, so a PR
+waiting for CI, or one that just ran a review or a fix, never holds up the
+others; the steps run one after another, so reviews still run one at a time.
+
+**Verdicts carried over.** When only `main` moved (the branch was updated with
+`main`, or `main` moved under the same head), each key's last verdict is
+reused instead of a new review when the PR's own diff is the same (the
+patch-id of merge-base..head), the PR text digest is the same, no file of the
+diff changed on `main` since that verdict's merge base, and none of the
+review's inputs (`carry_over_void_paths` in the review config: the map,
+`agents/`, the review skill, the review scripts, the visual direction)
+changed on `main` since. The citations are checked again at the new head, the
+comment says the verdict was carried over and from which head, and key 2 and
+the Founder Proxy are carried only when every key 1 verdict was. Any other
+change is reviewed from scratch.
 
 **Records.** Every review call, fixer call and loop step (updated, review,
 reviewed, fixed, ready, auto-merge, founder-wait, stopped) is a line in
@@ -368,7 +382,7 @@ copy. Three ways to run it:
   run stops before the loop starts and the log says so. To re-install after
   the plist changes on `main`: `launchctl bootout
   gui/$(id -u)/online.nirmaan.pr-loop`, then the `cp` and `launchctl
-  bootstrap` lines above. Every 5 minutes it resets the clone to
+  bootstrap` lines above. Every minute it resets the clone to
   `origin/main` and runs `--once`; output, including the `git` steps', goes
   to `~/.nirmaan/pr-review/loop.log`. To stop it:
   `launchctl bootout gui/$(id -u)/online.nirmaan.pr-loop`.

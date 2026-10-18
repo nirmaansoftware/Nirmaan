@@ -48,7 +48,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../review-teams.mjs';
 import {
-  acquireLock, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText,
+  acquireLock, carriedNote, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText,
   prTextBlock, prTextDigest, proxySystemPrompt, PROXY_VERDICT_SCHEMA, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict,
   VERDICT_SCHEMA, withFounderClassBlock,
 } from './lib.mjs';
@@ -275,6 +275,42 @@ export async function runReview(o) {
     // reused verdict. The Founder Proxy is key "proxy" here.
     const cacheDir = join(o.stateDir, 'verdicts', cfg.repo.replace('/', '_'), `pr-${o.pr}`);
     const textDigest = prTextDigest({ title: pull.title, body: pull.body, includeBody: cfg.include_pr_body });
+    // Carry-over: when only main moved (an update merged main into the branch,
+    // or main moved under the same head), the last verdict of a key and team
+    // is reused if the PR's own diff is the same (patch-id of merge-base..head),
+    // the PR text digest is the same, no file of the diff changed on main since
+    // that verdict's merge base, and none of the review's own inputs
+    // (carry_over_void_paths: the map, specs, checklists, this script) changed
+    // on main since that verdict's main. Its citations are validated again at
+    // this head. Key 2 and the proxy are carried only while no key in this run
+    // called a model, because they are given key 1's results.
+    const patchId = (() => {
+      try { return git(o.repoRoot, ['patch-id', '--stable'], { input: diff, stdio: ['pipe', 'pipe', 'pipe'] }).trim().split(/\s+/)[0] || null; } catch { return null; }
+    })();
+    const prPaths = [...new Set(files.flatMap((f) => (f.from ? [f.from, f.path] : [f.path])))];
+    const literal = (paths) => paths.map((p) => `:(literal)${p}`);
+    const changedOnMainSince = (from, paths) => {
+      try { return git(o.repoRoot, ['diff', '--no-ext-diff', '--name-only', '-z', from, mainSha, '--', ...literal(paths)]).split('\0').filter(Boolean); } catch { return null; }
+    };
+    let modelCalled = false;
+    const carryFile = (key, team) => join(cacheDir, `carry-k${key}-${team ?? (key === 'proxy' ? cfg.proxy_role : 'executive')}.json`);
+    const carried = (key, team) => {
+      if (o.fresh || modelCalled || !patchId || !prPaths.length || !Array.isArray(cfg.carry_over_void_paths) || !cfg.carry_over_void_paths.length) return null;
+      let c;
+      try { c = JSON.parse(readFileSync(carryFile(key, team), 'utf8')); } catch { return null; }
+      if (c.patchId !== patchId || c.textDigest !== textDigest || !c.result?.verdict) return null;
+      const inDiff = changedOnMainSince(c.baseSha, prPaths);
+      if (inDiff === null || inDiff.length) return null;
+      const rules = changedOnMainSince(c.mainSha, cfg.carry_over_void_paths);
+      if (rules === null || rules.length) return null;
+      const v = validateVerdict({ ...c.result.verdict, sha: headSha }, { headSha, lineExists, prTextLines: prText.count, proxy: key === 'proxy' });
+      if (!v.ok) return null;
+      return { record: c, result: { ...c.result, status: v.verdict.verdict, verdict: v.verdict, notes: [...v.notes, carriedNote(c.reviewed)] } };
+    };
+    const saveCarry = (key, team, reviewed, result) => {
+      mkdirSync(cacheDir, { recursive: true });
+      writeFileSync(carryFile(key, team), JSON.stringify({ reviewed, headSha, baseSha, mainSha, patchId, textDigest, result }));
+    };
     const review = async ({ key, team, model, system, user }) => {
       const proxy = key === 'proxy';
       const cacheFile = join(cacheDir, `${headSha}-${mainSha}-${textDigest}-k${key}-${team ?? (proxy ? cfg.proxy_role : 'executive')}.json`);
@@ -283,6 +319,15 @@ export async function runReview(o) {
         logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, model, attempt: 0, outcome: 'reused' });
         return { ...cached, notes: [...(cached.notes ?? []), REUSED_NOTE] };
       }
+      const carry = carried(key, team);
+      if (carry) {
+        logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, model, attempt: 0, outcome: 'carried', from_head: carry.record.reviewed.head });
+        saveCarry(key, team, carry.record.reviewed, carry.record.result);
+        mkdirSync(cacheDir, { recursive: true });
+        writeFileSync(cacheFile, JSON.stringify(carry.result));
+        return carry.result;
+      }
+      modelCalled = true;
       const args = claudeArgs({ model, systemPrompt: system, addDirs: [mainDir], schema: proxy ? PROXY_VERDICT_SCHEMA : VERDICT_SCHEMA });
       const r = await runWithRetry(
         { bin: o.claudeBin, args, input: user, cwd: headDir, env: reviewerEnv(), timeoutMs: o.timeoutMs },
@@ -299,6 +344,7 @@ export async function runReview(o) {
       const result = { status: v.verdict.verdict, verdict: v.verdict, notes: v.notes, model: r.reportedModel ?? model };
       mkdirSync(cacheDir, { recursive: true });
       writeFileSync(cacheFile, JSON.stringify(result));
+      saveCarry(key, team, { head: headSha, main: mainSha }, result);
       return result;
     };
     const promptCtx = { ...ctx, nonce: n, prText: prText.text, diff: diffForPrompt, diffTruncated, maxDiffBytes: cfg.max_diff_bytes };

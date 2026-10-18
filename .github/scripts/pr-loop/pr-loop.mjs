@@ -471,9 +471,12 @@ function commitIdentity(o, head) {
 
 // ---------------------------------------------------------------- a tick
 
-// One pass over the open PRs. A PR the loop is fixing goes first; the pass
-// ends after the first PR that ran a review or a fix, so one PR at a time
-// moves through the expensive steps.
+// One pass over the open PRs: one step for every PR, so a PR waiting on CI,
+// or one that just ran a review or a fix, never holds up the others. A PR
+// the loop is fixing goes first, then by number. The steps run one after
+// another, and each review or fix round holds the shared lock, so reviews
+// still run one at a time (a lock held elsewhere makes that PR "busy" and
+// the pass goes on to the next).
 export async function runTick(o) {
   const cfg = o.config;
   const pulls = (await o.github.listOpenPulls()).filter((p) => !o.onlyPr || p.number === o.onlyPr);
@@ -483,8 +486,6 @@ export async function runTick(o) {
   for (const p of pulls) {
     const r = await o.stepPr(o, p);
     results.push({ pr: p.number, ...r });
-    if (r.outcome === 'busy') break;
-    if (!['skip', 'wait', 'updated'].includes(r.outcome)) break;
   }
   return results;
 }

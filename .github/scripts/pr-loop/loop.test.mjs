@@ -95,9 +95,9 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     behind: gh.behind ?? false, behindWhen: null, updateError: null, beforeUpdate: null, updateAsync: false };
   const originHead = () => sh(origin, 'rev-parse', 'refs/heads/feature');
   // A new commit on main in origin, so the PR branch is really behind.
-  const advanceMain = (rel = 'os/other.js') => {
+  const advanceMain = (rel = 'os/other.js', text = null) => {
     sh(work, 'checkout', '-q', 'main'); sh(work, 'pull', '-q', 'origin', 'main');
-    write(work, rel, `main moved ${Date.now()}\n`);
+    write(work, rel, text ?? `main moved ${Date.now()}\n`);
     sh(work, 'add', '-A'); sh(work, 'commit', '-qm', 'main moves'); sh(work, 'push', '-q', 'origin', 'main');
     g.behind = true;
   };
@@ -325,6 +325,92 @@ test('founder class: main moves during the review, so the loop updates the branc
   } finally { t.cleanup(); }
 });
 
+// ---------------------------------------------------------------- verdict carry-over
+
+// Main moves during the review, so the loop updates the branch (a merge of
+// main); `edit` runs on main first. Returns the new head.
+async function reviewedThenUpdated(t, edit = () => t.advanceMain()) {
+  let moved = false;
+  t.g.behindWhen = () => { if (!moved && t.calls().length >= 2) { moved = true; edit(); } return false; };
+  assert.deepEqual(outcomes(await t.tick()), ['updated']);
+  assert.equal(t.calls().length, 2, 'both keys ran on the old head');
+  t.g.behindWhen = null;
+  return t.originHead();
+}
+
+test('only main moved (no file of the diff, no review rule, same PR text): the updated head reuses both verdicts with no model call, and says so', async () => {
+  const t = setup();
+  try {
+    const old = t.firstHead;
+    const newHead = await reviewedThenUpdated(t);
+    assert.notEqual(newHead, old);
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 2, 'no new model call');
+    assert.equal(t.merges[0].at(-1), newHead);
+    assert.equal(t.log().filter((l) => l.outcome === 'carried' && l.head === newHead).length, 2, 'key 1 and key 2 carried, and logged');
+    const k1 = t.comments().find((b) => b.startsWith('<!-- nirmaan-pr-review key=1 ') && b.includes(`head=${newHead}`));
+    assert.match(k1, new RegExp(`carried over from head ${old.slice(0, 7)}`));
+    assert.match(k1, /same diff \(patch-id\)/);
+    const exec = t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive' && p.headSha === newHead).pop();
+    assert.equal(exec.state, 'success');
+  } finally { t.cleanup(); }
+});
+
+test('the same head with main moved (no update needed): a rerun carries the verdicts over instead of calling the models again', async () => {
+  const t = setup({ gh: { mergeError: 'GraphQL: Head branch was modified. (enablePullRequestAutoMerge)' } });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.equal(t.calls().length, 2);
+    t.advanceMain();
+    t.g.behind = false; // the ruleset no longer requires up-to-date branches
+    t.g.mergeError = null;
+    t.g.labels = [];
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 2, 'main moved, so the exact cache missed; the verdicts were carried over');
+    assert.equal(t.merges.at(-1).at(-1), t.firstHead);
+  } finally { t.cleanup(); }
+});
+
+test('a file in the diff changed on main: the updated head is reviewed again from scratch', async () => {
+  const t = setup();
+  try {
+    const newHead = await reviewedThenUpdated(t, () => t.advanceMain('os/app.js', 'line one\nline two\nline three\nline four\n'));
+    assert.match(sh(t.origin, 'show', `${newHead}:os/app.js`), /line two changed[\s\S]*line four/, 'main merged cleanly into the branch');
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 4, 'both keys called again');
+    assert.ok(!t.comments().some((b) => /carried over/.test(b)));
+  } finally { t.cleanup(); }
+});
+
+test('a review rule changed on main (a role spec): the updated head is reviewed again from scratch', async () => {
+  const t = setup();
+  try {
+    await reviewedThenUpdated(t, () => t.advanceMain('agents/principal-architect/agent.md', '# principal-architect\nSPEC-MARKER-principal-architect\nA new rule.\n'));
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 4);
+  } finally { t.cleanup(); }
+});
+
+test('the PR text changed: the updated head is reviewed again from scratch', async () => {
+  const t = setup();
+  try {
+    await reviewedThenUpdated(t);
+    t.g.body = 'Changes line two, and claims more now.';
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 4);
+  } finally { t.cleanup(); }
+});
+
+test('the PR changed its own diff (a new commit): no carry-over, both keys again', async () => {
+  const t = setup({ reviews: [fail('Line two lost its test'), { verdict: 'pass' }], fixes: [{ edits: { 'os/app.js': 'line one\nline two fixed\nline three\n' } }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().filter((x) => x.kind === 'reviews').length, 3);
+    assert.ok(!t.log().some((l) => l.outcome === 'carried'));
+  } finally { t.cleanup(); }
+});
+
 test('the update fails (a conflict with main, or GitHub refuses): stop with needs-founder', async () => {
   const t = setup();
   try {
@@ -376,6 +462,7 @@ test('the launchd plist reads its settings from ~/.nirmaan/pr-loop/env, so re-co
   const cmd = plist.match(/<string>(mkdir[^<]*)<\/string>/)[1];
   assert.ok(cmd.indexOf('pr-loop/env') < cmd.indexOf('pr-loop.mjs'), 'sourced before the loop starts');
   assert.match(cmd, /loop\.log/, 'a missing env file is logged, not silent');
+  assert.match(plist, /<key>StartInterval<\/key>\s*<integer>60<\/integer>/, 'a pass every minute');
 });
 
 // ---------------------------------------------------------------- fix loop
@@ -655,6 +742,24 @@ test('one PR at a time: while the shared lock is held the loop does nothing', as
     held.release();
     assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
   } finally { t.cleanup(); }
+});
+
+test('one pass handles every PR with an action ready: a review, fix, update, CI wait or busy lock on one PR never ends the pass', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    // PR 3 is in a fix round, so it goes first; the rest by number.
+    mkdirSync(join(stateDir, 'loop'), { recursive: true });
+    writeFileSync(join(stateDir, 'loop', `${CONFIG.repo.replace('/', '_')}-pr-3.json`), JSON.stringify({ pr: 3, rounds: 1, seen: {}, lastFixHead: 'abc', done: null, stopped: null }));
+    const outcome = { 1: 'auto-merge', 2: 'wait', 3: 'fixed', 4: 'busy', 5: 'updated', 6: 'stopped' };
+    const seen = [];
+    const results = await runTick({
+      config: CONFIG, stateDir,
+      github: { listOpenPulls: async () => [6, 5, 4, 3, 2, 1].map((number) => ({ number })) },
+      stepPr: async (o, p) => { seen.push(p.number); return { outcome: outcome[p.number] }; },
+    });
+    assert.deepEqual(seen, [3, 1, 2, 4, 5, 6]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['3:fixed', '1:auto-merge', '2:wait', '4:busy', '5:updated', '6:stopped']);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
 });
 
 test('--no-post: the fix is committed locally and never pushed', async () => {

@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   The automated PR loop for nirmaansoftware/Nirmaan, run by launchd every
-  5 minutes on the founder's Mac. Install and remove: docs/operations/pr-review.md
+  minute on the founder's Mac. Install and remove: docs/operations/pr-review.md
   ("Automated loop"). Each run updates a dedicated clone to origin/main and
   runs main's copy of the loop once; launchd never starts a second run while
   one is still going, and the loop's lock is shared with ip-nirmaan.
@@ -24,7 +24,7 @@
     <string>mkdir -p "$HOME/.nirmaan/pr-review" &amp;&amp; { . "$HOME/.nirmaan/pr-loop/env" &amp;&amp; cd "$HOME/.nirmaan/pr-loop/Nirmaan" &amp;&amp; git fetch --quiet origin main &amp;&amp; git -c core.hooksPath=/dev/null reset --quiet --hard origin/main &amp;&amp; node .github/scripts/pr-loop/pr-loop.mjs --once; } &gt;&gt; "$HOME/.nirmaan/pr-review/loop.log" 2&gt;&amp;1</string>
   </array>
   <key>StartInterval</key>
-  <integer>300</integer>
+  <integer>60</integer>
   <key>RunAtLoad</key>
   <true/>
   <key>ProcessType</key>
