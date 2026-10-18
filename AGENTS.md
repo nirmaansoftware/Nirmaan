@@ -14,10 +14,11 @@ Read [README.md](README.md) for the map. This file adds the rules and commands.
   OS database and private storage. Only fixtures are committed.
 - **Ignore and delete iCloud duplicates** such as `file 2.ts` or `node_modules 2`. They
   come from the synced folder and are not part of the project.
-- **Every PR gets two keys** (`docs/operations/pr-review.md`, PLANNED): the lead of each
-  owning team, then the orchestrator; founder classes A to F also need the founder's
-  approval. Reviews run through the `pr-review` skill (being built). Never review a PR your
-  own session wrote. Until the ruleset is live, the founder merges every PR.
+- **Every PR gets two keys** (`docs/operations/pr-review.md`, IMPLEMENTED): the lead of
+  each owning team, then the orchestrator; founder classes A to F also need the founder's
+  approval. Reviews run through the `pr-review` skill and the automated loop. Never review
+  a PR your own session wrote. The ruleset on `main` requires both keys' checks before
+  merge.
 - **The OS must pass its checks before merge:** `typecheck`, `lint`, `test` and
   `next build`. Tests sit beside the code as `*.test.ts`.
 

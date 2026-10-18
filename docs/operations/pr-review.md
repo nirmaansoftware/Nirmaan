@@ -1,14 +1,13 @@
-# PR review · PLANNED
+# PR review · IMPLEMENTED
 
-How a pull request to this repository is reviewed and merged once the review
-mechanism is live. The decisions behind it, with reasons and dissent, are in
+How a pull request to this repository is reviewed and merged. The decisions
+behind it, with reasons and dissent, are in
 [pr-review-decisions.md](pr-review-decisions.md). IP Nirmaan follows the same
 mechanism with its own teams and hardware adaptations.
 
-**Until the GitHub App and the ruleset are live, the review checks are a
-convention and the founder merges every PR.** Automatic merge stays off until
-seeded test PRs show the mechanism behaves as written. This page moves to
-IMPLEMENTED after the first real PR merges through both keys.
+**Live since 2026-10-18.** The ruleset on `main` is active and requires the
+review App's two checks; the first PRs merged through both keys that day (see
+[Status](#status)).
 
 **The rule: every PR has at least two responsible reviewers.** The first is
 the lead of the team that owns the changed files (key 1; one lead per owning
@@ -99,7 +98,7 @@ the diff, a failed coverage test, or a review of a commit that is no longer the
 head.
 
 The keys are posted as two check runs, `review/team-lead` and
-`review/executive`, by a GitHub App the founder owns. The ruleset will accept
+`review/executive`, by a GitHub App the founder owns. The ruleset accepts
 these checks only from that App, so a check posted by an agent's token or a
 workflow does not count.
 
@@ -219,10 +218,10 @@ installation token scoped to this repository. It reads these environment
 variables: `NIRMAAN_REVIEW_APP_ID`, one of
 `NIRMAAN_REVIEW_APP_PRIVATE_KEY_FILE` (a PEM outside every repository) or
 `NIRMAAN_REVIEW_APP_KEYCHAIN_SERVICE` (a macOS Keychain item holding the
-PEM), and optionally `NIRMAAN_REVIEW_APP_INSTALLATION_ID`. Until the App
-exists, the script runs as a dry run with the caller's `gh` login: it posts
-the comments and commit statuses named `dry-run/review/team-lead` and
-`dry-run/review/executive`, which are never green and are not the checks a
+PEM), and optionally `NIRMAAN_REVIEW_APP_INSTALLATION_ID`. Without
+`NIRMAAN_REVIEW_APP_ID` and one of the two key variables, the script runs as
+a dry run with the caller's `gh` login: it posts the comments and commit
+statuses named `dry-run/review/team-lead` and `dry-run/review/executive`, which are never green and are not the checks a
 ruleset requires.
 
 ## Automated loop
@@ -396,8 +395,7 @@ other reason, roll back first and fix second, through the normal keys.
    This is the exact-revert fast path: key 1 (any Platform and Quality
    member) and key 2 (orchestrator) check only that it undoes the named merge
    commit and nothing else. Nothing else may be added to the PR; the fix goes
-   in a later, normally reviewed PR. Until the keys are live, the founder
-   merges it like every other PR. When it merges, Vercel publishes the
+   in a later, normally reviewed PR. When it merges, Vercel publishes the
    reverted `main` and `site-smoke` runs again.
 2. **Vercel Instant Rollback, if the site must come back before the revert
    merges.** The founder only, from the Vercel dashboard of the **nirmaan8**
@@ -416,6 +414,16 @@ deployed separately; see
 
 ## Status
 
-PLANNED. The rollout order and owners are in
-[pr-review-decisions.md](pr-review-decisions.md#6-rollout). Until the App and
-the ruleset are live, the founder merges every PR.
+IMPLEMENTED, live since 2026-10-18. The rollout order and owners are in
+[pr-review-decisions.md](pr-review-decisions.md#6-rollout).
+
+- The ruleset "main: two keys" on `main` is active. It requires the CI jobs
+  `os-test`, `website-build` and `repo-checks`, and the checks
+  `review/team-lead` and `review/executive` from the review App only;
+  branches must be up to date; code owner review is required, and a push
+  dismisses an earlier approval.
+- "Allow auto-merge" is on for the repository.
+- First automatic merge: #95. Both keys passed, the loop turned on
+  auto-merge, and GitHub merged it with no human action.
+- First founder-class merges, after the founder's approval on GitHub: #93
+  and #96.
