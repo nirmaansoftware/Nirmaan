@@ -1,30 +1,32 @@
-// Tests for the sitemap's lastModified filter.
-// Run: node --test website/scripts/last-modified.test.js
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { execFileSync } = require('node:child_process');
-const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs');
-const { tmpdir } = require('node:os');
-const { join } = require('node:path');
-const { createLastModified } = require('./last-modified');
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createLastModified } from "../../../../website/scripts/last-modified.js";
 
-const at = (iso) => Date.parse(iso) / 1000;
+// Tests for the website's sitemap lastModified filter
+// (website/scripts/last-modified.js). They live in os/ so the os-test CI job
+// runs them with `npm test`; no workflow runs tests under website/.
+
+const at = (iso: string) => Date.parse(iso) / 1000;
 const TODAY = Date.parse('2026-10-18T09:00:00Z');
 
 // A filter over a fake git: `times` maps a path to its commit times, or to an
 // Error to throw. Records every git call and every warning.
-function fake(times) {
-  const calls = [];
-  const warnings = [];
+function fake(times: Record<string, number[] | Error>) {
+  const calls: string[] = [];
+  const warnings: string[] = [];
   const filter = createLastModified({
-    git: (path) => {
+    git: (path: string) => {
       calls.push(path);
       const t = times[path];
       if (t instanceof Error) throw t;
       return t || [];
     },
     now: () => TODAY,
-    warn: (msg) => warnings.push(msg),
+    warn: (msg: string) => warnings.push(msg),
   });
   return { filter, calls, warnings };
 }
@@ -82,7 +84,7 @@ test('real git: author dates of non-merge commits, unchanged by a merge', (t) =>
   const dir = mkdtempSync(join(tmpdir(), 'lastmod-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', TZ: 'Pacific/Kiritimati' };
-  const git = (args, date) => execFileSync('git', args, {
+  const git = (args: string[], date?: string) => execFileSync('git', args, {
     cwd: dir,
     env: { ...env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com', ...(date ? { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : {}) },
     stdio: 'pipe',
@@ -106,8 +108,8 @@ test('real git: author dates of non-merge commits, unchanged by a merge', (t) =>
   git(['add', '.']);
   git(['commit', '-q', '-m', 'merge'], '2026-10-20T12:00:00Z');
 
-  const warnings = [];
-  const filter = createLastModified({ cwd: dir, warn: (m) => warnings.push(m), now: () => TODAY });
+  const warnings: string[] = [];
+  const filter = createLastModified({ cwd: dir, warn: (m: string) => warnings.push(m), now: () => TODAY });
   assert.equal(filter('src/a.njk'), '2026-10-05');
   assert.equal(filter('src/_data'), '2026-10-03');
   assert.equal(filter('src/a.njk', {}), '2026-10-05');

@@ -12,7 +12,7 @@
   fails, gets today, with a warning; build again after committing. In a
   shallow clone every file looks last changed by the one commit fetched.
 
-  Tests: node --test website/scripts/last-modified.test.js
+  Tests: os/src/lib/website/lastModified.test.ts (npm test in os/).
 */
 const { execFileSync } = require('node:child_process');
 
@@ -26,6 +26,10 @@ function gitAuthorTimes(path, cwd) {
 
 const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10);
 
+/**
+ * @param {{ cwd?: string, git?: (path: string, cwd?: string) => number[], now?: () => number, warn?: (msg: string) => void }} [options]
+ * @returns {(inputPath: string, pagination?: unknown) => string}
+ */
 function createLastModified({ cwd, git = gitAuthorTimes, now = Date.now, warn = console.warn } = {}) {
   const days = new Map();
   const gitDay = (path) => {
