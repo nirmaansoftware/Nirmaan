@@ -37,7 +37,9 @@ Read [README.md](README.md) for the map. This file adds the rules and commands.
 ## Where to look
 
 - Product and company decisions: `docs/`, starting at `docs/README.md`.
-- What is built today: `docs/assessment/current-state.md`. The plan: `docs/strategy/roadmap.md`.
+- What is built today: the "Current status" section of `README.md`. The plan:
+  `docs/strategy/roadmap.md`. `docs/assessment/current-state.md` is a dated snapshot
+  (2026-09-23), not the current state.
 - Agent behaviour: `agents/<slug>/agent.md`. The OS loads these at runtime.
 - Finished records (may describe old paths): `docs/history/`.
 - Big decisions (pricing, launches, naming, legal, public pages): run a decision meeting,
