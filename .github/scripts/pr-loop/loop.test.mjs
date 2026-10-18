@@ -350,7 +350,7 @@ test('only main moved (no file of the diff, no review rule, same PR text): the u
     assert.equal(t.log().filter((l) => l.outcome === 'carried' && l.head === newHead).length, 2, 'key 1 and key 2 carried, and logged');
     const k1 = t.comments().find((b) => b.startsWith('<!-- nirmaan-pr-review key=1 ') && b.includes(`head=${newHead}`));
     assert.match(k1, new RegExp(`carried over from head ${old.slice(0, 7)}`));
-    assert.match(k1, /same diff \(patch-id\)/);
+    assert.match(k1, /only main merged in, the same diff bytes/);
     const exec = t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive' && p.headSha === newHead).pop();
     assert.equal(exec.state, 'success');
   } finally { t.cleanup(); }
@@ -368,6 +368,45 @@ test('the same head with main moved (no update needed): a rerun carries the verd
     assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
     assert.equal(t.calls().length, 2, 'main moved, so the exact cache missed; the verdicts were carried over');
     assert.equal(t.merges.at(-1).at(-1), t.firstHead);
+  } finally { t.cleanup(); }
+});
+
+// A person pushes to the PR branch (in a clone of origin), after a review
+// that stopped on a merge error, so the loop looks at the new head next.
+function personPushes(t, edits) {
+  const w = mkdtempSync(join(t.tmp, 'person-'));
+  sh(t.tmp, 'clone', '-q', '-b', 'feature', t.origin, w);
+  sh(w, 'config', 'user.email', 'p@example.com'); sh(w, 'config', 'user.name', 'Person');
+  for (const e of edits) { write(w, 'os/app.js', e); sh(w, 'commit', '-qam', `edit ${e.length}`); }
+  sh(w, 'push', '-q', 'origin', 'feature');
+}
+async function reviewedThenStopped(t) {
+  t.g.mergeError = 'GraphQL: Head branch was modified. (enablePullRequestAutoMerge)';
+  assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+  assert.equal(t.calls().length, 2);
+  t.g.mergeError = null; t.g.labels = [];
+}
+
+test('a whitespace-only commit is a new diff: both keys again, never carried over', async () => {
+  const t = setup();
+  try {
+    await reviewedThenStopped(t);
+    personPushes(t, ['line one\nline two    changed\nline three\n']);
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 4);
+    assert.ok(!t.log().some((l) => l.outcome === 'carried'));
+  } finally { t.cleanup(); }
+});
+
+test('a new commit that leaves the diff the same (a change and its revert): both keys again, only main may have moved', async () => {
+  const t = setup();
+  try {
+    await reviewedThenStopped(t);
+    personPushes(t, ['line one\nline two changed\nline three changed\n', 'line one\nline two changed\nline three\n']);
+    assert.equal(sh(t.origin, 'diff', t.firstHead, t.originHead()), '', 'the same tree as the reviewed head');
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 4);
+    assert.ok(!t.log().some((l) => l.outcome === 'carried'));
   } finally { t.cleanup(); }
 });
 

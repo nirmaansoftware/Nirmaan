@@ -454,7 +454,7 @@ export const REUSED_NOTE = 'Verdict reused from an earlier run on the same head 
 // Said in a comment whose verdict was carried over to a new head (or a new
 // main) from the head a model last reviewed (review.mjs, carry-over).
 export function carriedNote(reviewed) {
-  return `Verdict carried over from head ${reviewed.head.slice(0, 7)} (reviewed with main ${reviewed.main.slice(0, 7)}): same diff (patch-id), same PR text, and no file of the diff and no review rule changed on main since; no new model call.`;
+  return `Verdict carried over from head ${reviewed.head.slice(0, 7)} (reviewed with main ${reviewed.main.slice(0, 7)}): only main merged in, the same diff bytes, the same PR text, and no file of the diff and no review rule changed on main since; no new model call.`;
 }
 
 // The marker that opens a review comment. `digest` covers everything the
