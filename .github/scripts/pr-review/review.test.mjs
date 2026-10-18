@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runReview, EXIT } from './review.mjs';
-import { acquireLock, classify, founderClassBlock, withFounderClassBlock, parseNameStatusZ, parseVerdictText, prTextBlock, renderComment, validateVerdict, PR_TEXT_FILE } from './lib.mjs';
+import { acquireLock, classify, founderClassBlock, withFounderClassBlock, FOUNDER_BLOCK_OPEN, FOUNDER_BLOCK_CLOSE, parseNameStatusZ, parseVerdictText, prTextBlock, renderComment, validateVerdict, PR_TEXT_FILE } from './lib.mjs';
 import { claudeArgs, interpret, reviewerEnv } from './claude.mjs';
 import { appJwt, appConfigFromEnv } from './github.mjs';
 import { parseYaml } from '../review-teams.mjs';
@@ -141,7 +141,7 @@ function setup({ responses = [{ type: 'verdict', verdict: 'pass' }], change, gh 
   const log = () => (existsSync(join(stateDir, 'calls.jsonl')) ? readFileSync(join(stateDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   const checks = () => posts.filter((p) => p.type === 'check' || p.type === 'status');
   const check = (name) => checks().filter((c) => c.name === name || c.context === name).pop();
-  return { tmp, work, headSha, posts, run, calls, log, checks, check, stateDir, body: () => body, cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
+  return { tmp, work, headSha, posts, run, calls, log, checks, check, stateDir, body: () => body, setBody: (b) => { body = b; }, cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
 }
 
 const noSuccess = (t) => assert.ok(!t.checks().some((c) => c.state === 'success'), 'nothing may be posted as success');
@@ -472,6 +472,29 @@ test('founderClassBlock and withFounderClassBlock', () => {
   assert.equal(withFounderClassBlock(`A\n${BLOCK_C}\nB\n${BLOCK_C}`, ''), 'A\nB', 'every copy is removed');
 });
 
+test('lone founder-class markers are stripped: an open or close marker without its pair never survives in the body', () => {
+  assert.equal(withFounderClassBlock(`Body ${FOUNDER_BLOCK_OPEN}Founder class: none.`, ''), 'Body Founder class: none.', 'a lone open marker');
+  assert.equal(withFounderClassBlock(`Founder class: none.${FOUNDER_BLOCK_CLOSE}\nBody.`, ''), 'Founder class: none.\nBody.', 'a lone close marker');
+  assert.equal(withFounderClassBlock(`${FOUNDER_BLOCK_OPEN}\n\nBody.`, BLOCK_C), `${BLOCK_C}\n\nBody.`, 'a lone marker on its own line goes with its line');
+  const once = withFounderClassBlock(`Text ${FOUNDER_BLOCK_CLOSE} more ${FOUNDER_BLOCK_OPEN} end`, BLOCK_C);
+  assert.equal(once, `${BLOCK_C}\n\nText  more  end`);
+  assert.equal(withFounderClassBlock(once, BLOCK_C), once, 'idempotent');
+  assert.equal(once.split(FOUNDER_BLOCK_OPEN).length - 1, 1, 'only the script block has an open marker');
+  assert.equal(once.split(FOUNDER_BLOCK_CLOSE).length - 1, 1, 'only the script block has a close marker');
+  assert.equal(withFounderClassBlock(`Keep ${FOUNDER_BLOCK_OPEN} this ${BLOCK_C} end`, ''), 'Keep  this end', 'a lone open marker before a block does not swallow the text between them');
+});
+
+test('a lone open marker written by the author is stripped from the body and from what the reviewers read', async () => {
+  const t = setup({ change: (w) => write(w, 'os/app.js', 'line one\nthe price is up\n'), gh: { body: `Adds a price. ${FOUNDER_BLOCK_OPEN}Founder class: none.` } });
+  try {
+    await t.run();
+    assert.equal(t.body(), `${BLOCK_C}\n\nAdds a price. Founder class: none.`);
+    for (const c of t.calls()) assert.equal(c.stdin.split(FOUNDER_BLOCK_OPEN).length - 1, 2, 'the block once in the trusted line and once at the top of the body, no lone marker');
+    await t.run();
+    assert.equal(t.posts.filter((p) => p.type === 'body').length, 1, 'stable on a rerun');
+  } finally { t.cleanup(); }
+});
+
 test("owning teams come from main's map, never the PR's", async () => {
   // The PR rewrites the map so os/** belongs to Business and drops the money rule.
   const t = setup({ change: (w) => {
@@ -685,6 +708,29 @@ test('a rerun on the same head reuses the validated verdicts without a new call'
     assert.deepEqual(t.log().slice(2).map((l) => l.outcome), ['reused', 'reused']);
     await t.run({ fresh: true });
     assert.equal(t.calls().length, 4);
+  } finally { t.cleanup(); }
+});
+
+test('the verdict cache is keyed on the PR title and body too: the reviewers read them, so a text change is reviewed again', async () => {
+  const gh = { title: 'Change app' };
+  const t = setup({ gh });
+  try {
+    await t.run();
+    assert.equal(t.calls().length, 2);
+    await t.run();
+    assert.equal(t.calls().length, 2, 'same head, main, title and body: reused');
+    gh.title = 'Change app (retitled)';
+    await t.run();
+    assert.equal(t.calls().length, 4, 'a new title: both keys called again');
+    t.setBody('Adds line four. Tests added. Now with a different claim.');
+    await t.run();
+    assert.equal(t.calls().length, 6, 'a new body: both keys called again');
+    await t.run();
+    assert.equal(t.calls().length, 6, 'unchanged since: reused');
+    gh.title = 'Change app';
+    t.setBody('Adds line four. Tests added.');
+    await t.run();
+    assert.equal(t.calls().length, 6, 'back to the first title and body: the first verdicts are reused');
   } finally { t.cleanup(); }
 });
 

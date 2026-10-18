@@ -85,7 +85,8 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
 
   const posts = [];
   const merges = [];
-  const g = { labels: gh.labels ?? [], reviews: [], mergeError: gh.mergeError ?? null, body: 'Changes line two.', ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true };
+  const apiCalls = [];
+  const g = { autoMergeAllowed: gh.autoMergeAllowed ?? true, settingsError: gh.settingsError ?? null, labels: gh.labels ?? [], reviews: [], mergeError: gh.mergeError ?? null, body: 'Changes line two.', ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true };
   const originHead = () => sh(origin, 'rev-parse', 'refs/heads/feature');
   const github = {
     async getPull() {
@@ -108,11 +109,18 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     repoRoot: work, config: CONFIG, loop: LOOP, github, post: 'app', claudeBin: bin, stateDir,
     models: { key1: 'k1', key2: 'k2' }, fixerModel: 'fixer-model', timeoutMs: 20000, fixerTimeoutMs: 20000, checkTimeoutMs: 20000,
     backoffMs: 0, sleep: async () => {}, out: () => {}, stepPr, ...extra,
-    // `gh pr merge` with the gh login: records the call, and fails the way gh
+    // gh with the gh login. `gh api repos/<repo>` answers the repository's
+    // allow_auto_merge field (or fails the way gh does when the test sets
+    // settingsError); `gh pr merge` records the call, and fails the way gh
     // does (non-zero exit, message on stderr) when the test sets mergeError.
     runGh: (args) => {
+      if (args[0] === 'api') {
+        apiCalls.push(args);
+        if (g.settingsError) { const e = new Error(`Command failed: gh ${args.join(' ')}`); e.status = 1; e.stderr = g.settingsError; throw e; }
+        return `${g.autoMergeAllowed}\n`;
+      }
       merges.push(args);
-      if (g.mergeError) { const e = new Error(`Command failed: gh ${args.join(' ')}`); e.stderr = g.mergeError; throw e; }
+      if (g.mergeError) { const e = new Error(`Command failed: gh ${args.join(' ')}`); e.status = 1; e.stderr = g.mergeError; throw e; }
       return '';
     },
   });
@@ -121,7 +129,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   const log = () => (existsSync(join(stateDir, 'calls.jsonl')) ? readFileSync(join(stateDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   const comments = () => posts.filter((p) => p.type === 'comment').map((p) => p.body);
   const labeled = () => posts.some((p) => p.type === 'label' && p.labels.includes('needs-founder'));
-  return { tmp, work, origin, firstHead, originHead, posts, merges, g, tick, calls, log, comments, labeled, scenario, stateDir, state: () => loadState(stateDir, CONFIG.repo, 1), cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
+  return { tmp, work, origin, firstHead, originHead, posts, merges, apiCalls, g, tick, calls, log, comments, labeled, scenario, stateDir, state: () => loadState(stateDir, CONFIG.repo, 1), cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
 }
 
 const fail = (text, line = 1, file = 'os/app.js') => ({ verdict: 'fail', findings: [{ file, line, severity: 'critical', text }] });
@@ -133,6 +141,7 @@ test('both keys pass: auto-merge when the App posts and the repository allows it
   const t = setup();
   try {
     assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.deepEqual(t.apiCalls, [['api', `repos/${CONFIG.repo}`, '--jq', '.allow_auto_merge']]);
     assert.deepEqual(t.merges, [['pr', 'merge', '1', '--repo', CONFIG.repo, '--auto', '--merge', '--match-head-commit', t.firstHead]]);
     assert.match(t.comments().pop(), /Auto-merge is on/);
     assert.equal(t.calls().length, 2, 'key 1 and key 2, no fixer');
@@ -143,17 +152,27 @@ test('both keys pass: auto-merge when the App posts and the repository allows it
   } finally { t.cleanup(); }
 });
 
-test('both keys pass and GitHub says auto-merge is not allowed for the repository: a "ready" comment, no stop', async () => {
-  const t = setup({ gh: { mergeError: 'GraphQL: Pull request Auto merge is not allowed for this repository (enablePullRequestAutoMerge)' } });
+test('both keys pass and the repository does not allow auto-merge (its allow_auto_merge field): a "ready" comment, no merge call, no stop', async () => {
+  const t = setup({ gh: { autoMergeAllowed: false } });
   try {
     assert.deepEqual(outcomes(await t.tick()), ['ready']);
-    assert.deepEqual(t.merges, [['pr', 'merge', '1', '--repo', CONFIG.repo, '--auto', '--merge', '--match-head-commit', t.firstHead]], 'the loop tries the merge itself; no settings read');
+    assert.deepEqual(t.apiCalls, [['api', `repos/${CONFIG.repo}`, '--jq', '.allow_auto_merge']], 'the setting is read with the gh login');
+    assert.equal(t.merges.length, 0, 'no merge is asked for when the setting is off');
     const c = t.comments().pop();
     assert.match(c, /Both keys passed on `[0-9a-f]{7}`, waiting for the founder's merge settings/);
     assert.match(c, /does not allow auto-merge/);
     assert.ok(!t.labeled());
     assert.deepEqual(outcomes(await t.tick()), ['skip'], 'ready on this head: nothing more');
+  } finally { t.cleanup(); }
+});
+
+test('the merge decision does not depend on the wording of a gh error: with the setting on, even a "not allowed" message stops the loop', async () => {
+  const t = setup({ gh: { mergeError: 'GraphQL: Pull request Auto merge is not allowed for this repository (enablePullRequestAutoMerge)' } });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
     assert.equal(t.merges.length, 1);
+    assert.ok(t.labeled(), 'fails safe: needs-founder, never "ready" and never merged');
+    assert.ok(!t.comments().some((b) => /Auto-merge is on|### Automated loop: ready/.test(b)));
   } finally { t.cleanup(); }
 });
 
@@ -164,8 +183,35 @@ test('both keys pass and gh pr merge fails for any other reason: stop with needs
     assert.equal(t.merges.length, 1);
     assert.ok(t.labeled());
     const c = t.comments().pop();
-    assert.match(c, /Automated loop stopped[\s\S]*gh pr merge --auto failed[\s\S]*Head branch was modified/);
+    assert.match(c, /Automated loop stopped[\s\S]*gh pr merge --auto failed \(exit 1\)[\s\S]*Head branch was modified/);
     assert.ok(!t.comments().some((b) => /Auto-merge is on|### Automated loop: ready/.test(b)));
+  } finally { t.cleanup(); }
+});
+
+test('the auto-merge setting cannot be read (an HTTP error, or an answer that is not true or false): stop with needs-founder, no merge call', async () => {
+  for (const gh of [{ settingsError: 'gh: Not Found (HTTP 404)' }, { autoMergeAllowed: 'null' }]) {
+    const t = setup({ gh });
+    try {
+      assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+      assert.equal(t.merges.length, 0);
+      assert.ok(t.labeled());
+      assert.match(t.comments().pop(), /could not read the repository's auto-merge setting/);
+    } finally { t.cleanup(); }
+  }
+});
+
+test('gh error text is redacted before it is posted: tokens and credentials in URLs never reach a comment', async () => {
+  const token = `ghs_${'A1b2'.repeat(9)}`;
+  const pat = `github_pat_${'x9'.repeat(30)}`;
+  const t = setup({ gh: { mergeError: `fatal: https://x-access-token:${token}@github.com/o/r.git refused; Authorization: Bearer ${pat}; header token ${token}` } });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    const c = t.comments().pop();
+    assert.ok(!c.includes(token), 'no GitHub token');
+    assert.ok(!c.includes(pat), 'no fine-grained token');
+    assert.ok(!c.includes('x-access-token:'), 'no credentials in a URL');
+    assert.match(c, /\[redacted\]/);
+    assert.ok(!JSON.stringify(t.state()).includes(token), 'the state file keeps the redacted reason too');
   } finally { t.cleanup(); }
 });
 
