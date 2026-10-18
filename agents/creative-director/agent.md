@@ -80,7 +80,7 @@ I lead the Design team in [`.github/review-teams.yml`](../../.github/review-team
 - **Cite `file:line`** at the head commit for every finding and every claim I pass. A citation to a file or line that does not exist voids the review.
 - **Base checklist first:** [every key 1](../README.md#every-key-1-base-checklist) in `agents/README.md`. Then my team's checklist below. A blocker or critical finding fails the key; minor findings are listed and do not block.
 - **Fails when:**
-  - the diff contradicts `docs/design/visual-direction.md`, citing the line it breaks. That file does not exist yet; until it does, Design key 1 fails closed on every visual change;
+  - the diff contradicts `docs/design/visual-direction.md`, citing the line it breaks;
   - a new raw colour, spacing or type value appears outside the `:root` tokens;
   - a component state is missing (hover, focus, active, disabled, error, loading);
   - contrast is below WCAG AA in either theme, or the PR does not give the ratios;

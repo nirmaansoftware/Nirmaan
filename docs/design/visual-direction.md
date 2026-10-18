@@ -9,9 +9,8 @@ assumptions:
   - Line numbers are from website/src/static/styles.css at nirmaansoftware/Nirmaan af420ce (main, 2026-10-17). A PR that moves lines updates the citations it touches.
   - Contrast ratios below were computed from the token hex values with the WCAG 2.x relative-luminance formula, not measured in a browser.
 risks:
-  - Section 9 lists places where the shipped CSS breaks this document. Until they are fixed, a PR that copies them is copying a known defect, not precedent.
-open_questions:
-  - Should the error colour (#C2261B) become a token with its own dark value? See 9.4.
+  - Section 9 lists places where the shipped CSS breaks this document (none open since 2026-10-18). A PR that copies a listed defect is copying a defect, not precedent.
+open_questions: []
 review_required: true
 ---
 # Nirmaan visual direction (current)
@@ -75,20 +74,20 @@ site.js section 2). `theme-color` metas match `--paper` in each theme
 | `--paper-3` | `#DEDED7` | `#202024` | Pressed or hover panel |
 | `--ink` | `#131313` | `#EDEDE7` | Text, primary fills, inverse panels |
 | `--ink-2` | `#4F4F4A` | `#B2B2AA` | Secondary text |
-| `--ink-3` | `#6A6A64` | `#8C8C85` | Meta and mono labels |
+| `--ink-3` | `#62625C` | `#8C8C85` | Meta and mono labels |
 | `--line` | ink at 11% | ink at 10% | Hairlines |
 | `--line-2` | ink at 22% | ink at 20% | Stronger hairlines, card borders |
 | `--blue` | `#2E43F5` | `#8190FF` | The accent |
 | `--blue-ink` | `#FFFFFF` | `#0B0B14` | Text on blue |
 | `--blue-wash` | blue at 9% | blue at 12% | Tinted fills (focus ring, marks, spotlight) |
 | `--blue-on-ink` | `#8190FF` | `#2E43F5` | Blue on an `--ink` panel |
+| `--danger` | `#C2261B` | `#EC5F52` | Invalid-field borders, the error notice's border and 7% tint |
 | `--grid` | ink at 5.5% | ink at 5% | Blueprint grid lines |
 
 Rules:
 
 - **No raw colour outside the token block.** A new colour is a new token,
-  with a light and a dark value and its contrast ratios in the PR. Today's
-  exceptions are listed in 9.4.
+  with a light and a dark value and its contrast ratios in the PR.
 - **Inverse panels** (CTA band css:435-437, the current layer in the stack
   css:645, `.svc-card--all` css:692) swap `--ink` and `--paper`. Their
   secondary text is `--paper` mixed to 65 to 72% (css:165, css:444, css:693),
@@ -103,23 +102,29 @@ Computed from the values above:
 | `--ink` on `--paper` | 16.4 | 16.4 |
 | `--ink-2` on `--paper` | 7.3 | 9.0 |
 | `--ink-2` on `--paper-2` | 6.7 | 8.4 |
-| `--ink-3` on `--paper` | 4.8 | 5.7 |
-| `--ink-3` on `--paper-2` | **4.4** | 5.3 |
+| `--ink-3` on `--paper` | 5.4 | 5.7 |
+| `--ink-3` on `--paper-2` | 5.0 | 5.3 |
+| `--ink-3` on `--paper-3` | 4.5 | 4.8 |
 | `--blue` on `--paper` | 5.7 | 6.8 |
 | `--blue` on `--paper-2` | 5.3 | 6.3 |
 | `--blue-ink` on `--blue` | 6.5 | 6.9 |
+| `--blue` on `--blue-wash` over `--paper` (reached stamp) | 5.0 | 5.8 |
+| `--danger` on `--paper` | 5.2 | 5.8 |
+| `--danger` on `--paper-2` | 4.8 | 5.4 |
 | `--blue-on-ink` on `--ink` | 6.5 | 5.5 |
 | `--paper` 72% on `--ink` (CTA text) | 8.8 | 7.3 |
 | `--paper` 65% on `--ink` (inverse eyebrow) | 7.4 | 5.7 |
 
 Rules:
 
-- `--ink-3` is for meta text on `--paper` only. On `--paper-2` in light it is
-  4.4:1, below AA for small text (see 9.2).
+- `--ink-3` is for meta text on `--paper`, `--paper-2` and `--paper-3`. It
+  passes AA on all three in both themes, with the least room on `--paper-3`
+  in light (4.5:1).
 - Do not dim text with `opacity`. Any opacity below 1 on text must be
-  recomputed against its ground and pass AA (see 9.1).
-- The ratio comments in the token block (css:35-42) are out of date. The
-  table above is the computed source until they are corrected (9.3).
+  recomputed against its ground and pass AA. For example, `--ink-3` at 55%
+  opacity is 2.1:1 in light and 2.5:1 in dark.
+- The ratio comments in the token block match this table. A PR that changes a
+  token value updates both.
 
 ## 3. Type
 
@@ -197,7 +202,7 @@ state, follows the same table.
 | `.link-arrow` | underline drawn by background, min-height 2.75rem | blue, arrow moves 0.25rem | as above | | | css:257-268 |
 | Nav link | `--ink-2` | `--ink`, blue underline draws in | as above | `aria-current` keeps the underline | | css:287-298 |
 | `.svc-card` | `--paper-2`, `--line` border | whole card turns blue; odd glyph cells shrink | same as hover | touch `scale(0.985)` | | css:674-693 |
-| `.input` | paper, `--line-2` border, min-height 3.1rem | `--ink-3` border | blue border plus 3px `--blue-wash` ring | | `aria-invalid` red border (9.4) | css:1084-1101 |
+| `.input` | paper, `--line-2` border, min-height 3.1rem | `--ink-3` border | blue border plus 3px `--blue-wash` ring | | `aria-invalid` `--danger` border | css:1084-1101 |
 | Layer (stack) | `--paper-2` | | | current: ink panel, `--blue-on-ink` tech label | | css:614-646 |
 | Theme toggle | 2.5rem square, `--line` border | `--ink`, `--line-2` border | as above | icon shows the mode | hidden without JS | css:327-338 |
 
@@ -277,10 +282,14 @@ Motion follows `docs/engineering/motion.md`. In short:
   (css:1715-1729).
 - **Scenes** (stack, rail, problem to system) pin only when they fit
   (site.js:260, css:1604-1636). Otherwise they are still and complete.
-- **Ambient motion that does not stop:** the ticker (48 s loop, pauses on
-  hover, css:1544-1545), the CTA band's falling blocks (css:1548-1549) and
-  the hero N's occasional blink after it settles (hero.js, `BLINK_MS`). All
-  stop under reduced motion. See 9.5.
+- **Ambient motion stops or can be paused (WCAG 2.2.2):** the ticker (48 s
+  loop) has a Pause/Play button (`.ticker__toggle`, `[data-ticker-toggle]`
+  in site.js) and also pauses on hover. The CTA band's falling blocks run for
+  5 s after the band first comes into view, then stop where they are
+  (`.cta-band.is-still`, set by site.js). The hero N blinks only for the
+  first 5 s after it settles (hero.js, `BLINK_FOR_MS`). All three are
+  scoped to `.motion`, so with JavaScript off or reduced motion on nothing
+  moves.
 
 Every moving element in a PR has a motion.md spec line, with a "Reduced:"
 state and a "Why:" (motion.md:93-106), and passes the checklist at
@@ -308,33 +317,25 @@ A visual PR fails key 1 if it:
 
 ## 9. Known gaps (the CSS currently breaks this document)
 
-These are defects to fix, not precedent to copy.
+None open. The five gaps recorded on 2026-10-17 were fixed on 2026-10-18:
 
-1. **Journey stamps are dimmed below AA.** css:1602 sets `opacity: 0.55` on
-   unreached stamps, which puts `--ink-3` at 2.1:1 in light and 2.5:1 in
-   dark. The comment on css:1601 says "Scale only", and
-   `docs/engineering/list.md` item 13 records this exact dimming as FIXED.
-   Commit 711dd12 ("WIP: ... Drop the commit if the journey timeline should
-   keep main's look") brought it back. `.stamp--approve::after` at 0.75
-   (css:804) is 3.0:1 in light. Fix: remove both opacities.
-2. **`--ink-3` on `--paper-2` in light is 4.4:1.** Small mono text on
-   recessed panels misses AA, for example `.svc-card__more` (css:679 with
-   css:687). Fix: darken light `--ink-3` slightly, or use `--ink-2` on
-   `--paper-2`.
-3. **The ratio comments in the token block are wrong.** css:35-42 claim
-   8.1, 5.3, 6.3 and 6.2; the computed values are 7.3, 4.8, 5.7 and 6.5.
-   Fix: update the comments to the table in section 2.
-4. **The error colour is raw.** `#C2261B` is used for invalid borders and
-   the error notice (css:1095, css:1117, css:1124) and is the same in both
-   themes: 5.2:1 on light paper, 3.3:1 on dark (passes 3:1 for UI). Fix:
-   make it a `--danger` token with a dark value.
-5. **Ambient loops have no pause control.** motion.md:20-22 says nothing
-   auto-moves for more than 5 s without a way to pause it. The ticker pauses
-   only on mouse hover. The CTA band blocks and the hero blink have no pause
-   besides reduced motion. Fix: decide whether these count as decoration
-   under WCAG 2.2.2 and either add a pause or stop them after one pass.
+1. Journey stamps were dimmed to 55% opacity before being reached (2.1:1 in
+   light, 2.5:1 in dark), and `.stamp--approve::after` to 75% (3.0:1 in
+   light). Both opacities are removed; unreached stamps only scale.
+2. `--ink-3` on `--paper-2` in light was 4.4:1. Light `--ink-3` is now
+   `#62625C` (5.0:1 on `--paper-2`).
+3. The ratio comments in the token block were wrong. They now match
+   section 2.
+4. The raw error colour `#C2261B` is now the `--danger` token, with
+   `#EC5F52` in dark.
+5. The ticker, CTA blocks and hero blink had no pause. See section 7.
+
+A new defect found later is listed here, with the line it breaks and the fix.
 
 ## History
 
 - 2026-10-17: written from the shipped site (tracker T14). Succeeds
   `docs/history/website-review-2026-09/design/visual-direction.md`.
+- 2026-10-18: the five known gaps in section 9 fixed: light `--ink-3`
+  darkened, `--danger` added, contrast table extended (section 2), ambient
+  motion stops or pauses (section 7).
