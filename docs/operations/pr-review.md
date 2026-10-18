@@ -246,7 +246,8 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
    repos/<repo>/pulls/<n>/update-branch` with `expected_head_sha` set to the
    head it saw. This is the merge-commit update that `gh pr update-branch`
    makes, but GitHub refuses it if the head has moved. It does this before
-   any review, also for a head that already finished, and again after both
+   any review, also for a head that already finished (unless the review
+   refused the PR), and again after both
    keys pass when `main` moved during the review. So a founder-class PR is
    put to the founder only on a head that can merge, and the founder approves
    once. The new head is reviewed from scratch. While GitHub is still making
