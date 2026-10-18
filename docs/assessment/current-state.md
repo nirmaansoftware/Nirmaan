@@ -32,7 +32,7 @@ CURRENT STATE
 | Orchestration | `os/src/lib/orchestrator` | `dispatchTask()`, complexity-based model tiering, six quality gates enforced against `Approval` rows. |
 | Tools | `os/src/lib/tools` | Project-scoped filesystem tools plus a fixed `npm test` runner. No deploy or git tool, enforced by a standing test. |
 | Evaluation | `os/src/lib/evaluation` | 7 eval cases with checkers proven to tell good output from bad (mock provider). |
-| Cost and safety | `os/src/lib/costs`, `security/redact.ts`, `db/logEvent.ts` | Real cost from provider when reported; secret redaction on every Event write. |
+| Cost and safety | `os/src/lib/ai/costs`, `security/redact.ts`, `db/logEvent.ts` | Real cost from provider when reported; secret redaction on every Event write. |
 | Architecture doc | `docs/history/agency-os-plan.md` | Phase 0–9 record of the Agency OS build. Honest about what's mock-only. |
 
 ## What works (verified)
