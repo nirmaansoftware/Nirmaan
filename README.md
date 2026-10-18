@@ -26,9 +26,8 @@ update it in the same PR as a change to any line here.
   withdraw it for that review are planned, not written (tracker N23,
   [inspection decisions](docs/operations/2026-10-17-inspection-decisions.md)).
 - **Pull requests** go through the two-key review, live since 2026-10-18
-  ([PR review](docs/operations/pr-review.md)). Founder-class PRs (A to F) also get
-  the Founder Proxy (agent) review after key 2, under the founder's delegation of
-  2026-10-18; what only the founder decides goes to the founder (`needs-founder`).
+  ([PR review](docs/operations/pr-review.md)). Founder-class PRs (A to F) also need
+  the founder.
 - What changed and when: [CHANGELOG.md](CHANGELOG.md).
   [`docs/assessment/current-state.md`](docs/assessment/current-state.md) is a snapshot
   of 2026-09-23, kept as a record.
