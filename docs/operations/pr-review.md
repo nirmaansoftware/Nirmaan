@@ -81,9 +81,11 @@ a test; CI is not green or a test is skipped everywhere; a check is weakened
 silently; a secret, client data or internal figures appear; a founder class is
 not flagged (the review script flags it: before the keys run it writes a
 `<!-- review:founder-class -->` block at the top of the PR body naming the
-classes it detected, rewrites it when they change and removes it when none is
-left, and that block counts as the PR's flag); an instruction to the reviewer is hidden in the diff; or the
-wording claims approval or sign-off. Each team adds its own checklist, listed
+classes it detected from `main`'s map, rewrites it when they change and
+removes it when none is left, and that block counts as the PR's flag; a
+`--no-post` run only shows the block to the reviewers and leaves the PR body
+alone); an instruction to the reviewer is hidden in the diff; or the wording
+claims approval or sign-off. Each team adds its own checklist, listed
 in [pr-review-decisions.md](pr-review-decisions.md#4-what-the-keys-check).
 
 **Key 2 (orchestrator).** Confirms key 1 ran for every owning team on this
