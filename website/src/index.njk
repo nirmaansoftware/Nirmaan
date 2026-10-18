@@ -65,14 +65,17 @@ tools: ["HTML5", "Modern CSS", "JavaScript", "React", "Next.js", "Node.js", "Pyt
 
   {%- set capabilities = ["Websites", "Web applications", "Mobile apps", "Internal tools", "Dashboards", "Workflow automation", "AI systems", "Integrations", "Business portals", "SaaS products", "Data systems", "Modernisation"] %}
   <div class="ticker" aria-label="What we build">
-    <div class="ticker__track">
-      <ul class="ticker__list" role="list">
-        {%- for c in capabilities %}<li>{{ c }}</li>{% endfor %}
-      </ul>
-      <ul class="ticker__list" role="list" aria-hidden="true">
-        {%- for c in capabilities %}<li>{{ c }}</li>{% endfor %}
-      </ul>
+    <div class="ticker__viewport">
+      <div class="ticker__track">
+        <ul class="ticker__list" role="list">
+          {%- for c in capabilities %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+        <ul class="ticker__list" role="list" aria-hidden="true">
+          {%- for c in capabilities %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+      </div>
     </div>
+    <button class="ticker__toggle" type="button" data-ticker-toggle>Pause</button>
   </div>
 </section>
 
