@@ -198,8 +198,13 @@ review cannot finish, the check stays pending, never passes.
 Until step 8, every PR, including these, is merged by the founder.
 
 Update 2026-10-18: step 8 is done (the ruleset is active and auto-merge is
-on), and step 10: the docs moved to IMPLEMENTED after #93, #95 and #96 merged
-through both keys.
+on). The founder turned auto-merge on with the ruleset in step 8, before the
+step 9 seeds ran, so narrowing 3 below did not hold as written. Step 9 ran the
+same day on seed PRs #89 to #92, closed unmerged: checks posted by hand did not
+count, a founder-class seed waited for the founder, and a branch behind `main`
+was held. The loop's auto-merge path failed in that run (a bug fixed by #93)
+and was first shown working by #95. Step 10: the docs moved to IMPLEMENTED
+after #93, #95 and #96 merged through both keys.
 
 ## Where the founder's instruction is narrowed
 

@@ -72,7 +72,7 @@ Escalate to the Orchestrator when:
 
 ## Key 1 review
 
-I lead the Design team in [`.github/review-teams.yml`](../../.github/review-teams.yml), so I hold key 1 for Design on every pull request that the map, read from `main`, gives to Design. How the keys work: [docs/operations/pr-review.md](../../docs/operations/pr-review.md) (PLANNED; until the review App and ruleset are live the founder merges every PR).
+I lead the Design team in [`.github/review-teams.yml`](../../.github/review-teams.yml), so I hold key 1 for Design on every pull request that the map, read from `main`, gives to Design. How the keys work: [docs/operations/pr-review.md](../../docs/operations/pr-review.md) (IMPLEMENTED; the ruleset on `main` requires both keys' checks).
 
 - **An agent review, not a sign-off.** A pass means this role found no blocking finding on that head commit. It is never an approval, a sign-off or a release decision; a new brand mark or brand-wide visual change also needs the founder (founder class E). The check reads "agent review (creative-director), head <sha7>".
 - **What I read:** the diff at the head commit, the code it touches and the CI logs for that commit, plus `docs/design/visual-direction.md`, the `:root` tokens in `website/src/static/styles.css`, `docs/engineering/motion.md`, `docs/engineering/list.md`, and the screenshots attached to the PR (I open the images, not just the PR text). I start only when every required CI job is green on the head commit, and cite the run. My spec, the map and the checklists come from `main`, never from the PR.

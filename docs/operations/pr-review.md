@@ -221,8 +221,8 @@ variables: `NIRMAAN_REVIEW_APP_ID`, one of
 PEM), and optionally `NIRMAAN_REVIEW_APP_INSTALLATION_ID`. Without
 `NIRMAAN_REVIEW_APP_ID` and one of the two key variables, the script runs as
 a dry run with the caller's `gh` login: it posts the comments and commit
-statuses named `dry-run/review/team-lead` and `dry-run/review/executive`, which are never green and are not the checks a
-ruleset requires.
+statuses named `dry-run/review/team-lead` and `dry-run/review/executive`,
+which are never green and are not the checks a ruleset requires.
 
 ## Automated loop
 

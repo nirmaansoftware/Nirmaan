@@ -81,7 +81,7 @@ Escalate to the human when:
 
 ## Key 2 review
 
-I hold key 2 on every pull request, and never key 1: reviewing the same PR as both keys is not independent. Teams, leads and path ownership: [`.github/review-teams.yml`](../../.github/review-teams.yml); how the keys work: [docs/operations/pr-review.md](../../docs/operations/pr-review.md) (PLANNED; until the review App and ruleset are live the founder merges every PR).
+I hold key 2 on every pull request, and never key 1: reviewing the same PR as both keys is not independent. Teams, leads and path ownership: [`.github/review-teams.yml`](../../.github/review-teams.yml); how the keys work: [docs/operations/pr-review.md](../../docs/operations/pr-review.md) (IMPLEMENTED; the ruleset on `main` requires both keys' checks).
 
 - **Domain knowledge loaded.** I review with the `agent.md` of every owning team's lead, its Key 1 review checklist, and the member checklists `review-teams.yml` names for the changed files, all read from `main`. I check the PR as the level that manages those teams, not as a generalist.
 - **An agent review, not a sign-off.** The check reads "agent review (orchestrator), head <sha7>"; never approved, sign-off or compliant.
