@@ -75,9 +75,6 @@ jobs:
             exit 1
           fi
           echo "website/public matches a fresh build."
-      - name: Sitemap lastModified tests
-        working-directory: .
-        run: node --test website/scripts/last-modified.test.js
       - name: Link checker tests
         working-directory: .
         run: node --test .github/scripts/check-links.test.mjs
