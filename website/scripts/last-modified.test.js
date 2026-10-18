@@ -43,9 +43,9 @@ test('the day is UTC, whatever the commit time zone was', () => {
 
 test('a paginated page takes the later of its template and src/_data', () => {
   const { filter } = fake({ 'src/plan.njk': [at('2026-10-10T12:00:00Z')], 'src/_data': [at('2026-10-17T12:00:00Z')] });
-  assert.equal(filter('src/plan.njk', { data: 'pricing.packages' }), '2026-10-17');
+  assert.equal(filter('src/plan.njk', { data: 'services.items' }), '2026-10-17');
   const { filter: f2 } = fake({ 'src/plan.njk': [at('2026-10-17T12:00:00Z')], 'src/_data': [at('2026-10-10T12:00:00Z')] });
-  assert.equal(f2('src/plan.njk', { data: 'pricing.packages' }), '2026-10-17');
+  assert.equal(f2('src/plan.njk', { data: 'services.items' }), '2026-10-17');
 });
 
 test('a page without pagination ignores src/_data', () => {
