@@ -239,14 +239,30 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
 
 **Each step, per PR:**
 
-1. **CI.** Until `os-test`, `website-build` and `repo-checks` are green on the
+1. **Behind `main`.** The ruleset requires branches to be up to date, so
+   GitHub reports a PR whose branch lacks commits on `main` as behind
+   (`mergeable_state` `behind`). The loop then asks GitHub to merge `main`
+   into the branch first, with the gh login: `PUT
+   repos/<repo>/pulls/<n>/update-branch` with `expected_head_sha` set to the
+   head it saw. This is the merge-commit update that `gh pr update-branch`
+   makes, but GitHub refuses it if the head has moved. It does this before
+   any review, also for a head that already finished, and again after both
+   keys pass when `main` moved during the review. So a founder-class PR is
+   put to the founder only on a head that can merge, and the founder approves
+   once. The new head is reviewed from scratch. While GitHub is still making
+   the merge commit (up to 10 minutes), the loop waits instead of asking
+   again. If the update fails (a merge conflict with `main`, or GitHub
+   refuses it), the loop stops with `needs-founder`. If someone pushed in
+   between, the step is dropped without a label and the new head is reviewed.
+   `--no-post` never updates a branch.
+2. **CI.** Until `os-test`, `website-build` and `repo-checks` are green on the
    head commit, the loop waits and calls no model (the newest run of each job
    counts, as in the review). CI failing on a head the loop pushed stops the
    loop; CI failing on the author's head only waits.
-2. **Review.** The review script above runs unchanged: one fresh read-only
+3. **Review.** The review script above runs unchanged: one fresh read-only
    process per owning team (key 1), then the orchestrator (key 2), specs from
    `main`, comments and checks posted.
-3. **Both keys pass.** If the PR is in a founder class, the loop posts that it
+4. **Both keys pass.** If the PR is in a founder class, the loop posts that it
    waits for the founder's approval of this head and does nothing else; after
    the founder approves, it runs the review again (cached verdicts, no model
    call) so `review/executive` turns green, and the founder merges. Otherwise,
@@ -259,7 +275,7 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
    settings", and the founder merges. The decision never depends on the
    wording of a gh error: when the setting cannot be read, or `gh pr merge
    --auto` fails for any reason, the loop stops with `needs-founder`.
-4. **A key fails.** The loop starts a **fixer**: a separate, fresh `claude -p`
+5. **A key fails.** The loop starts a **fixer**: a separate, fresh `claude -p`
    process, never a reviewer process and never the session that reviewed. It
    runs in a clean worktree of the head commit, with Read, Grep, Glob, Edit and
    Write allowed only inside that worktree, no shell, no network, no MCP and
@@ -268,7 +284,7 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
    wording are passed as data, not instructions. It gets `AGENTS.md` and
    `CLAUDE.md` from `main` and is told to change only what the findings
    require.
-5. **The loop, not the model, finishes the round.** It throws the fix away
+6. **The loop, not the model, finishes the round.** It throws the fix away
    and stops if the fixer changed anything it may not change: `.github/**`
    (the review map, `CODEOWNERS`, workflows, the review and loop scripts),
    `.claude/**` (the `pr-review` skill and settings), `AGENTS.md`,
@@ -284,7 +300,7 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
    token-free environment, checks the head has not moved, pushes to the PR
    branch with `--force-with-lease` on the reviewed head, and posts "fix
    round N" listing the findings addressed.
-6. **Again from scratch.** The new head voids both keys, so the next step
+7. **Again from scratch.** The new head voids both keys, so the next step
    waits for CI on it and runs both reviews again.
 
 **When it stops.** The loop labels the PR `needs-founder` and comments why when:
@@ -293,7 +309,8 @@ team, file and wording) fails again after a fix; CI fails after a fix; the
 branch has a merge conflict; a key is deferred (rate limit, bad output,
 missing spec); the fixer hits a rate limit, gives no valid answer, cannot
 fix every finding or changes nothing; a local check fails; the auto-merge
-setting cannot be read or `gh pr merge --auto` fails; or any error. Nothing is
+setting cannot be read or `gh pr merge --auto` fails; the branch is behind
+`main` and the update fails; or any error. Nothing is
 pushed in any of these cases. The reason is redacted before it is logged or
 posted: secret formats the secret scan knows, credentials in a URL and the
 value after `Authorization:`, `Bearer` or `token` become `[redacted]`, since a
@@ -306,8 +323,8 @@ round count.
 for a whole review and fix round. A PR the loop is fixing goes first, and each
 pass ends after the first PR that ran a review or a fix.
 
-**Records.** Every review call, fixer call and loop step (review, reviewed,
-fixed, ready, auto-merge, founder-wait, stopped) is a line in
+**Records.** Every review call, fixer call and loop step (updated, review,
+reviewed, fixed, ready, auto-merge, founder-wait, stopped) is a line in
 `~/.nirmaan/pr-review/calls.jsonl`. Per-PR loop state (rounds, findings seen,
 the last head it pushed) is in `~/.nirmaan/pr-review/loop/`.
 
@@ -323,19 +340,37 @@ copy. Three ways to run it:
 - **Continuously in a terminal:** `node .github/scripts/pr-loop/pr-loop.mjs
   --watch --interval-minutes 5`. It exits when `main`'s copy of the loop
   changes; start it again from the updated checkout.
-- **launchd (survives restarts).** Make a dedicated clone, then install the
-  plist [`pr-loop.plist`](pr-loop.plist):
+- **launchd (survives restarts).** Make a dedicated clone and the settings
+  file, then install the plist [`pr-loop.plist`](pr-loop.plist):
 
   ```sh
   mkdir -p ~/.nirmaan/pr-loop
   git clone https://github.com/nirmaansoftware/Nirmaan.git ~/.nirmaan/pr-loop/Nirmaan
+  # once: write ~/.nirmaan/pr-loop/env (below)
   cp ~/.nirmaan/pr-loop/Nirmaan/docs/operations/pr-loop.plist ~/Library/LaunchAgents/online.nirmaan.pr-loop.plist
   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/online.nirmaan.pr-loop.plist
   ```
 
-  Every 5 minutes it resets the clone to `origin/main` and runs `--once`;
-  output goes to `~/.nirmaan/pr-review/loop.log`. `node`, `git`, `gh` and
-  `claude` must be on the login shell's `PATH`. To stop it:
+  The plist holds no settings. Its command first sources
+  `~/.nirmaan/pr-loop/env`, a shell file shared with the ip-nirmaan loop, so
+  copying a newer plist keeps them. The file holds paths and IDs only, never
+  a key's contents:
+
+  ```sh
+  export PATH="$HOME/.nirmaan/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  export NIRMAAN_CLAUDE_CODE="$HOME/.nirmaan/bin/claude"
+  export NIRMAAN_REVIEW_APP_ID=<the App ID>
+  export NIRMAAN_REVIEW_APP_INSTALLATION_ID=<the installation ID>
+  export NIRMAAN_REVIEW_APP_PRIVATE_KEY_FILE=<path to the PEM, outside every repository>
+  ```
+
+  `PATH` must reach `node`, `git`, `gh` and `claude`. Without the file, a
+  run stops before the loop starts and the log says so. To re-install after
+  the plist changes on `main`: `launchctl bootout
+  gui/$(id -u)/online.nirmaan.pr-loop`, then the `cp` and `launchctl
+  bootstrap` lines above. Every 5 minutes it resets the clone to
+  `origin/main` and runs `--once`; output, including the `git` steps', goes
+  to `~/.nirmaan/pr-review/loop.log`. To stop it:
   `launchctl bootout gui/$(id -u)/online.nirmaan.pr-loop`.
 - **Claude Code `/loop`:** in a session opened in the dedicated clone, run
   `/loop 10m git fetch origin main && git reset --hard origin/main && node
@@ -349,8 +384,9 @@ copy. Three ways to run it:
 `NIRMAAN_LOOP_CHECK_TIMEOUT_SECONDS` (1200), `NIRMAAN_LOOP_GIT_NAME` and
 `NIRMAAN_LOOP_GIT_EMAIL` (the commit identity; otherwise the clone's git
 config, otherwise the PR head commit's author), plus the review script's
-variables above. The local checks, forbidden paths, round limit and authors
-are in `.github/scripts/pr-loop/config.json`.
+variables above. Under launchd, set them in `~/.nirmaan/pr-loop/env`. The
+local checks, forbidden paths, round limit and authors are in
+`.github/scripts/pr-loop/config.json`.
 
 **What the loop does not do.** It never merges a founder-class PR, never
 changes review configuration or workflows, never pushes over someone else's
@@ -372,8 +408,9 @@ loop pushed is an agent's change like any other: both keys review it again.
 ## Merging
 
 Branches must be up to date with `main` before merge, because Vercel publishes
-`main` directly and an untested combination would go live. PRs merge with a
-merge commit, one at a time.
+`main` directly and an untested combination would go live. The loop updates a
+branch that is behind (step 1 of the loop). PRs merge with a merge commit,
+one at a time.
 
 ## Rollback
 

@@ -10,7 +10,14 @@
 // and a step never waits on CI:
 //   skip     draft, fork, other author, `hold` or `needs-founder` label, or
 //            this head already finished (ready, auto-merge, founder wait);
-//   wait     required CI not finished on the head;
+//   update   GitHub reports the branch behind main (the ruleset requires
+//            branches to be up to date): merge main into it with the gh
+//            login (update-branch, pinned to the head the loop saw) before
+//            any review, and again before a founder-class PR is put to the
+//            founder, so the founder approves a head that can merge; a
+//            failed update stops, a person's push in between drops the step;
+//   wait     required CI not finished on the head, or GitHub still making
+//            the update's merge commit;
 //   stop     CI failed on a head the loop pushed, a merge conflict, a key
 //            deferred (rate limit, bad output, missing spec), a repeated
 //            finding, the round limit, a forbidden path, a failed local
@@ -44,6 +51,9 @@ import { findingsToFix, fixerArgs, fixerSystemPrompt, fixerUserPrompt, forbidden
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MARK = 'nirmaan-pr-loop';
+// After asking GitHub to update a branch, how long the loop waits for the new
+// head before asking again (GitHub makes the merge commit asynchronously).
+const UPDATE_WAIT_MS = 10 * 60 * 1000;
 
 export function loopDefaults(env = process.env) {
   return {
@@ -186,6 +196,13 @@ export async function stepPr(o, listed) {
       const last = mine[mine.length - 1];
       return !!last && last.state === 'APPROVED' && last.commitId === head;
     };
+    // Behind main: update first, also for a head that already finished (it
+    // cannot merge while behind, and a founder-class PR must not be approved
+    // on a head that needs another push).
+    if (pull.mergeableState === 'behind' && st.done?.outcome !== 'refused') {
+      const u = await updateBehind(o, { n, head, st, say, stop, log, out });
+      if (u) return u;
+    }
     if (st.done?.head === head) {
       if (st.done.outcome !== 'founder-wait' || st.done.founderRerun) return skip(`${st.done.outcome} on this head`);
       if (!(await founderApproval())) return skip("waiting for the founder's approval on this head");
@@ -223,7 +240,7 @@ export async function stepPr(o, listed) {
       const failed = [...k1, ...(r.key2 ? [r.key2] : [])].filter((k) => k.status === 'fail');
       log('reviewed', { key1: k1.map((k) => `${k.team}:${k.status}`).join(','), key2: r.key2?.status ?? 'not run' });
 
-      if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, founderApproval });
+      if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, out, founderApproval });
       return await fixRound(o, { n, head, pull, st, r, say, stop, log, out });
     } finally { lock.release(); }
   } catch (e) {
@@ -231,12 +248,42 @@ export async function stepPr(o, listed) {
   }
 }
 
-async function mergePath(o, { n, head, st, r, say, stop, log, founderApproval }) {
+// The branch is behind main: ask GitHub to merge main into it (REST
+// update-branch with the gh login, the same merge-commit update as
+// `gh pr update-branch`, but pinned with expected_head_sha so a person's push
+// in between is never merged over). Returns the step's result, or null to go
+// on (--no-post never updates).
+async function updateBehind(o, { n, head, st, say, stop, log, out }) {
+  const cfg = o.config;
+  const sha7 = head.slice(0, 7);
+  if (o.post === 'none') { out(`pr-loop: #${n} is behind main; not updated (--no-post)`); return null; }
+  if (st.updated?.from === head && Date.now() - Date.parse(st.updated.at) < UPDATE_WAIT_MS) {
+    out(`pr-loop: #${n} waiting for GitHub to update the branch (head ${sha7})`);
+    return { outcome: 'wait', reason: 'waiting for GitHub to update the branch' };
+  }
+  try {
+    o.runGh(['api', '-X', 'PUT', `repos/${cfg.repo}/pulls/${n}/update-branch`, '-f', `expected_head_sha=${head}`]);
+  } catch (e) {
+    const now = (await o.github.getPull(n)).headSha;
+    if (now !== head) { log('head-moved', { new_head: now }); return { outcome: 'head-moved' }; }
+    return await stop(head, `could not update the branch with main ${ghFailure(e)}. A person resolves it (a merge conflict with main, or GitHub refused the update)`);
+  }
+  st.updated = { from: head, at: new Date().toISOString() };
+  saveState(o.stateDir, cfg.repo, st);
+  log('updated');
+  await say(`<!-- ${MARK} updated from=${head} -->\n### Automated loop: branch updated\n\nThe branch was behind \`main\`, and the ruleset requires branches to be up to date before merge, so the loop asked GitHub to merge \`main\` into it (update-branch, a merge commit, only while the head was still \`${sha7}\`). The new head is reviewed from scratch.`);
+  return { outcome: 'updated' };
+}
+
+async function mergePath(o, { n, head, st, r, say, stop, log, out, founderApproval }) {
   const cfg = o.config;
   const sha7 = head.slice(0, 7);
   const classes = Object.keys(r.classification?.founder ?? {});
-  const held = (await o.github.getPull(n)).labels.includes(cfg.hold_label);
-  if (held) { log('held'); return { outcome: 'skip', reason: 'hold label set during the review' }; }
+  const now = await o.github.getPull(n);
+  if (now.labels.includes(cfg.hold_label)) { log('held'); return { outcome: 'skip', reason: 'hold label set during the review' }; }
+  // main moved during the review: this head cannot merge, so update it rather
+  // than ask the founder (or GitHub) to merge it.
+  if (now.mergeableState === 'behind' && o.post !== 'none') return await updateBehind(o, { n, head, st, say, stop, log, out });
   if (classes.length) {
     const approved = await founderApproval();
     const first = st.done?.head !== head;
@@ -447,7 +494,7 @@ export async function runTick(o) {
     const r = await o.stepPr(o, p);
     results.push({ pr: p.number, ...r });
     if (r.outcome === 'busy') break;
-    if (!['skip', 'wait'].includes(r.outcome)) break;
+    if (!['skip', 'wait', 'updated'].includes(r.outcome)) break;
   }
   return results;
 }
