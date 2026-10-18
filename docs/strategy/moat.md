@@ -13,7 +13,7 @@ Client problems → structured requirements → solutions → implementation dat
 | Which assumptions were right or wrong | Confirmed/rejected discovery items | IMPLEMENTED |
 | Requirement → solution → proof chains | Knowledge graph + evidence | IMPLEMENTED |
 | Estimate versus actual by project type | Proposal economics (+ actuals in Phase 3) | Partly |
-| Reusable components with usage history | IP library | PLANNED |
+| Reusable components with usage history | IP library | IMPLEMENTED in the OS; no client uses recorded yet |
 | Agent quality history | Eval + human acceptance rates | Partly |
 
 Each project makes the next estimate more accurate, the next build shorter,

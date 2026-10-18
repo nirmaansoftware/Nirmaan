@@ -26,8 +26,15 @@ Website intake / call ─► LEAD-### (NEW)
 | QUALIFIED | Real problem, fit, worth a proposal | Team |
 | PROPOSAL | Proposal with the client | Automatically on send |
 | WON | Client approved | **Only** the client's approval; can't be set by hand |
-| LOST | Not proceeding | Team; a reason is **required** (it feeds pricing and ICP reviews) |
+| LOST | Not proceeding | Team; a reason is **required** (it feeds pricing and ICP reviews). Until the OS lists them, also record by hand: "chose a DIY or AI builder" and "already built, needs fixing" |
 | SPAM | Junk | Team |
+
+## Capacity check (policy, 2026-10-18)
+
+Before a proposal is drafted (QUALIFIED to PROPOSAL), check delivery capacity.
+Fixed-price work is not proposed past it; see principle 8 in
+[pricing-principles.md](../finance/pricing-principles.md). The limits are
+internal. Decided in the [market learnings decisions](../strategy/market-learnings-decisions.md).
 
 ## Service levels (policy)
 

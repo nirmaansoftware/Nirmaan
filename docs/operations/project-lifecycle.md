@@ -7,6 +7,9 @@ PLANNING ─[PLAN]→ DESIGN ─[DESIGN]→ ARCHITECTURE ─[ARCHITECTURE]→ IM
 ─[HANDOVER]→ MONITORING → MAINTENANCE
 ```
 
+LEAD to PROPOSAL are lead stages ([lead-to-project.md](lead-to-project.md)).
+A project record starts at APPROVED, when the client approves the proposal.
+
 `[GATE]` marks a transition that needs a recorded human approval. REQUIREMENTS
 is also a gate (REQUIREMENTS → PLANNING) for projects that enter at that stage,
 such as the seeded demo.
@@ -24,6 +27,12 @@ such as the seeded demo.
 | QA | Functional, responsive, accessibility, regression, with evidence | Founder / CTO |
 | PRODUCTION | Security review, deployment plan, monitoring, rollback, backups | Founder / CTO |
 | HANDOVER | Client accepted delivery; docs and access handed over | Founder / CTO, after the client's written acceptance |
+
+**Client sign-off (2026-10-18, D1 in the [market learnings decisions](../strategy/market-learnings-decisions.md)):**
+the founder approves the PLAN, DESIGN, PRODUCTION and HANDOVER gates only with
+the client's written sign-off for that step attached as evidence. The Process
+page tells clients they approve these steps; until the OS records a client
+decision per milestone (backlog ML17), this rule is what makes that true.
 
 Enforcement: `moveToNextStage()` refuses a gated transition without an
 APPROVED record for that gate. Production deployments can't even be recorded

@@ -12,6 +12,14 @@
 5. **Validity dates** on every proposal. Expired proposals can't be approved.
 6. **Recurring plans are optional** and only offered for real ongoing work.
 7. **No discounts without a scope change.** Reduce scope instead.
+8. **Capacity before price.** Fixed-price work is not proposed past delivery
+   capacity; capacity is checked when a lead moves from QUALIFIED to PROPOSAL
+   ([lead-to-project.md](../operations/lead-to-project.md)). A queue that stays
+   full triggers a price review. The limits are internal.
+9. **Every new offer states its tax treatment**, confirmed with a chartered
+   accountant before its first invoice.
 
-Actual price points, target margins and rate cards are internal and live in
-the OS, not in this public repository.
+Public price anchors are published in `website/src/_data/pricing.json`. Rate
+cards, target margins and estimates are internal and live in the OS, not in
+this public repository. (Corrected 2026-10-18, D8 in the
+[market learnings decisions](../strategy/market-learnings-decisions.md).)

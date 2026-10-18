@@ -34,7 +34,7 @@ Every document, and every capability inside one, is marked:
 | Design | [visual direction](design/visual-direction.md) (what Design key 1 checks against) |
 | AI | [agent architecture](ai/agent-architecture.md) · [agent responsibilities](ai/agent-responsibilities.md) · [orchestration](ai/orchestration.md) · [model routing](ai/model-routing.md) · [evaluation](ai/evaluation.md) · [AI cost governance](ai/ai-cost-governance.md) |
 | Product | [portal architecture](product/portal-architecture.md) · [knowledge graph](product/project-knowledge-graph.md) · [client portal](product/client-portal.md) · [internal OS](product/internal-os.md) · [prospecting](product/prospecting.md) · [Nirmaan Outreach](product/nirmaan-outreach.md) |
-| Strategy | [moat](strategy/moat.md) · [productization](strategy/productization.md) · [reusable IP](strategy/reusable-ip.md) · [roadmap](strategy/roadmap.md) · [risks](strategy/risks.md) |
+| Strategy | [moat](strategy/moat.md) · [productization](strategy/productization.md) · [reusable IP](strategy/reusable-ip.md) · [roadmap](strategy/roadmap.md) · [risks](strategy/risks.md) · [market learnings decisions](strategy/market-learnings-decisions.md) |
 | History | [history/](history/README.md): the original Agency OS plan, the OS build log and the 2026-09 website review. Kept as records, not as current guidance. |
 
 ## Where the 20 required planning artifacts live

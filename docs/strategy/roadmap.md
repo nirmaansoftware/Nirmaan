@@ -96,7 +96,7 @@ recurring invoices (today: a "Create due invoices" button).
 
 | Capability | Scope |
 |---|---|
-| IP library | `/os/ip`: reusable assets (IP-) with category, version, dependencies, owner, docs link and the projects using each. Maturity is computed, not claimed: experimental → used once → proven after 3 projects. |
+| IP library | `/os/library`: reusable assets (IP-) with category, version, dependencies, owner, docs link and the projects using each. Maturity is computed, not claimed: experimental → used once → proven after 3 projects. |
 | Knowledge base | `/os/knowledge`: searchable articles (playbooks, lessons, decisions, post-mortems) with source and author; linked from each project. |
 | Post-mortems | Ten fixed questions; at least six answered. Saving snapshots the project's economics and publishes one POST_MORTEM article. The HANDOVER gate can't be approved without it. |
 | Client accounts | Client Admin / Client User logins bound to one client. `/portal` shows only their projects, progress, sent invoices and support; admins can also ask for changes (which arrive as change requests). Client roles never reach `/os`. |

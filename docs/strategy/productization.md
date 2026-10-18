@@ -25,4 +25,22 @@ Path: extract components into the IP library → a configurable template →
 an internal "starter" used on the next similar client → only then a
 self-serve product. Candidate themes to watch (not commitments): order and
 follow-up tracking for SMBs, booking and scheduling, document intake with AI
-extraction.
+extraction, and our own repeated rework (measured from estimate versus actual
+and from copies of the shared site layer).
+
+## Products we built for our own use · PROPOSED (2026-10-18)
+
+A product that started from Nirmaan's own use, like Nirmaan Outreach, fails
+criterion 1 by construction, because the criteria count won client projects.
+For such a product, criteria 1 to 4 are shown as unknown, never as a pass, and
+its own gate is:
+
+- **Success** is clients still paying after the three-month minimum term
+  ([nirmaan-outreach-decisions.md](../product/nirmaan-outreach-decisions.md)),
+  judged at the existing price review. Waitlist sign-ups never count.
+- **No second product or new service** is built before Outreach passes this
+  gate.
+
+Decided in the [market learnings decisions](market-learnings-decisions.md)
+(2.6). The client portal is not a product candidate for now: the OS has only
+been used on Nirmaan itself, as a test, and it is single-tenant.
