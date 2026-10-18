@@ -55,8 +55,11 @@ counsel), and changing a public name.
 
 Merging follows [pr-review.md](pr-review.md): every PR needs two keys, the lead
 of each owning team (key 1) and the orchestrator (key 2), and a PR in a founder
-class (A to F) also needs the founder's approval on GitHub. That mechanism is
-IMPLEMENTED: the ruleset on `main` requires both keys' checks.
+class (A to F) also gets the Founder Proxy (agent), under the founder's
+delegation of 2026-10-18. The proxy sends the decisions above, and anything
+that weakens the review system's own gates, to the founder (`needs-founder`).
+That mechanism is IMPLEMENTED: the ruleset on `main` requires both keys'
+checks.
 
 ## Lessons from the first meeting
 

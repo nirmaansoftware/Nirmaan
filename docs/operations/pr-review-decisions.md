@@ -1,5 +1,12 @@
 # Teams and the PR review mechanism: decisions (2026-10-17) · IMPLEMENTED
 
+**Superseded in part 2026-10-18: the Founder Proxy.** M3's third key (the
+founder's GitHub approval, enforced by `CODEOWNERS`) is replaced, by the
+founder's decision after being shown the risks, with the Founder Proxy
+(agent, `agents/founder-proxy/agent.md`); `CODEOWNERS` is removed. What the
+founder keeps still goes to the founder. Current mechanism:
+[pr-review.md](pr-review.md#founder-classes-a-to-f).
+
 **Superseded 2026-10-18: IMPLEMENTED.** The ruleset on `main` is active and
 requires the review App's checks; #95 merged automatically through both keys,
 and #93 and #96 merged through both keys with the founder's approval.
