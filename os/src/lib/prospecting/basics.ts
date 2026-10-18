@@ -6,7 +6,9 @@
 
 /**
  * The public packages, as the website's pricing page states them
- * (website/src/_data/pricing.json). Keep in step with that file.
+ * (website/src/_data/pricing.json, the single source for prices). The OS image
+ * is built from os/ alone, so it cannot import that file: basics.test.ts fails
+ * when the id, name or from price here differs from it.
  */
 export const PACKAGES = [
   { id: "starter", name: "Starter", from: 15000, for: "A professional website that brings in enquiries (clinics, consultants, service businesses)." },
