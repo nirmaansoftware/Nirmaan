@@ -41,6 +41,10 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'sha256-f0aQfkZ1lqdeSrcsevArXzVs5/XyrCUZbcd6AdvRPVk=' 'sha256-qwBmNl1zKXumCrUb26PVf2H1rclgGYzS4ojbBwKSUBY='; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self' https://api.web3forms.com; form-action 'self' https://api.web3forms.com; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
         }
       ]
     },

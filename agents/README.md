@@ -17,9 +17,11 @@ Every `agent.md` follows the same structure:
 
 ## Status
 
-All 28 agents exist as `agent.md` specs (the 25 from the architecture plan's Agent Architecture table, Section C, plus `legal-counsel`, `tax-accounts` and `sales-partnerships`, added on 2026-10-16 after the first decision meetings), and all load cleanly through the real Phase 2 runtime (`os/src/lib/agents/loadAgent.ts` — see `os/src/lib/agents/allAgentsLoad.test.ts`).
+All 29 agents exist as `agent.md` specs (the 25 from the architecture plan's Agent Architecture table, Section C, plus `legal-counsel`, `tax-accounts` and `sales-partnerships`, added on 2026-10-16 after the first decision meetings, and `founder-proxy`, added on 2026-10-18), and all load cleanly through the real Phase 2 runtime (`os/src/lib/agents/loadAgent.ts` — see `os/src/lib/agents/allAgentsLoad.test.ts`).
 
 `legal-counsel` drafts agreements and policies for a qualified lawyer to review (`legal-compliance` flags risks and never drafts), `tax-accounts` works out GST, TDS and invoicing for a chartered accountant to review, and `sales-partnerships` plans who to approach and how deals close. None of them advises, sends or signs.
+
+`founder-proxy` is the Founder Proxy (agent): the founder's delegation of 2026-10-18 makes it the third reviewer of founder-class pull requests, after key 1 and key 2, in place of the founder's GitHub approval. It acts under that delegation and is not the founder; what the founder keeps (spending, contracts and legal counsel, public names, prices published to clients, turning on sending, and the review system's own gates) it sends to the founder as `needs-founder`. The review script runs it once the script change that adds it is on `main`; until then founder-class pull requests still wait for the founder's GitHub approval.
 
 **What this does NOT mean yet:** none of these agents have been run against a real or realistic input and had their output inspected — that only happened for Product Manager, in Phase 2, using a mock model response. Every agent here is a reviewed, structurally-valid *specification*; none has been exercised end-to-end against a live model. That's Phase 5+ work (orchestration) and Phase 8 (evaluation harness) — see `/docs/history/agency-os-plan.md`.
 
