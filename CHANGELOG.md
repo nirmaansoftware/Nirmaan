@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-18: Two-key PR review is live
+
+- The ruleset "main: two keys" is active on `main`. It requires the CI jobs
+  and the review App's checks `review/team-lead` and `review/executive`, code
+  owner review for founder classes A to F, and branches up to date with
+  `main`. Auto-merge is on.
+- First merges through both keys: #95 merged automatically; #93 and #96
+  merged after the founder's approval on GitHub.
+- `docs/operations/pr-review.md` and its decision record moved from PLANNED to
+  IMPLEMENTED. `AGENTS.md`, `docs/operations/decision-meetings.md`, the
+  decision-meeting skill and `.github/CODEOWNERS` no longer say the founder
+  merges every PR by hand.
+
 ## 2026-10-14: Repository restructure
 
 - The website moved to `website/`. Sources are in `website/src/`, hand-written files in

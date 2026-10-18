@@ -27,7 +27,7 @@ No production deploy/execute capability is live anywhere in this repo. A few age
 
 ## Teams
 
-The agents form seven teams for pull request review (decided 2026-10-17, [docs/operations/pr-review-decisions.md](../docs/operations/pr-review-decisions.md)). Each team has one lead, who holds key 1 for that team; the orchestrator holds key 2 on every PR. Which team owns which files is set only in [`.github/review-teams.yml`](../.github/review-teams.yml); this page lists the teams and does not copy its path rules. How a PR is reviewed: [docs/operations/pr-review.md](../docs/operations/pr-review.md) (PLANNED: until the GitHub App and the ruleset are live, the keys are a convention and the founder merges every PR).
+The agents form seven teams for pull request review (decided 2026-10-17, [docs/operations/pr-review-decisions.md](../docs/operations/pr-review-decisions.md)). Each team has one lead, who holds key 1 for that team; the orchestrator holds key 2 on every PR. Which team owns which files is set only in [`.github/review-teams.yml`](../.github/review-teams.yml); this page lists the teams and does not copy its path rules. How a PR is reviewed: [docs/operations/pr-review.md](../docs/operations/pr-review.md) (IMPLEMENTED: the ruleset on `main` requires both keys' checks).
 
 | Team | Lead | Members |
 |---|---|---|

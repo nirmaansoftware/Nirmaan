@@ -56,8 +56,7 @@ counsel), and changing a public name.
 Merging follows [pr-review.md](pr-review.md): every PR needs two keys, the lead
 of each owning team (key 1) and the orchestrator (key 2), and a PR in a founder
 class (A to F) also needs the founder's approval on GitHub. That mechanism is
-PLANNED: until the GitHub App and the ruleset are live, the founder merges every
-PR by hand.
+IMPLEMENTED: the ruleset on `main` requires both keys' checks.
 
 ## Lessons from the first meeting
 

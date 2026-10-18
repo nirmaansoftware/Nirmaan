@@ -1,8 +1,13 @@
-# Teams and the PR review mechanism: decisions (2026-10-17) · PLANNED
+# Teams and the PR review mechanism: decisions (2026-10-17) · IMPLEMENTED
 
-Status: **PLANNED** until the ruleset is live and the first PR has merged
-through both keys. How the mechanism works day to day:
-[pr-review.md](pr-review.md). This page is the decision record.
+**Superseded 2026-10-18: IMPLEMENTED.** The ruleset on `main` is active and
+requires the review App's checks; #95 merged automatically through both keys,
+and #93 and #96 merged through both keys with the founder's approval.
+Originally: Status: **PLANNED** until the ruleset is live and the first PR has
+merged through both keys.
+
+How the mechanism works day to day: [pr-review.md](pr-review.md). This page
+is the decision record.
 
 The founder asked for one PR review mechanism for Nirmaan and IP Nirmaan: a
 review by a higher authority in the PR's team (key 1), then by the level that
@@ -191,6 +196,15 @@ review cannot finish, the check stays pending, never passes.
 10. Docs move to IMPLEMENTED after the first real PR merges through both keys.
 
 Until step 8, every PR, including these, is merged by the founder.
+
+Update 2026-10-18: step 8 is done (the ruleset is active and auto-merge is
+on). The founder turned auto-merge on with the ruleset in step 8, before the
+step 9 seeds ran, so narrowing 3 below did not hold as written. Step 9 ran the
+same day on seed PRs #89 to #92, closed unmerged: checks posted by hand did not
+count, a founder-class seed waited for the founder, and a branch behind `main`
+was held. The loop's auto-merge path failed in that run (a bug fixed by #93)
+and was first shown working by #95. Step 10: the docs moved to IMPLEMENTED
+after #93, #95 and #96 merged through both keys.
 
 ## Where the founder's instruction is narrowed
 
