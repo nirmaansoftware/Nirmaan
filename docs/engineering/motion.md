@@ -19,7 +19,8 @@ what depends on what, what something is made of. If an animation only says
   something that isn't real output, caption it as an illustration.
 - **Once, not forever.** An entrance plays once. Explainers get a Replay
   button instead of looping. Nothing auto-moves for more than 5 seconds
-  without a way to pause it (WCAG 2.2.2); the nirmaan.online ticker pauses on hover.
+  without a way to pause it (WCAG 2.2.2): the nirmaan.online ticker has a
+  Pause button, and the CTA band's blocks and the hero blink stop after 5 s.
 - **Motion never carries content.** The HTML holds every final value: the
   real number, the full text. Motion only animates toward it. With JavaScript
   off, or motion reduced, the page is complete and still.
