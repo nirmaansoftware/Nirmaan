@@ -6,6 +6,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { owners, contentHits, founderClasses, globMatch } from '../review-teams.mjs';
+import { PATTERNS as SECRET_PATTERNS } from '../secret-scan.mjs';
 
 const list = (v) => (Array.isArray(v) ? v : []);
 
@@ -261,7 +262,13 @@ export function untrusted(n, name, text) {
 // cannot edit PR text.
 export const FOUNDER_BLOCK_OPEN = '<!-- review:founder-class -->';
 export const FOUNDER_BLOCK_CLOSE = '<!-- /review:founder-class -->';
-const FOUNDER_BLOCK_RE = /<!-- review:founder-class -->[\s\S]*?<!-- \/review:founder-class -->[ \t]*\n?/g;
+// A complete block: an open marker, then text with no other open marker, then
+// a close marker. A lone open marker before a block therefore never swallows
+// the author's text between them.
+const FOUNDER_BLOCK_RE = /<!-- review:founder-class -->(?:(?!<!-- review:founder-class -->)[\s\S])*?<!-- \/review:founder-class -->[ \t]*\n?/g;
+// What is left of a marker once every complete block is gone: a lone open or
+// close marker, with its line when it stands alone on one.
+const LONE_MARKER_RE = /^[ \t]*<!-- \/?review:founder-class -->[ \t]*(?:\n|$)|<!-- \/?review:founder-class -->/gm;
 
 export function founderClassBlock(map, classes) {
   if (!classes.length) return '';
@@ -270,15 +277,38 @@ export function founderClassBlock(map, classes) {
   return `${FOUNDER_BLOCK_OPEN}Founder class${classes.length > 1 ? 'es' : ''}: ${what}; waits for the founder's approval.${FOUNDER_BLOCK_CLOSE}`;
 }
 
-// The body with every existing block removed and `block` (if any) at the top.
-// Returns the body unchanged when there is nothing to add or remove; otherwise
-// leading blank lines and trailing whitespace go, so a rerun changes nothing.
+// The body with every existing block and every lone open or close marker
+// removed, and `block` (if any) at the top, so the only markers left are the
+// script's own. Returns the body unchanged when there is nothing to add or
+// remove; otherwise leading blank lines and trailing whitespace go, so a rerun
+// changes nothing.
 export function withFounderClassBlock(body, block) {
   const text = String(body ?? '');
-  const rest = text.replace(FOUNDER_BLOCK_RE, '');
+  const rest = text.replace(FOUNDER_BLOCK_RE, '').replace(LONE_MARKER_RE, '');
   const trimmed = rest.replace(/^\s*\n/, '').trimEnd();
   if (!block) return rest === text ? text : trimmed;
   return trimmed ? `${block}\n\n${trimmed}` : block;
+}
+
+// A short digest of the PR text the reviewers read (title, and the body when
+// it is included), for the verdict cache key: a cached verdict is reused only
+// for the same text.
+export function prTextDigest({ title, body, includeBody }) {
+  const text = JSON.stringify({ title: String(title ?? ''), body: includeBody ? String(body ?? '') : null });
+  return createHash('sha256').update(text).digest('hex').slice(0, 16);
+}
+
+// Error text from gh or git, made safe to post: every secret format the
+// secret scan knows, credentials in a URL (https://user:token@host) and the
+// value of an Authorization header or a "token"/"Bearer" word become
+// [redacted]. Used on every reason the loop posts when it stops.
+export function redact(text) {
+  let out = String(text ?? '');
+  for (const { re } of SECRET_PATTERNS) out = out.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`), '[redacted]');
+  return out
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+(?::[^\s/@]*)?@/gi, '$1[redacted]@')
+    .replace(/\b(authorization\s*[:=]\s*)(?:(bearer|token|basic)\s+)?\S+/gi, (m, h, scheme) => `${h}${scheme ? `${scheme} ` : ''}[redacted]`)
+    .replace(/\b(bearer|token)(\s+)(?!\[redacted\])[A-Za-z0-9_\-.=]{20,}/gi, '$1$2[redacted]');
 }
 
 // Numbered PR text (title, body, commit messages), so findings can cite it.

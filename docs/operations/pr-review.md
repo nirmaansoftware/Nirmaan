@@ -153,7 +153,11 @@ What the script does, in order:
    `.claude/skills/pr-review/checklists/` as the fallback. With neither, the
    key is deferred. Design key 1 is deferred until
    `docs/design/visual-direction.md` exists on `main`. The script itself
-   refuses to post unless it is `main`'s copy.
+   refuses to post unless it is `main`'s copy. It then keeps its
+   founder-class block (`<!-- review:founder-class -->`) at the top of the PR
+   body: every other copy of the block, and any lone open or close marker
+   without its pair, is removed, so the only markers left are the script's
+   own.
 5. **CI first.** For each required job (`os-test`, `website-build`,
    `repo-checks`) the newest run on the head counts (by start time, then run
    id), and a run still in progress, such as a rerun, always means waiting: an
@@ -198,8 +202,10 @@ What the script does, in order:
     comment's marker carries a digest of the result for this.
 11. **Records.** Every model call (tokens, duration, outcome) is logged
     outside the repository in `~/.nirmaan/pr-review/calls.jsonl`. Validated
-    verdicts are cached per head and `main` commit, so re-running after the
-    founder approves does not call the model again. Each run's worktrees, and
+    verdicts are cached per head commit, `main` commit and a digest of the PR
+    title and body (the reviewers read both, so changed PR text is reviewed
+    again), so re-running after the founder approves does not call the model
+    again. Each run's worktrees, and
     the per-run folder that holds them under `~/.nirmaan/pr-review/worktrees`,
     are removed when it ends.
 
@@ -239,12 +245,15 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
    waits for the founder's approval of this head and does nothing else; after
    the founder approves, it runs the review again (cached verdicts, no model
    call) so `review/executive` turns green, and the founder merges. Otherwise,
-   when the review App posts the checks and the repository's "Allow
-   auto-merge" setting is on, the loop runs `gh pr merge --auto --merge
-   --match-head-commit <head>`, so GitHub merges only when every required
-   check passes on that head. Until then (a dry run, or auto-merge off) it
-   posts "ready: both keys passed, waiting for the founder's merge settings",
-   and the founder merges.
+   when the review App posts the checks, the loop reads the repository's
+   "Allow auto-merge" setting with the gh login (the `allow_auto_merge` field
+   of `gh api repos/<repo>`). When it is on, the loop runs `gh pr merge --auto
+   --merge --match-head-commit <head>`, so GitHub merges only when every
+   required check passes on that head. In a dry run, or when the setting is
+   off, it posts "ready: both keys passed, waiting for the founder's merge
+   settings", and the founder merges. The decision never depends on the
+   wording of a gh error: when the setting cannot be read, or `gh pr merge
+   --auto` fails for any reason, the loop stops with `needs-founder`.
 4. **A key fails.** The loop starts a **fixer**: a separate, fresh `claude -p`
    process, never a reviewer process and never the session that reviewed. It
    runs in a clean worktree of the head commit, with Read, Grep, Glob, Edit and
@@ -278,8 +287,12 @@ three fix rounds are done and a key still fails; the same finding (same key,
 team, file and wording) fails again after a fix; CI fails after a fix; the
 branch has a merge conflict; a key is deferred (rate limit, bad output,
 missing spec); the fixer hits a rate limit, gives no valid answer, cannot
-fix every finding or changes nothing; a local check fails; or any error.
-Nothing is pushed in any of these cases. If someone pushes while the fixer
+fix every finding or changes nothing; a local check fails; the auto-merge
+setting cannot be read or `gh pr merge --auto` fails; or any error. Nothing is
+pushed in any of these cases. The reason is redacted before it is logged or
+posted: secret formats the secret scan knows, credentials in a URL and the
+value after `Authorization:`, `Bearer` or `token` become `[redacted]`, since a
+gh or git error can carry them. If someone pushes while the fixer
 works, the round is dropped without a label and the new head is reviewed from
 scratch. Removing the `needs-founder` label lets the loop resume with a fresh
 round count.

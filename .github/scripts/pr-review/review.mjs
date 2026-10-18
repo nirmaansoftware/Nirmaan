@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../review-teams.mjs';
 import {
   acquireLock, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, nonce, parseNameStatusZ, parseVerdictText,
-  prTextBlock, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict, VERDICT_SCHEMA, withFounderClassBlock,
+  prTextBlock, prTextDigest, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict, VERDICT_SCHEMA, withFounderClassBlock,
 } from './lib.mjs';
 import { claudeArgs, reviewerEnv, runWithRetry } from './claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from './github.mjs';
@@ -261,11 +261,14 @@ export async function runReview(o) {
     const memberText = (role) => markdownSection(roleSpec(role), cfg.member_section) ?? roleSpec(role);
     const teamsById = new Map((map.teams ?? []).map((t) => [t.id, t]));
 
-    // One reviewer call, cached per (head, main, key, team) so a rerun after
-    // the founder approves does not spend another call.
+    // One reviewer call, cached per (head, main, PR text, key, team) so a
+    // rerun after the founder approves does not spend another call. The
+    // reviewers read the title and body (include_pr_body), so a change to
+    // either is a new review, not a reused verdict.
     const cacheDir = join(o.stateDir, 'verdicts', cfg.repo.replace('/', '_'), `pr-${o.pr}`);
+    const textDigest = prTextDigest({ title: pull.title, body: pull.body, includeBody: cfg.include_pr_body });
     const review = async ({ key, team, model, system, user }) => {
-      const cacheFile = join(cacheDir, `${headSha}-${mainSha}-k${key}-${team ?? 'executive'}.json`);
+      const cacheFile = join(cacheDir, `${headSha}-${mainSha}-${textDigest}-k${key}-${team ?? 'executive'}.json`);
       if (!o.fresh && existsSync(cacheFile)) {
         const cached = JSON.parse(readFileSync(cacheFile, 'utf8'));
         logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, model, attempt: 0, outcome: 'reused' });

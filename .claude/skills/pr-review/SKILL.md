@@ -32,7 +32,7 @@ git worktree remove "${TMPDIR:-/tmp}/pr-review-main"
 
 Options: `--no-post` prints the comments and checks instead of posting
 (allowed from any copy, for trying a change to the script); `--fresh` ignores
-verdicts cached for the same head and main commits.
+verdicts cached for the same head and main commits and the same PR title and body.
 
 It takes a while: one model call per owning team for key 1, then one for
 key 2, one at a time. Run it in the background and wait for it to exit.
