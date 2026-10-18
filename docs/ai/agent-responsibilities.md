@@ -26,6 +26,8 @@ each `agents/<slug>/agent.md`). "R" = responsible, "A" = the human who approves.
 
 Agents review pull requests as key 1 (the lead of each owning team) and key 2
 (the orchestrator), per [pr-review.md](../operations/pr-review.md). A passing
-key is an agent review, never a person's approval or sign-off. The founder
-approves founder classes A to F. Unassigned by design: no agent can send a
+key is an agent review, never a person's approval or sign-off. Founder classes
+A to F also get the Founder Proxy (`founder-proxy`, agent) after key 2, under
+the founder's delegation of 2026-10-18; it is not the founder, and what only
+the founder decides it sends to the founder. Unassigned by design: no agent can send a
 client communication, change a price, or deploy.
