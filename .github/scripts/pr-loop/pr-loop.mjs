@@ -17,9 +17,10 @@
 //            check, or any error: label `needs-founder` and say why;
 //   review   both keys (fresh read-only processes, review.mjs);
 //   merge    both keys passed: `gh pr merge --auto --merge` with the gh login
-//            when the review App posts the checks; a "ready" comment in a dry
-//            run or when GitHub answers that auto-merge is not allowed; any
-//            other merge error stops. Founder-class PRs are never merged
+//            when the review App posts the checks and the repository's
+//            allow_auto_merge field (read with gh) is true; a "ready" comment
+//            in a dry run or when it is false; the field unreadable or any
+//            merge error stops. Founder-class PRs are never merged
 //            by the loop: it waits for the founder's GitHub approval and the
 //            founder merges;
 //   fix      a key failed: a fresh fixer `claude -p` in a clean worktree of
@@ -35,7 +36,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globMatch } from '../review-teams.mjs';
-import { acquireLock, logCall, nonce, parseNameStatusZ, parseVerdictText, requiredCi } from '../pr-review/lib.mjs';
+import { acquireLock, logCall, nonce, parseNameStatusZ, parseVerdictText, redact, requiredCi } from '../pr-review/lib.mjs';
 import { reviewerEnv, runOnce } from '../pr-review/claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from '../pr-review/github.mjs';
 import { defaults, differsFromMain, EXIT, runReview } from '../pr-review/review.mjs';
@@ -43,9 +44,6 @@ import { findingsToFix, fixerArgs, fixerSystemPrompt, fixerUserPrompt, forbidden
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MARK = 'nirmaan-pr-loop';
-// GitHub's answer to `gh pr merge --auto` when the repository's "Allow
-// auto-merge" setting is off.
-const AUTO_MERGE_OFF = /auto[- ]?merge is not (allowed|enabled)/i;
 
 export function loopDefaults(env = process.env) {
   return {
@@ -60,6 +58,14 @@ export function loopDefaults(env = process.env) {
 
 function git(cwd, args, opts = {}) {
   return execFileSync('git', ['-c', 'core.hooksPath=/dev/null', ...args], { cwd, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+}
+
+// A failed gh call, classified by what it is (gh missing, a timeout, or its
+// exit code) with its output after; stop() redacts it before posting.
+function ghFailure(e) {
+  const kind = e?.code === 'ENOENT' ? 'gh not found' : e?.code === 'ETIMEDOUT' || e?.signal ? `gh ${e.signal ? `killed by ${e.signal}` : 'timed out'}` : `exit ${e?.status ?? 'unknown'}`;
+  const detail = `${e?.stderr ?? ''} ${e?.stdout ?? ''}`.replace(/\s+/g, ' ').trim() || String(e?.message ?? '');
+  return `(${kind}): ${detail.slice(0, 500)}`;
 }
 
 const esc = (s, max = 400) => {
@@ -150,7 +156,10 @@ export async function stepPr(o, listed) {
     if (o.post === 'none') { out(`----- comment (not posted)\n${body}`); return null; }
     return (await o.github.createComment(n, body)).url;
   };
-  const stop = async (head, reason) => {
+  const stop = async (head, why) => {
+    // Reasons can carry gh or git error text: redacted before it is logged,
+    // saved or posted.
+    const reason = redact(why);
     out(`pr-loop: #${n} stopped: ${reason}`);
     st.stopped = { head, reason, at: new Date().toISOString(), labeled: false };
     saveState(o.stateDir, cfg.repo, st);
@@ -248,17 +257,27 @@ async function mergePath(o, { n, head, st, r, say, stop, log, founderApproval })
     }
     return { outcome: 'founder-wait', reason: approved ? 'founder approved; the founder merges' : 'waiting for the founder' };
   }
-  // The review App's token never sees the "Allow auto-merge" setting, so the
-  // loop does not read it: it asks for auto-merge with the gh login and reads
-  // GitHub's answer. "Not allowed" means the setting is off: ready, as before.
+  // The repository's "Allow auto-merge" setting decides between auto-merge
+  // and "ready": read with the gh login (`allow_auto_merge`, a field, never
+  // the wording of an error). Off: ready. On: `gh pr merge --auto`, and any
+  // failure of it stops the loop (fails safe). The setting unreadable, or an
+  // answer other than true or false: stop as well.
   let why = o.post !== 'app' ? 'the review App is not configured (dry run)' : null;
+  if (!why) {
+    let allowed;
+    try {
+      allowed = String(o.runGh(['api', `repos/${cfg.repo}`, '--jq', '.allow_auto_merge']) ?? '').trim();
+    } catch (e) {
+      return await stop(head, `could not read the repository's auto-merge setting ${ghFailure(e)}`);
+    }
+    if (allowed === 'false') why = 'the repository does not allow auto-merge';
+    else if (allowed !== 'true') return await stop(head, `could not read the repository's auto-merge setting (gh answered "${allowed.slice(0, 40)}", not true or false)`);
+  }
   if (!why) {
     try {
       o.runGh(['pr', 'merge', String(n), '--repo', cfg.repo, '--auto', '--merge', '--match-head-commit', head]);
     } catch (e) {
-      const detail = `${e.stderr ?? ''} ${e.stdout ?? ''} ${e.message ?? ''}`.replace(/\s+/g, ' ').trim();
-      if (!AUTO_MERGE_OFF.test(detail)) return await stop(head, `gh pr merge --auto failed: ${detail.slice(0, 500)}`);
-      why = 'the repository does not allow auto-merge';
+      return await stop(head, `gh pr merge --auto failed ${ghFailure(e)}`);
     }
   }
   if (!why) {
