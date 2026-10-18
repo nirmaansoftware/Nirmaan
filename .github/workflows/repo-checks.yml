@@ -7,8 +7,8 @@
 #   - Secret scan: added lines matching common secret formats, and added .env,
 #     key or database files, fail.
 #   - Review teams coverage: .github/review-teams.yml maps every tracked file
-#     to a team with no dead rule, and .github/CODEOWNERS equals its
-#     founder-class paths.
+#     to a team with no dead rule, and no CODEOWNERS file exists (founder
+#     classes are reviewed by the Founder Proxy agent, not a code owner).
 #
 # Both compare the change against its base: on a pull request, the target
 # branch (origin/<base>...HEAD); on a push to main, the previous tip. The logic
@@ -79,7 +79,7 @@ jobs:
           BASE: ${{ steps.base.outputs.ref }}
         run: node .github/scripts/secret-scan.mjs "$BASE"
       # Every tracked file maps to a review team, no rule is dead, every role
-      # exists, content rules still match, and CODEOWNERS names exactly the
-      # founder-class paths. Runs on the whole tree, not the diff.
+      # exists, content rules still match, and no CODEOWNERS file exists.
+      # Runs on the whole tree, not the diff.
       - name: Review teams coverage
         run: node .github/scripts/review-teams.mjs

@@ -12,6 +12,8 @@
   "fail_closed_without": { "design": ["docs/design/visual-direction.md"] },
   "key2_role": "orchestrator",
   "key2_name": "Executive",
+  "proxy_role": "founder-proxy",
+  "proxy_name": "Founder Proxy",
   "required_ci": ["os-test", "website-build", "repo-checks"],
   "allowed_authors": ["patel-om", "nirmaansoftware"],
   "founder_login": "nirmaansoftware",

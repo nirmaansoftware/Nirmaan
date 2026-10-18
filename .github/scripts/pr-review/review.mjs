@@ -18,15 +18,20 @@
 //      (action_required, never green) when one finished without success.
 //   6. Key 1: one fresh `claude -p` per owning team, its lead's spec and
 //      checklists from main. Key 2: the orchestrator's spec plus every owning
-//      lead's spec and checklist, given key 1's results.
+//      lead's spec and checklist, given key 1's results. For a founder-class
+//      PR, once key 2 passed: the Founder Proxy (agent), its spec from main,
+//      given both keys' results, on the strongest model.
 //   7. Validates each JSON verdict (schema, head SHA, every cited file:line at
-//      the head); one backoff retry on a failed call, then "review deferred".
+//      the head; the proxy may also say "needs-founder", with reasons); one
+//      backoff retry on a failed call, then "review deferred".
 //   8. Checks the head has not moved, then posts one comment per key and the
 //      checks review/team-lead and review/executive. A comment or check run
 //      identical to the App's latest one for that key, team and head is not
 //      posted again (a rerun that reused its cached verdicts). review/executive is
 //      success only with key 2 pass, no `hold` label, and, for a founder-class
-//      PR, the founder's approval on this head SHA.
+//      PR, the Founder Proxy's pass on this head SHA. A proxy "needs-founder"
+//      keeps it pending until the founder's own GitHub approval of this head
+//      SHA; the loop labels such a PR needs-founder.
 //
 // Posting identity: the review App (env in github.mjs APP_ENV) posts check
 // runs. Without it, the caller's gh login posts comments and commit statuses
@@ -43,8 +48,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../review-teams.mjs';
 import {
-  acquireLock, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, nonce, parseNameStatusZ, parseVerdictText,
-  prTextBlock, prTextDigest, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict, VERDICT_SCHEMA, withFounderClassBlock,
+  acquireLock, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText,
+  prTextBlock, prTextDigest, proxySystemPrompt, PROXY_VERDICT_SCHEMA, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict,
+  VERDICT_SCHEMA, withFounderClassBlock,
 } from './lib.mjs';
 import { claudeArgs, reviewerEnv, runWithRetry } from './claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from './github.mjs';
@@ -56,7 +62,8 @@ export function defaults(env = process.env) {
   return {
     claudeBin: env.NIRMAAN_CLAUDE_CODE || 'claude',
     stateDir: env.NIRMAAN_REVIEW_STATE_DIR || join(homedir(), '.nirmaan', 'pr-review'),
-    models: { key1: env.NIRMAAN_REVIEW_MODEL_KEY1 || 'sonnet', key2: env.NIRMAAN_REVIEW_MODEL_KEY2 || 'opus' },
+    // Key 2 and the Founder Proxy run on the strongest model.
+    models: { key1: env.NIRMAAN_REVIEW_MODEL_KEY1 || 'sonnet', key2: env.NIRMAAN_REVIEW_MODEL_KEY2 || 'opus', proxy: env.NIRMAAN_REVIEW_MODEL_PROXY || 'opus' },
     timeoutMs: Number(env.NIRMAAN_REVIEW_TIMEOUT_SECONDS || 1200) * 1000,
     backoffMs: Number(env.NIRMAAN_REVIEW_BACKOFF_SECONDS || 90) * 1000,
   };
@@ -262,19 +269,21 @@ export async function runReview(o) {
     const teamsById = new Map((map.teams ?? []).map((t) => [t.id, t]));
 
     // One reviewer call, cached per (head, main, PR text, key, team) so a
-    // rerun after the founder approves does not spend another call. The
-    // reviewers read the title and body (include_pr_body), so a change to
-    // either is a new review, not a reused verdict.
+    // rerun (after the founder decides a needs-founder PR, or after a
+    // restart) does not spend another call. The reviewers read the title and
+    // body (include_pr_body), so a change to either is a new review, not a
+    // reused verdict. The Founder Proxy is key "proxy" here.
     const cacheDir = join(o.stateDir, 'verdicts', cfg.repo.replace('/', '_'), `pr-${o.pr}`);
     const textDigest = prTextDigest({ title: pull.title, body: pull.body, includeBody: cfg.include_pr_body });
     const review = async ({ key, team, model, system, user }) => {
-      const cacheFile = join(cacheDir, `${headSha}-${mainSha}-${textDigest}-k${key}-${team ?? 'executive'}.json`);
+      const proxy = key === 'proxy';
+      const cacheFile = join(cacheDir, `${headSha}-${mainSha}-${textDigest}-k${key}-${team ?? (proxy ? cfg.proxy_role : 'executive')}.json`);
       if (!o.fresh && existsSync(cacheFile)) {
         const cached = JSON.parse(readFileSync(cacheFile, 'utf8'));
         logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, model, attempt: 0, outcome: 'reused' });
         return { ...cached, notes: [...(cached.notes ?? []), REUSED_NOTE] };
       }
-      const args = claudeArgs({ model, systemPrompt: system, addDirs: [mainDir], schema: VERDICT_SCHEMA });
+      const args = claudeArgs({ model, systemPrompt: system, addDirs: [mainDir], schema: proxy ? PROXY_VERDICT_SCHEMA : VERDICT_SCHEMA });
       const r = await runWithRetry(
         { bin: o.claudeBin, args, input: user, cwd: headDir, env: reviewerEnv(), timeoutMs: o.timeoutMs },
         {
@@ -285,7 +294,7 @@ export async function runReview(o) {
       if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, model };
       let raw;
       try { raw = r.structured ?? parseVerdictText(r.text); } catch (e) { return { status: 'deferred', reason: `the reviewer's output is not valid JSON (${e.message})`, model }; }
-      const v = validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count });
+      const v = validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count, proxy });
       if (!v.ok) return { status: 'deferred', reason: `the verdict failed validation: ${v.error}`, model };
       const result = { status: v.verdict.verdict, verdict: v.verdict, notes: v.notes, model: r.reportedModel ?? model };
       mkdirSync(cacheDir, { recursive: true });
@@ -352,27 +361,60 @@ export async function runReview(o) {
       k2 = { ...k2base, status: 'deferred', reason: `spec or checklist missing on main: ${e.message}` };
     }
 
-    // Founder key and hold, from GitHub on this head SHA.
+    // The Founder Proxy (agent): founder-class PRs only, and only once key 2
+    // passed on this head. It takes the founder's place as the third
+    // reviewer (the founder's delegation of 2026-10-18); what the founder
+    // keeps it returns as "needs-founder".
     const founderClassesFound = Object.keys(classification.founder);
-    let founderApproved = false;
-    if (founderClassesFound.length) {
-      const mine = (await o.github.listReviews(o.pr)).filter((r) => r.login === cfg.founder_login && ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state));
-      const last = mine[mine.length - 1];
-      founderApproved = !!last && last.state === 'APPROVED' && last.commitId === headSha;
-    }
     const held = pull.labels.includes(cfg.hold_label);
     k2.notes = [...(k2.notes ?? [])];
-    if (founderClassesFound.length) k2.notes.push(`Founder classes ${founderClassesFound.join(', ')}: ${founderApproved ? `the founder approved head ${sha7}` : `review/executive waits for the founder's approval on head ${sha7}`}. Key 2 never substitutes for the founder.`);
+    if (founderClassesFound.length) k2.notes.push(`Founder classes ${founderClassesFound.join(', ')}: ${k2.status === 'pass' ? 'the Founder Proxy (agent) reviews this head next' : 'the Founder Proxy (agent) runs only after key 2 passes'}; review/executive passes only when key 2 and the proxy pass. Key 2 never substitutes for the founder.`);
     if (held) k2.notes.push(`The "${cfg.hold_label}" label is set: review/executive is not passed.`);
     if (classification.notify.length) k2.notes.push(`Notify: ${classification.notify.join(', ')}.`);
     k2.url = await comment(renderComment(k2, ctx));
+
+    let proxy = null;
+    let founderApproved = false;
+    if (founderClassesFound.length && k2.status === 'pass') {
+      const pbase = { key: 'proxy', team: null, teamName: cfg.proxy_name, role: cfg.proxy_role, checkName: cfg.check_names.key2, legal: k2.legal };
+      try {
+        const system = proxySystemPrompt({ ...promptCtx, role: cfg.proxy_role, roleSpec: roleSpec(cfg.proxy_role) });
+        const user = userPrompt({
+          ...promptCtx, key: 'proxy',
+          key1Results: key1.map((r) => ({ team: r.team, role: r.role, verdict: r.verdict })),
+          key2Result: { role: cfg.key2_role, verdict: k2.verdict },
+        });
+        out(`pr-review: Founder Proxy (${cfg.proxy_role})...`);
+        proxy = { ...pbase, ...(await review({ key: 'proxy', team: null, model: o.models.proxy, system, user })) };
+      } catch (e) {
+        proxy = { ...pbase, status: 'deferred', reason: `spec missing on main: ${e.message}` };
+      }
+      proxy.notes = [...(proxy.notes ?? [])];
+      if (proxy.status === NEEDS_FOUNDER) {
+        // Only the founder decides these: their own GitHub review, the latest
+        // one, approving this head SHA.
+        const mine = (await o.github.listReviews(o.pr)).filter((r) => r.login === cfg.founder_login && ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state));
+        const last = mine[mine.length - 1];
+        founderApproved = !!last && last.state === 'APPROVED' && last.commitId === headSha;
+        proxy.notes.push(founderApproved
+          ? `The founder's own GitHub review approves head ${sha7}: that is the founder's decision on the changes above, not the proxy's.`
+          : `review/executive stays pending: the founder decides these changes, on GitHub, on head ${sha7}.`);
+      }
+      proxy.url = await comment(renderComment(proxy, ctx));
+    }
+
     const desc = `agent review (${cfg.key2_role}), head ${sha7}`;
+    const pdesc = `${desc}: key 2 pass; Founder Proxy (agent)`;
     if (k2.status === 'fail') await check('key2', 'failure', `${desc}: fail`, k2.url);
     else if (k2.status === 'deferred') await check('key2', 'pending', `${desc}: review deferred`, k2.url);
-    else if (held) await check('key2', 'pending', `${desc}: pass; held by the ${cfg.hold_label} label`, k2.url);
-    else if (founderClassesFound.length && !founderApproved) await check('key2', 'pending', `${desc}: pass; waits for founder approval (class ${founderClassesFound.join(', ')})`, k2.url);
+    else if (proxy?.status === 'fail') await check('key2', 'failure', `${pdesc}: fail`, proxy.url);
+    else if (proxy?.status === 'deferred') await check('key2', 'pending', `${pdesc}: review deferred`, proxy.url);
+    else if (proxy?.status === NEEDS_FOUNDER && !founderApproved) await check('key2', 'pending', `${pdesc}: needs the founder (class ${founderClassesFound.join(', ')})`, proxy.url);
+    else if (held) await check('key2', 'pending', `${desc}: pass; held by the ${cfg.hold_label} label`, (proxy ?? k2).url);
+    else if (proxy?.status === NEEDS_FOUNDER) await check('key2', 'success', `${pdesc}: needs the founder; the founder's review approves this head`, proxy.url);
+    else if (proxy) await check('key2', 'success', `${pdesc}: pass`, proxy.url);
     else await check('key2', 'success', `${desc}: pass`, k2.url);
-    return { exit: EXIT.ok, key1, key2: k2, posted, classification };
+    return { exit: EXIT.ok, key1, key2: k2, proxy, founderApproved, posted, classification };
   } catch (e) {
     if (e instanceof HeadMoved) { out(`pr-review: ${e.message}. Nothing more was posted; run again on the new head.`); return { exit: EXIT.headMoved, posted }; }
     throw e;

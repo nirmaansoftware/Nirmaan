@@ -1,6 +1,7 @@
 # Website: check that the committed site (website/public, which Vercel publishes
 # as is, with no build step) is exactly what a fresh build of website/src makes,
-# and that every internal link in it resolves. It deploys nothing.
+# that the CSP in vercel.json has the hash of every inline script, and that
+# every internal link in it resolves. It deploys nothing.
 #
 # The job id and name are both `website-build`, unique across the repository's
 # workflows, so a ruleset can require it by name. No path filter, so it can be a
@@ -78,6 +79,15 @@ jobs:
       - name: Link checker tests
         working-directory: .
         run: node --test .github/scripts/check-links.test.mjs
+      # The CSP in vercel.json allows inline scripts by hash only. These
+      # recompute the hash of every inline script in the fresh build and fail
+      # when vercel.json lacks one or keeps one no page uses.
+      - name: CSP hash checker tests
+        working-directory: .
+        run: node --test .github/scripts/check-csp.test.mjs
+      - name: CSP script-src has every inline script's hash
+        working-directory: .
+        run: node .github/scripts/check-csp.mjs website/public website/src/static/vercel.json
       - name: Internal links resolve
         working-directory: .
         run: |
