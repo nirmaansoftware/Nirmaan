@@ -86,13 +86,44 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   const posts = [];
   const merges = [];
   const apiCalls = [];
-  const g = { autoMergeAllowed: gh.autoMergeAllowed ?? true, settingsError: gh.settingsError ?? null, labels: gh.labels ?? [], reviews: [], mergeError: gh.mergeError ?? null, body: 'Changes line two.', ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true };
+  const g = { autoMergeAllowed: gh.autoMergeAllowed ?? true, settingsError: gh.settingsError ?? null, labels: gh.labels ?? [], reviews: [], mergeError: gh.mergeError ?? null, body: 'Changes line two.', ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true,
+    // GitHub's mergeable_state "behind": main has commits the branch lacks and
+    // the ruleset requires branches to be up to date. behindWhen() can turn it
+    // on mid-run; updateError makes the update fail the way gh does;
+    // beforeUpdate() runs first (a person's push); updateAsync leaves the
+    // branch as it was (GitHub has not made the merge commit yet).
+    behind: gh.behind ?? false, behindWhen: null, updateError: null, beforeUpdate: null, updateAsync: false };
   const originHead = () => sh(origin, 'rev-parse', 'refs/heads/feature');
+  // A new commit on main in origin, so the PR branch is really behind.
+  const advanceMain = (rel = 'os/other.js') => {
+    sh(work, 'checkout', '-q', 'main'); sh(work, 'pull', '-q', 'origin', 'main');
+    write(work, rel, `main moved ${Date.now()}\n`);
+    sh(work, 'add', '-A'); sh(work, 'commit', '-qm', 'main moves'); sh(work, 'push', '-q', 'origin', 'main');
+    g.behind = true;
+  };
+  // What GitHub's update-branch does: merge main into the PR branch (a merge
+  // commit) when the branch head is still the expected one.
+  const updates = [];
+  const updateBranch = (args) => {
+    updates.push(args);
+    if (g.beforeUpdate) g.beforeUpdate();
+    const expected = args.find((a) => a.startsWith('expected_head_sha=')).split('=')[1];
+    if (g.updateError || originHead() !== expected) { const e = new Error(`Command failed: gh ${args.join(' ')}`); e.status = 1; e.stderr = g.updateError ?? 'gh: expected head sha did not match current head ref (HTTP 422)'; throw e; }
+    if (g.updateAsync) return '{"message":"Updating pull request branch."}';
+    const tmpw = mkdtempSync(join(tmp, 'upd-'));
+    sh(tmp, 'clone', '-q', '-b', 'feature', origin, tmpw);
+    sh(tmpw, 'config', 'user.email', 'gh@example.com'); sh(tmpw, 'config', 'user.name', 'GitHub');
+    sh(tmpw, 'merge', '-q', '--no-ff', '--no-edit', 'origin/main');
+    sh(tmpw, 'push', '-q', 'origin', 'feature');
+    rmSync(tmpw, { recursive: true, force: true });
+    g.behind = false;
+    return '{"message":"Updating pull request branch."}';
+  };
   const github = {
     async getPull() {
       const head = originHead();
       sh(origin, 'update-ref', 'refs/pull/1/head', head); // GitHub keeps this in step with the branch
-      return { number: 1, state: 'open', draft: g.draft, title: 'Change app', body: g.body, author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : 'clean' };
+      return { number: 1, state: 'open', draft: g.draft, title: 'Change app', body: g.body, author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : g.behind || g.behindWhen?.() ? 'behind' : 'clean' };
     },
     async listOpenPulls() { return [await this.getPull()]; },
     async updatePullBody(n, body) { posts.push({ type: 'body', body }); g.body = body; },
@@ -114,6 +145,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     // settingsError); `gh pr merge` records the call, and fails the way gh
     // does (non-zero exit, message on stderr) when the test sets mergeError.
     runGh: (args) => {
+      if (args[0] === 'api' && args.includes('PUT')) return updateBranch(args);
       if (args[0] === 'api') {
         apiCalls.push(args);
         if (g.settingsError) { const e = new Error(`Command failed: gh ${args.join(' ')}`); e.status = 1; e.stderr = g.settingsError; throw e; }
@@ -129,7 +161,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   const log = () => (existsSync(join(stateDir, 'calls.jsonl')) ? readFileSync(join(stateDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   const comments = () => posts.filter((p) => p.type === 'comment').map((p) => p.body);
   const labeled = () => posts.some((p) => p.type === 'label' && p.labels.includes('needs-founder'));
-  return { tmp, work, origin, firstHead, originHead, posts, merges, apiCalls, g, tick, calls, log, comments, labeled, scenario, stateDir, state: () => loadState(stateDir, CONFIG.repo, 1), cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
+  return { tmp, work, origin, firstHead, originHead, posts, merges, apiCalls, updates, advanceMain, g, tick, calls, log, comments, labeled, scenario, stateDir, state: () => loadState(stateDir, CONFIG.repo, 1), cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
 }
 
 const fail = (text, line = 1, file = 'os/app.js') => ({ verdict: 'fail', findings: [{ file, line, severity: 'critical', text }] });
@@ -224,6 +256,137 @@ test('a dry run (no review App): a "ready" comment and gh is never called', asyn
     assert.match(c, /Both keys passed on `[0-9a-f]{7}`, waiting for the founder's merge settings/);
     assert.match(c, /review App is not configured/);
   } finally { t.cleanup(); }
+});
+
+// ---------------------------------------------------------------- behind main
+
+const UPDATE = (head) => ['api', '-X', 'PUT', `repos/${CONFIG.repo}/pulls/1/update-branch`, '-f', `expected_head_sha=${head}`];
+const isMergeOf = (t, sha, head) => {
+  const parents = sh(t.origin, 'rev-list', '--parents', '-n', '1', sha).split(' ').slice(1);
+  return parents.length === 2 && parents[0] === head && parents[1] === sh(t.origin, 'rev-parse', 'refs/heads/main');
+};
+
+test('a PR behind main: the loop updates the branch (a merge commit, expected head) before reviewing, then reviews the new head', async () => {
+  const t = setup();
+  try {
+    t.advanceMain();
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.deepEqual(t.updates, [UPDATE(t.firstHead)], 'update-branch with the gh login, pinned to the head it saw');
+    assert.equal(t.calls().length, 0, 'no review of the stale head');
+    const newHead = t.originHead();
+    assert.ok(isMergeOf(t, newHead, t.firstHead), 'main merged into the branch');
+    assert.match(t.comments().pop(), /Automated loop: branch updated[\s\S]*behind `main`/);
+    assert.ok(!t.labeled());
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.merges[0].at(-1), newHead);
+    assert.ok(t.calls().filter((x) => x.kind === 'reviews').every((x) => x.stdin.includes(`Head SHA: ${newHead}`)));
+    assert.deepEqual(t.log().filter((l) => l.kind === 'loop').map((l) => l.event), ['updated', 'review', 'reviewed', 'auto-merge']);
+  } finally { t.cleanup(); }
+});
+
+test('GitHub has not made the merge commit yet: the next pass waits instead of asking again', async () => {
+  const t = setup();
+  try {
+    t.advanceMain();
+    t.g.updateAsync = true;
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.deepEqual(outcomes(await t.tick()), ['wait']);
+    assert.equal(t.updates.length, 1);
+    assert.equal(t.calls().length, 0);
+  } finally { t.cleanup(); }
+});
+
+test('founder class behind main: the branch is updated before the founder is asked, so the founder approves once', async () => {
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
+  try {
+    t.advanceMain();
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.ok(!t.comments().some((b) => /this PR waits for the founder's GitHub approval/.test(b)), 'no founder request on the stale head');
+    const newHead = t.originHead();
+    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    const asks = t.comments().filter((b) => /waits for the founder's GitHub approval/.test(b));
+    assert.equal(asks.length, 1);
+    assert.match(asks[0], new RegExp(`head \`${newHead.slice(0, 7)}\``));
+  } finally { t.cleanup(); }
+});
+
+test('founder class: main moves during the review, so the loop updates the branch instead of posting the founder wait', async () => {
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
+  try {
+    let moved = false;
+    t.g.behindWhen = () => { if (!moved && t.calls().length >= 2) { moved = true; t.advanceMain(); } return false; };
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.equal(t.calls().length, 2, 'both keys ran on the old head');
+    assert.ok(!t.comments().some((b) => /this PR waits for the founder's GitHub approval/.test(b)), 'the founder is not asked about a head that cannot merge');
+    t.g.behindWhen = null;
+    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    assert.equal(t.comments().filter((b) => /waits for the founder's GitHub approval/.test(b)).length, 1);
+  } finally { t.cleanup(); }
+});
+
+test('founder class waiting for the founder, then main moves: the loop updates the branch and asks again on the new head', async () => {
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    assert.deepEqual(outcomes(await t.tick()), ['skip']);
+    t.advanceMain();
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    assert.match(t.comments().pop(), new RegExp(`head \`${t.originHead().slice(0, 7)}\``));
+  } finally { t.cleanup(); }
+});
+
+test('the update fails (a conflict with main, or GitHub refuses): stop with needs-founder', async () => {
+  const t = setup();
+  try {
+    t.advanceMain();
+    t.g.updateError = 'gh: merge conflict between base and head (HTTP 422)';
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.ok(t.labeled());
+    assert.match(t.comments().pop(), /could not update the branch with main/);
+    assert.equal(t.originHead(), t.firstHead);
+    assert.equal(t.calls().length, 0);
+  } finally { t.cleanup(); }
+});
+
+test('a person pushes just before the update: GitHub refuses the stale expected head, the round is dropped without a label', async () => {
+  const t = setup();
+  try {
+    t.advanceMain();
+    t.g.beforeUpdate = () => {
+      const w = mkdtempSync(join(t.tmp, 'human-'));
+      sh(t.tmp, 'clone', '-q', '-b', 'feature', t.origin, w);
+      sh(w, 'config', 'user.email', 'h@example.com'); sh(w, 'config', 'user.name', 'Human');
+      write(w, 'os/human.js', 'by hand\n'); sh(w, 'add', '-A'); sh(w, 'commit', '-qm', 'human'); sh(w, 'push', '-q', 'origin', 'feature');
+      t.g.beforeUpdate = null;
+    };
+    const human = await (async () => { const r = outcomes(await t.tick()); assert.deepEqual(r, ['head-moved']); return t.originHead(); })();
+    assert.notEqual(human, t.firstHead);
+    assert.ok(!t.labeled());
+    assert.ok(!t.comments().some((b) => /stopped/.test(b)));
+  } finally { t.cleanup(); }
+});
+
+test('--no-post: a branch behind main is not updated', async () => {
+  const t = setup();
+  try {
+    t.advanceMain();
+    await t.tick({ post: 'none' });
+    assert.equal(t.updates.length, 0);
+    assert.equal(t.originHead(), t.firstHead);
+  } finally { t.cleanup(); }
+});
+
+// ---------------------------------------------------------------- the plist
+
+test('the launchd plist reads its settings from ~/.nirmaan/pr-loop/env, so re-copying it keeps them; it holds no setting itself', () => {
+  const plist = readFileSync(join(HERE, '..', '..', '..', 'docs', 'operations', 'pr-loop.plist'), 'utf8');
+  assert.match(plist, /\. "\$HOME\/\.nirmaan\/pr-loop\/env"/, 'the command sources the env file');
+  assert.ok(!plist.includes('<key>EnvironmentVariables</key>'), 'no EnvironmentVariables block to lose or to hold a value');
+  assert.ok(!/NIRMAAN_REVIEW_APP_\w+=/.test(plist), 'no App setting written into the plist');
+  const cmd = plist.match(/<string>(mkdir[^<]*)<\/string>/)[1];
+  assert.ok(cmd.indexOf('pr-loop/env') < cmd.indexOf('pr-loop.mjs'), 'sourced before the loop starts');
+  assert.match(cmd, /loop\.log/, 'a missing env file is logged, not silent');
 });
 
 // ---------------------------------------------------------------- fix loop
