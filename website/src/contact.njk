@@ -20,8 +20,10 @@ head:
 
     {#- Without JavaScript the browser validates (required, minlength,
         type="email") and posts the form straight to Web3Forms, which shows
-        its own sent or not-sent page. contact-form.js turns the browser's
-        validation off and sends with fetch instead. -#}
+        its own sent or not-sent page. With JavaScript, contact-form.js
+        cancels that post and sends with fetch instead; the browser still
+        checks required fields first, so an empty field shows the browser's
+        message before the script's own. -#}
     <form class="form intake" id="enquiry" data-enquiry
           {%- if site.web3formsKey %}
           action="https://api.web3forms.com/submit" method="post"
