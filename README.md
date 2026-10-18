@@ -20,9 +20,11 @@ update it in the same PR as a change to any line here.
   Web3Forms, not sent to the OS.
 - **Nirmaan OS** (os.nirmaan.online): screens on, worker off since 2026-10-17. Nothing
   reads the inbox, sends email, runs Claude or calls Google Places (see Deployment below).
-- **Nirmaan Outreach** is on a waitlist and takes no clients. Whether to un-pause or
-  withdraw it is decided at the 31 March 2027 review
-  ([decisions](docs/product/nirmaan-outreach-decisions.md)).
+- **Nirmaan Outreach** is on a waitlist and takes no clients. Prices are reviewed after
+  three clients, or by 31 March 2027
+  ([decisions](docs/product/nirmaan-outreach-decisions.md)). Criteria to un-pause or
+  withdraw it for that review are planned, not written (tracker N23,
+  [inspection decisions](docs/operations/2026-10-17-inspection-decisions.md)).
 - **Pull requests** go through the two-key review, live since 2026-10-18
   ([PR review](docs/operations/pr-review.md)). Founder classes A to F also need the
   founder's approval.
