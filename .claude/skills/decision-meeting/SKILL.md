@@ -54,7 +54,8 @@ as it did, records dissent, and sets gates with an owner role each. It writes:
 ## 6. Reserved for the founder
 Contracts, spending money, legal counsel, and public names. Merging follows
 `docs/operations/pr-review.md`: two keys (each owning team's lead, then the
-orchestrator), plus the founder's GitHub approval for founder classes A to F.
-That mechanism is IMPLEMENTED; the ruleset on `main` requires both keys' checks.
+orchestrator), plus the Founder Proxy (agent) for founder classes A to F, which
+sends what only the founder decides to the founder (`needs-founder`). That
+mechanism is IMPLEMENTED; the ruleset on `main` requires both keys' checks.
 Report the decisions and ask; if the founder overrules, record it
 in the public record and mark the dissent resolved.

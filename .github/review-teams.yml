@@ -14,14 +14,15 @@
 #   3. A file nothing matches belongs to the `catch_all` team (Engineering).
 #   4. `content_rules` scan the diff's added and removed lines and add teams
 #      (and founder classes) that a path cannot show.
-#   5. Founder classes A to F need the founder's GitHub approval on the head
-#      commit as a third key. Their path globs are mirrored exactly in
-#      .github/CODEOWNERS (a test checks the two agree).
+#   5. Founder classes A to F get a third reviewer after key 2 passes: the
+#      Founder Proxy (agent, agents/founder-proxy/agent.md), under the
+#      founder's delegation of 2026-10-18. What the founder keeps it sends to
+#      the founder as needs-founder. There is no CODEOWNERS file (a test
+#      checks it stays absent).
 #
 # Glob syntax: `*` matches within one path segment, `**` matches any number of
-# segments (including none), `?` one character, `{a,b}` either name. Founder
-# class globs use no braces, so they can be copied into CODEOWNERS as written.
-# Globs are always quoted (a bare `*` starts a YAML alias).
+# segments (including none), `?` one character, `{a,b}` either name. Globs are
+# always quoted (a bare `*` starts a YAML alias).
 #
 # The coverage test (.github/scripts/review-teams.mjs, run by repo-checks)
 # fails when: a tracked file maps to no rule and is not on the catch-all
@@ -318,11 +319,12 @@ generated:
   - output: "website/public/**"
     mirror: "website/src/static/"
 
-# Founder classes: the founder's GitHub approval on the head commit is a third
-# key. `paths` are enforced by CODEOWNERS (each glob appears there, naming
-# @nirmaansoftware, and nothing else does); `content_rules` with a
-# `founder_class` are enforced by the review script. Generated outputs of a
-# founder-class source are listed too, so CODEOWNERS covers them.
+# Founder classes: a PR in any of them gets the Founder Proxy (agent) as a
+# third reviewer, after key 1 and key 2 pass on its head commit
+# (docs/operations/pr-review.md). The review script detects both `paths` and
+# `content_rules` with a `founder_class`, from main's copy of this file.
+# Generated outputs of a founder-class source are listed too, so they are
+# detected like their source.
 founder_classes:
   - id: A
     name: Control plane

@@ -12,6 +12,8 @@
   Detail pages are paginated from data: /pricing/<package>.html (plan.njk),
   /pricing/care/<plan>.html (care.njk) and /services/<id>.html (service.njk).
 */
+const { createLastModified } = require('./scripts/last-modified');
+
 const GLYPH = /^[01]{5}(\/[01]{5}){4}$/;
 
 // The logo's own 5x5 grid: full-height stems plus a 3-step diagonal.
@@ -110,6 +112,11 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addFilter('serviceCount', (services) =>
     services.groups.reduce((n, group) => n + group.items.length, 0)
   );
+
+  // {{ p.inputPath | lastModified(p.data.pagination) }} → "2026-10-17": the UTC
+  // day of the page's last commit, for the sitemap's <lastmod>. See
+  // scripts/last-modified.js.
+  eleventyConfig.addFilter('lastModified', createLastModified());
 
   // Hand-written site files (CSS, JS, images, robots.txt, vercel.json) ship as-is.
   eleventyConfig.addPassthroughCopy({ 'src/static': '.' });
