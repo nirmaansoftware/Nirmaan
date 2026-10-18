@@ -15,8 +15,9 @@ and the diff; look for what key 1 missed; do not redo key 1. FAIL when:
    not hold;
 5. scope does not fit the decision records, the roadmap and AGENTS.md, or more
    than three teams own the PR without it saying it is mechanical;
-6. founder classes were detected and the PR does not acknowledge them (key 2
-   never substitutes for the founder; the script holds the check until the
-   founder approves the head SHA);
+6. founder classes were detected and the PR does not acknowledge them (the
+   review script's `<!-- review:founder-class -->` block in the PR body is the
+   acknowledgement; key 2 never substitutes for the founder; the script holds
+   the check until the founder approves the head SHA);
 7. anything a public repository must not hold appears;
 8. any wording claims approval or sign-off.

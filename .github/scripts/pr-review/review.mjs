@@ -43,8 +43,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../review-teams.mjs';
 import {
-  acquireLock, classify, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, nonce, parseNameStatusZ, parseVerdictText,
-  prTextBlock, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict, VERDICT_SCHEMA,
+  acquireLock, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, nonce, parseNameStatusZ, parseVerdictText,
+  prTextBlock, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict, VERDICT_SCHEMA, withFounderClassBlock,
 } from './lib.mjs';
 import { claudeArgs, reviewerEnv, runWithRetry } from './claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from './github.mjs';
@@ -185,6 +185,19 @@ export async function runReview(o) {
     const classification = classify(map, files, diff, tracked);
     ctx.classification = classification;
     out(`pr-review: #${o.pr} head ${headSha.slice(0, 7)}; owning teams: ${classification.teams.join(', ')}; founder classes: ${Object.keys(classification.founder).join(', ') || 'none'}`);
+
+    // The founder-class declaration in the PR body, kept by this script so a
+    // PR flags its classes even when they come from content (a fixer cannot
+    // edit PR text). Not edited with --no-post; the reviewers get it either way.
+    ctx.founderBlock = founderClassBlock(map, Object.keys(classification.founder));
+    const declaredBody = withFounderClassBlock(pull.body, ctx.founderBlock);
+    if (declaredBody !== (pull.body ?? '')) {
+      if (o.post !== 'none') {
+        await o.github.updatePullBody(o.pr, declaredBody);
+        out(`pr-review: ${ctx.founderBlock ? 'wrote the founder-class block into' : 'removed the founder-class block from'} the PR body.`);
+      }
+      pull.body = declaredBody;
+    }
 
     // 5. CI first: the newest run of each required job on the head.
     const ciNow = requiredCi(cfg.required_ci, await checkRunsOnHead());
