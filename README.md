@@ -11,6 +11,25 @@ documentation. Each deployable has its own folder, and each folder explains itse
 
 ip.nirmaan.online is a separate repository, IP Nirmaan, and is not part of this one.
 
+## Current status
+
+Last updated 2026-10-18. This is the page to read for what is built and running today;
+update it in the same PR as a change to any line here.
+
+- **nirmaan.online** is live. Enquiries from the contact form are emailed through
+  Web3Forms, not sent to the OS.
+- **Nirmaan OS** (os.nirmaan.online): screens on, worker off since 2026-10-17. Nothing
+  reads the inbox, sends email, runs Claude or calls Google Places (see Deployment below).
+- **Nirmaan Outreach** is on a waitlist and takes no clients. Whether to un-pause or
+  withdraw it is decided at the 31 March 2027 review
+  ([decisions](docs/product/nirmaan-outreach-decisions.md)).
+- **Pull requests** go through the two-key review, live since 2026-10-18
+  ([PR review](docs/operations/pr-review.md)). Founder classes A to F also need the
+  founder's approval.
+- What changed and when: [CHANGELOG.md](CHANGELOG.md).
+  [`docs/assessment/current-state.md`](docs/assessment/current-state.md) is a snapshot
+  of 2026-09-23, kept as a record.
+
 Shared, not deployed:
 
 - [`docs/`](docs/README.md): company, product, engineering, AI, finance, operations

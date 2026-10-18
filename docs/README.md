@@ -26,7 +26,7 @@ Every document, and every capability inside one, is marked:
 
 | Area | Documents |
 |---|---|
-| Start here | [assessment/current-state.md](assessment/current-state.md) · [strategy/roadmap.md](strategy/roadmap.md) |
+| Start here | [current status](../README.md#current-status) · [strategy/roadmap.md](strategy/roadmap.md) · [assessment/current-state.md](assessment/current-state.md) (snapshot of 2026-09-23) |
 | Company | [vision](company/vision.md) · [mission](company/mission.md) · [positioning](company/positioning.md) · [business model](company/business-model.md) · [ideal customer](company/ideal-customer-profile.md) · [principles](company/principles.md) |
 | Operations | [lead to project](operations/lead-to-project.md) · [project lifecycle](operations/project-lifecycle.md) · [change requests](operations/change-requests.md) · [client handover](operations/client-handover.md) · [maintenance](operations/maintenance.md) · [decision meetings](operations/decision-meetings.md) · [PR review](operations/pr-review.md) (implemented) · [PR review decisions](operations/pr-review-decisions.md) |
 | Finance | [pricing principles](finance/pricing-principles.md) · [project economics](finance/project-economics.md) · [margin model](finance/margin-model.md) · [recurring revenue](finance/recurring-revenue.md) · [cost governance](finance/cost-governance.md) |
