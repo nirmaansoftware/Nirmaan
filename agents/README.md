@@ -42,7 +42,7 @@ The agents form seven teams for pull request review (decided 2026-10-17, [docs/o
 - A lead's `agent.md` has a **Key 1 review** section with its team's checklist; the orchestrator's has a **Key 2 review** section.
 - A member whose checklist a lead must run has a **Checklist for my team lead** section. Members' checklists run inside the lead's single verdict and are cited by name; a member never posts a key of its own. `review-teams.yml` says which member checklists a changed file or content rule requires (`checklists:`).
 - `legal-counsel` never holds a key. It may comment on a PR; its comment is not a check.
-- The founder is not a team. PRs in founder classes A to F (listed in `review-teams.yml`) also need the founder's GitHub approval as a third key.
+- The founder is not a team. PRs in founder classes A to F (listed in `review-teams.yml`) also get the [Founder Proxy (agent)](founder-proxy/agent.md#founder-proxy-review) as a third reviewer after key 2, under the founder's delegation of 2026-10-18. It is not the founder: what only the founder decides it returns as `needs-founder`, and the founder decides that on GitHub.
 - `reviewed_by` in each spec's frontmatter is who reviews that agent's authored work. It is a review edge, not team membership, and it is not a PR key.
 
 ## Every key 1 (base checklist)
