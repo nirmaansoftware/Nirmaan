@@ -1,4 +1,10 @@
 {#- Budget estimator. Prices come from src/_data/pricing.json (packages + estimator). -#}
+{#- The range shown before estimator.js runs: the first package at the first
+    complexity with no add-ons, worked out the same way as estimator.js
+    (low = price × complexity, high = low × 1.3, its UPPER). -#}
+{%- set firstPlan = pricing.packages | first %}
+{%- set firstScale = pricing.estimator.scales | first %}
+{%- set estLow = firstPlan.from * firstScale.value -%}
 <section class="section" id="estimator" aria-labelledby="estimator-title">
   <div class="wrap">
     <div class="section__head section__head--split" data-reveal>
@@ -50,7 +56,7 @@
 
       <div class="estimator__result" aria-live="polite">
         <p class="mono">Estimated range</p>
-        <p class="estimator__price" data-est-price>₹15,000 – ₹19,500</p>
+        <p class="estimator__price" data-est-price>{{ estLow | round | inr }} – {{ (estLow * 1.3) | round | inr }}</p>
         <div>
           <p class="mono">Timeline · <span class="estimator__weeks" data-est-weeks>1–2 weeks</span></p>
           <div class="weeks" data-est-bar role="img" aria-label="Timeline: 1–2 weeks"><i></i><i class="is-range"></i></div>
@@ -58,7 +64,6 @@
         </div>
         <button class="btn btn--inverse" type="submit">Use this estimate {% glyph "00100/00010/11111/00010/00100", "btn__arrow" %}</button>
         <p class="estimator__fine">Takes this ballpark into your enquiry. Final pricing depends on the problem, scope and integrations.</p>
-        {%- set firstPlan = pricing.packages | first %}
         <a class="link-arrow link-arrow--inverse estimator__plan" href="/pricing/{{ firstPlan.id }}.html" data-est-plan>See what's in {{ firstPlan.name }} <span aria-hidden="true">→</span></a>
       </div>
     </form>
