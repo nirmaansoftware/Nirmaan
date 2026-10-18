@@ -49,6 +49,10 @@
 
   /* ---- Steps ---- */
   form.classList.add('is-stepped');
+  // The browser's own validation is for visitors without JavaScript (the
+  // markup may leave it on). This script checks step by step itself, with
+  // messages next to the field, so the browser's checks are turned off here.
+  form.noValidate = true;
 
   function show(index, focus) {
     current = Math.max(0, Math.min(steps.length - 1, index));
