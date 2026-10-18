@@ -306,9 +306,9 @@ export function redact(text) {
   let out = String(text ?? '');
   for (const { re } of SECRET_PATTERNS) out = out.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`), '[redacted]');
   return out
-    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+(?::[^\s/@]*)?@/gi, '$1[redacted]@')
-    .replace(/\b(authorization\s*[:=]\s*)(?:(bearer|token|basic)\s+)?\S+/gi, (m, h, scheme) => `${h}${scheme ? `${scheme} ` : ''}[redacted]`)
-    .replace(/\b(bearer|token)(\s+)(?!\[redacted\])[A-Za-z0-9_\-.=]{20,}/gi, '$1$2[redacted]');
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+(?::[^\s/@]*)?@/gi, (m, scheme) => `${scheme}[redacted]@`)
+    .replace(/\b(authorization\s*[:=]\s*)(?:(bearer|token|basic)\s+)?[^\s;,]+/gi, (m, h, kind) => `${h}${kind ? `${kind} ` : ''}[redacted]`)
+    .replace(/\b(bearer|token)(\s+)(?!\[redacted\])[A-Za-z0-9_\-.=]{20,}/gi, (m, word, gap) => `${word}${gap}[redacted]`);
 }
 
 // Numbered PR text (title, body, commit messages), so findings can cite it.

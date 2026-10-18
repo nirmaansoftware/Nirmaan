@@ -485,10 +485,11 @@ test('lone founder-class markers are stripped: an open or close marker without i
 });
 
 test('a lone open marker written by the author is stripped from the body and from what the reviewers read', async () => {
-  const t = setup({ change: (w) => write(w, 'os/app.js', 'line one\nthe price is up\n'), gh: { body: `Adds a price. ${FOUNDER_BLOCK_OPEN}Founder class: none.` } });
+  const blockA = founderClassBlock(parseYaml(MAP), ['A']);
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n'), gh: { body: `Adds a workflow. ${FOUNDER_BLOCK_OPEN}Founder class: none.` } });
   try {
     await t.run();
-    assert.equal(t.body(), `${BLOCK_C}\n\nAdds a price. Founder class: none.`);
+    assert.equal(t.body(), `${blockA}\n\nAdds a workflow. Founder class: none.`);
     for (const c of t.calls()) assert.equal(c.stdin.split(FOUNDER_BLOCK_OPEN).length - 1, 2, 'the block once in the trusted line and once at the top of the body, no lone marker');
     await t.run();
     assert.equal(t.posts.filter((p) => p.type === 'body').length, 1, 'stable on a rerun');
