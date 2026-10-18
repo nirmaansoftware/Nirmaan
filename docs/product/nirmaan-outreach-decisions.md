@@ -74,6 +74,11 @@ these decisions to the meeting. The founder still merges the page and signs each
 - Add a small strip when the first early-access client is live.
 
 ### 31 March 2027 review: un-pause or withdraw
+**PROPOSED, not decided.** The thresholds below (at least 3 qualified enquiries, the withdraw
+rule, the 30 September 2027 backstop) and the definition of "qualified" are INFERRED by the
+Product Manager and Business Analyst. No decision record backs them. They bind nothing until
+the founder accepts or changes them.
+
 Written 2026-10-18 (tracker N23, Product Manager and Business Analyst). The review on
 31 March 2027 is a decision meeting (`docs/operations/decision-meetings.md`). Its agenda has
 this item, beside the price review above. The founder decides on the meeting's advice.
@@ -81,7 +86,7 @@ this item, beside the price review above. The founder decides on the meeting's a
 **What the meeting is given** (gathered the week before, by the Product Manager and the
 Business Analyst):
 1. **Waitlist count:** the number of qualified waitlist enquiries in the private enquiry log
-   (N18), a count only, with no names or details here. An enquiry is qualified when it is
+   (N18), a count only, with no names or details here. (PROPOSED definition, INFERRED.) An enquiry is qualified when it is
    from a business in "Who it's for", says who it wants to reach, and arrived with the consent
    the privacy page describes. Spam, job seekers and duplicates are not counted.
 2. **Counsel:** for each of L1 to L5, one of: answered by counsel, asked but not answered,
@@ -92,7 +97,7 @@ Business Analyst):
    checklist for turning it back on (`docs/engineering/deployment.md`, "Worker off, and
    turning it back on") are done.
 
-**Un-pause** (start getting ready for the first clients) only when all of these hold:
+**Un-pause** (PROPOSED, INFERRED thresholds; start getting ready for the first clients) only when all of these hold:
 - at least **3** qualified waitlist enquiries (three, the number of clients the price review
   waits for, and the number we can set up by hand);
 - **L1** is answered by counsel, and so are **L3, L4 and L5**. **L2** may still be open, but
@@ -104,7 +109,7 @@ Un-pausing changes no other rule: the worker is turned back on only through the 
 `deployment.md`, no contract is signed before L1, and no client email is sent before every
 gate above has passed. The page leaves "Waitlist" only after that, through its own PR.
 
-**Withdraw** (take the product off the site) when both of these hold:
+**Withdraw** (PROPOSED, INFERRED; take the product off the site) when both of these hold:
 - **no** qualified waitlist enquiry, and
 - **L1 not asked** of counsel.
 
@@ -113,7 +118,7 @@ Products page, and anyone on the waitlist is told by email. The OS code stays in
 repository, and the worker stays off.
 
 **Otherwise** the page stays a waitlist with no changes. The meeting sets the next review
-date, no later than 30 September 2027, and records why it neither un-paused nor withdrew.
+date, no later than 30 September 2027 (PROPOSED backstop, INFERRED), and records why it neither un-paused nor withdrew.
 
 ## Page changes
 
