@@ -350,7 +350,8 @@ missing spec), or so is the Founder Proxy; the Founder Proxy returns
 hits a rate limit, gives no valid answer, cannot
 fix every finding or changes nothing; a local check fails; the auto-merge
 setting cannot be read or `gh pr merge --auto` fails; the branch is behind
-`main` and the update fails; or any error. Nothing is
+`main` and the update fails; or any error (after the retries below for
+passing faults). Nothing is
 pushed in any of these cases. The reason is redacted before it is logged or
 posted: secret formats the secret scan knows, credentials in a URL and the
 value after `Authorization:`, `Bearer` or `token` become `[redacted]`, since a
@@ -358,6 +359,33 @@ gh or git error can carry them. If someone pushes while the fixer
 works, the round is dropped without a label and the new head is reviewed from
 scratch. Removing the `needs-founder` label lets the loop resume with a fresh
 round count.
+
+**Who fixes what.** Before a fix round the loop tags each finding as
+fixable by the loop or by the author, from the finding's path, never from the
+model: the PR text and every path the fixer may not change (above) are the
+author's. When any finding of a failed key is the author's, no fixer runs:
+the loop adds the `author-fix` label and a comment with each finding and the
+reviewer's proposed change, and waits. It adds no `needs-founder` label. A new
+head is reviewed from scratch and the `author-fix` label comes off.
+
+**Passing faults retry.** A failed model process, a GitHub or git error, or a
+failed push is retried on later passes, up to `transient_retries` (3) times
+for the same head, with no label. If it still fails, the loop stops with
+`needs-founder` and the stop's class is `transient`.
+
+**Stacked PRs wait.** A PR whose base branch is another open PR's branch waits
+for that PR to merge (GitHub then retargets it to `main`); it is never
+reviewed against the other PR's branch.
+
+**Locks.** `lock_mode` in `.github/scripts/pr-loop/config.json` chooses how
+reviews share the plan. `step` (the setting today): one review lock, shared
+with ip-nirmaan, held for a whole review and fix round, as below. `calls`:
+each repository has its own lock, and every model call takes one of
+`model_cap` model slots shared by both loops (the shared review lock is slot
+one, so the ip-nirmaan loop always counts); the review holds its slot only for
+the review, the fixer only for its call, and the local checks and pushes hold
+nothing. With `model_cap` 1 that is still one model call at a time; raising
+it lets the two repositories review at once, never more than the cap.
 
 **One review at a time, every PR each pass.** The loop holds the review lock
 (shared with ip-nirmaan) for a whole review and fix round. Each pass takes one

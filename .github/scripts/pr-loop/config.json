@@ -2,6 +2,10 @@
   "authors": ["patel-om"],
   "max_fix_rounds": 3,
   "needs_founder_label": "needs-founder",
+  "author_fix_label": "author-fix",
+  "transient_retries": 3,
+  "lock_mode": "step",
+  "model_cap": 1,
   "co_author": "Claude Opus 5.5 <noreply@anthropic.com>",
   "rules_files": ["AGENTS.md", "CLAUDE.md"],
   "fixer_forbidden": [
