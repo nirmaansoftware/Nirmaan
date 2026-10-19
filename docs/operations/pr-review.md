@@ -466,9 +466,11 @@ required. So CI and both keys run on the
 branch head, not on the result of merging it with the latest `main`: a PR
 whose branch is behind can merge without being tested against the newer
 `main`, and Vercel publishes `main` directly. Requiring up-to-date branches
-again is a ruleset setting, the founder's to change; while it is on, the loop
+again is a ruleset setting and the founder's decision (F3 in
+[2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md),
+R5.8, which records the gap and the recommendation); while it is on, the loop
 updates a branch that is behind (step 1 of the loop). PRs merge with a merge
-commit.
+commit, one at a time.
 
 ## Rollback
 
