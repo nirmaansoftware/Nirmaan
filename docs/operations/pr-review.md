@@ -356,9 +356,19 @@ works, the round is dropped without a label and the new head is reviewed from
 scratch. Removing the `needs-founder` label lets the loop resume with a fresh
 round count.
 
-**One PR at a time.** The loop holds the review lock (shared with ip-nirmaan)
-for a whole review and fix round. A PR the loop is fixing goes first, and each
-pass ends after the first PR that ran a review or a fix.
+**One review at a time, every PR each pass.** The loop holds the review lock
+(shared with ip-nirmaan) for a whole review and fix round. Each pass takes one
+step on every open PR, a PR the loop is fixing first, then by number, so a PR
+waiting for CI, or one that just ran a review or a fix, never holds up the
+others; the steps run one after another, so reviews still run one at a time.
+Before each step the loop reads main's tip again (`git ls-remote`); if any
+merge has moved it since the pass began (the loop's own, the founder's, the
+ip-nirmaan loop's), or main cannot be read, the pass ends there. A step that
+arms auto-merge also ends the pass. The next pass refetches main and reruns
+the check that the loop's copy matches main before it steps any PR. The check
+runs between steps, not during one: a merge while a review runs is caught by
+the next step's check, and the merge path updates a branch that has fallen
+behind main instead of merging it.
 
 **Records.** Every review call, fixer call and loop step (updated, review,
 reviewed, fixed, ready, auto-merge, stopped) is a line in
@@ -405,7 +415,7 @@ copy. Three ways to run it:
   run stops before the loop starts and the log says so. To re-install after
   the plist changes on `main`: `launchctl bootout
   gui/$(id -u)/online.nirmaan.pr-loop`, then the `cp` and `launchctl
-  bootstrap` lines above. Every 5 minutes it resets the clone to
+  bootstrap` lines above. Every minute it resets the clone to
   `origin/main` and runs `--once`; output, including the `git` steps', goes
   to `~/.nirmaan/pr-review/loop.log`. To stop it:
   `launchctl bootout gui/$(id -u)/online.nirmaan.pr-loop`.

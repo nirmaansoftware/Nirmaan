@@ -376,6 +376,7 @@ test('the launchd plist reads its settings from ~/.nirmaan/pr-loop/env, so re-co
   const cmd = plist.match(/<string>(mkdir[^<]*)<\/string>/)[1];
   assert.ok(cmd.indexOf('pr-loop/env') < cmd.indexOf('pr-loop.mjs'), 'sourced before the loop starts');
   assert.match(cmd, /loop\.log/, 'a missing env file is logged, not silent');
+  assert.match(plist, /<key>StartInterval<\/key>\s*<integer>60<\/integer>/, 'a pass every minute');
 });
 
 // ---------------------------------------------------------------- fix loop
@@ -655,6 +656,59 @@ test('one PR at a time: while the shared lock is held the loop does nothing', as
     held.release();
     assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
   } finally { t.cleanup(); }
+});
+
+test('one pass handles every PR with an action ready: a review, fix, update, CI wait or busy lock on one PR never ends the pass', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    // PR 3 is in a fix round, so it goes first; the rest by number.
+    mkdirSync(join(stateDir, 'loop'), { recursive: true });
+    writeFileSync(join(stateDir, 'loop', `${CONFIG.repo.replace('/', '_')}-pr-3.json`), JSON.stringify({ pr: 3, rounds: 1, seen: {}, lastFixHead: 'abc', done: null, stopped: null }));
+    const outcome = { 1: 'ready', 2: 'wait', 3: 'fixed', 4: 'busy', 5: 'updated', 6: 'stopped' };
+    const seen = [];
+    const results = await runTick({
+      config: CONFIG, stateDir,
+      github: { listOpenPulls: async () => [6, 5, 4, 3, 2, 1].map((number) => ({ number })) },
+      stepPr: async (o, p) => { seen.push(p.number); return { outcome: outcome[p.number] }; },
+    });
+    assert.deepEqual(seen, [3, 1, 2, 4, 5, 6]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['3:fixed', '1:ready', '2:wait', '4:busy', '5:updated', '6:stopped']);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
+});
+
+test('a step that arms auto-merge ends the pass; later PRs wait for the next pass', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    const outcome = { 1: 'wait', 2: 'auto-merge', 3: 'ready', 4: 'updated' };
+    const seen = [];
+    const results = await runTick({
+      config: CONFIG, stateDir,
+      github: { listOpenPulls: async () => [4, 3, 2, 1].map((number) => ({ number })) },
+      stepPr: async (o, p) => { seen.push(p.number); return { outcome: outcome[p.number] }; },
+    });
+    assert.deepEqual(seen, [1, 2]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['1:wait', '2:auto-merge']);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
+});
+
+test('main moved by an outside merge mid-pass ends the pass before the next step; an unreadable main does too', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    let main = 'm1';
+    const seen = [];
+    const run = (mainSha) => runTick({
+      config: CONFIG, stateDir, mainStart: 'm1', mainSha,
+      github: { listOpenPulls: async () => [1, 2, 3, 4].map((number) => ({ number })) },
+      // The founder merges another PR while PR 2 is being reviewed.
+      stepPr: async (o, p) => { seen.push(p.number); if (p.number === 2) main = 'm2'; return { outcome: 'wait' }; },
+    });
+    const results = await run(async () => main);
+    assert.deepEqual(seen, [1, 2]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['1:wait', '2:wait']);
+    seen.length = 0;
+    assert.deepEqual(await run(async () => { throw new Error('ls-remote failed'); }), []);
+    assert.deepEqual(seen, []);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
 });
 
 test('--no-post: the fix is committed locally and never pushed', async () => {

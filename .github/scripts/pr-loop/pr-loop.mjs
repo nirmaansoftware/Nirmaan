@@ -471,20 +471,36 @@ function commitIdentity(o, head) {
 
 // ---------------------------------------------------------------- a tick
 
-// One pass over the open PRs. A PR the loop is fixing goes first; the pass
-// ends after the first PR that ran a review or a fix, so one PR at a time
-// moves through the expensive steps.
+// One pass over the open PRs: one step for every PR, so a PR waiting on CI,
+// or one that just ran a review or a fix, never holds up the others. A PR
+// the loop is fixing goes first, then by number. The steps run one after
+// another, and each review or fix round holds the shared lock, so reviews
+// still run one at a time (a lock held elsewhere makes that PR "busy" and
+// the pass goes on to the next).
 export async function runTick(o) {
   const cfg = o.config;
   const pulls = (await o.github.listOpenPulls()).filter((p) => !o.onlyPr || p.number === o.onlyPr);
   const inFlight = (p) => { const s = loadState(o.stateDir, cfg.repo, p.number); return s.lastFixHead && !s.done && !s.stopped ? 0 : 1; };
   pulls.sort((a, b) => inFlight(a) - inFlight(b) || a.number - b.number);
   const results = [];
+  // main's SHA when the pass began (the copy fetched and checked in main()).
+  // Before each step main is read again; if any merge moved it (this loop's,
+  // the founder's, the ip-nirmaan loop's), the pass ends, so no later step
+  // runs against a stale main or a script copy that no longer matches it.
+  // An unreadable main ends the pass too (fails safe).
+  const start = o.mainStart ?? null;
   for (const p of pulls) {
+    if (start && o.mainSha) {
+      let now = null;
+      try { now = await o.mainSha(); } catch { /* unreadable: end the pass */ }
+      if (now !== start) break;
+    }
     const r = await o.stepPr(o, p);
     results.push({ pr: p.number, ...r });
-    if (r.outcome === 'busy') break;
-    if (!['skip', 'wait', 'updated'].includes(r.outcome)) break;
+    // Auto-merge armed: main can move at any moment, so a later PR in this
+    // pass would be reviewed against a stale main. End the pass; the next one
+    // refetches main and reruns the differs-from-main check first.
+    if (r && r.outcome === 'auto-merge') break;
   }
   return results;
 }
@@ -516,6 +532,7 @@ async function main(argv) {
   const base = {
     repoRoot, config, loop, ...loopDefaults(), onlyPr, stepPr,
     callerBranch, inClaudeSession: !!process.env.CLAUDECODE,
+    mainSha: () => git(repoRoot, ['ls-remote', 'origin', `refs/heads/${config.base_branch}`]).split(/\s/)[0] || null,
     runGh: (args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
   };
   for (;;) {
@@ -534,7 +551,8 @@ async function main(argv) {
         return 4;
       }
     }
-    const results = await runTick({ ...base, github, post });
+    const mainStart = git(repoRoot, ['rev-parse', 'refs/pr-review/main']).trim();
+    const results = await runTick({ ...base, github, post, mainStart });
     console.log(`pr-loop: ${new Date().toISOString()} ${post}: ${results.map((r) => `#${r.pr} ${r.outcome}`).join(', ') || 'no open PRs'}`);
     if (once) return 0;
     await new Promise((r) => setTimeout(r, intervalMs));
