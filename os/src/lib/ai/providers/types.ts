@@ -6,8 +6,13 @@ export interface CompletionRequest {
 }
 
 export interface TokenUsage {
+  /** Uncached input tokens only. Total input is this plus the two cache fields. */
   inputTokens: number;
   outputTokens: number;
+  /** Input tokens served from the prompt cache. Undefined when the provider did not report the field (never a guessed 0). */
+  cacheReadInputTokens?: number;
+  /** Input tokens written to the prompt cache on this call. Undefined when the provider did not report the field. */
+  cacheCreationInputTokens?: number;
 }
 
 export interface CompletionResult {

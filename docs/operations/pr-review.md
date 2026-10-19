@@ -303,9 +303,11 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
 
 **Each step, per PR:**
 
-1. **Behind `main`.** The ruleset requires branches to be up to date, so
-   GitHub reports a PR whose branch lacks commits on `main` as behind
-   (`mergeable_state` `behind`). The loop then asks GitHub to merge `main`
+1. **Behind `main`.** GitHub reports a PR whose branch lacks commits on
+   `main` as behind (`mergeable_state` `behind`) only while the ruleset
+   requires branches to be up to date. The ruleset does not require it today
+   (see "Merging"), so this step does not run now; it runs again if the
+   setting is turned back on. On `behind`, the loop asks GitHub to merge `main`
    into the branch first, with the gh login: `PUT
    repos/<repo>/pulls/<n>/update-branch` with `expected_head_sha` set to the
    head it saw. This is the merge-commit update that `gh pr update-branch`
@@ -492,10 +494,19 @@ loop pushed is an agent's change like any other: both keys review it again.
 
 ## Merging
 
-Branches must be up to date with `main` before merge, because Vercel publishes
-`main` directly and an untested combination would go live. The loop updates a
-branch that is behind (step 1 of the loop). PRs merge with a merge commit,
-one at a time.
+The ruleset on `main` does not require branches to be up to date with `main`
+before merge: its `strict_required_status_checks_policy` is `false` (read it
+with `gh api repos/nirmaansoftware/Nirmaan/rules/branches/main`), although
+[pr-review-decisions.md](pr-review-decisions.md) still records it as
+required. So CI and both keys run on the
+branch head, not on the result of merging it with the latest `main`: a PR
+whose branch is behind can merge without being tested against the newer
+`main`, and Vercel publishes `main` directly. Requiring up-to-date branches
+again is a ruleset setting and the founder's decision (F3 in
+[2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md),
+R5.8, which records the gap and the recommendation); while it is on, the loop
+updates a branch that is behind (step 1 of the loop). PRs merge with a merge
+commit, one at a time.
 
 ## Rollback
 
@@ -543,7 +554,7 @@ IMPLEMENTED, live since 2026-10-18. The rollout order and owners are in
 - The ruleset "main: two keys" on `main` is active. It requires the CI jobs
   `os-test`, `website-build` and `repo-checks`, and the checks
   `review/team-lead` and `review/executive` from the review App only;
-  branches must be up to date; code owner review is required, and a push
+  branches need not be up to date; code owner review is required, and a push
   dismisses an earlier approval. Since `.github/CODEOWNERS` was removed
   (Founder Proxy, 2026-10-18), the code owner setting has no effect; the
   founder can turn it off.

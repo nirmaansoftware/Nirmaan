@@ -286,3 +286,67 @@ test('repository: review-teams.yml passes against git ls-files, and there is no 
   const shared = map.named_files.find((n) => n.ip_site_impact === true);
   assert.deepEqual(shared.paths, ['website/src/static/styles.css', 'website/src/static/site.js', 'website/src/static/hero.js']);
 });
+
+// Classification fixtures for the split OS rules (os-app, os-ai, os-lib, os)
+// and the website-frontend rule, against the real map and tracked files.
+function realMap() {
+  const files = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean);
+  return { map: parseYaml(readFileSync(join(ROOT, MAP_PATH), 'utf8')), files, tracked: new Set(files) };
+}
+const ruleIds = (map, file) => map.rules.filter((r) => r.globs.some((g) => globMatch(g, file)) && !(r.exclude ?? []).some((g) => globMatch(g, file))).map((r) => r.id);
+
+test('classification: an OS screen is os-app, adds Design key 1 and runs the ux-designer and frontend-engineer checklists', () => {
+  const { map, tracked } = realMap();
+  for (const file of ['os/src/app/os/approvals/page.tsx', 'os/src/app/_components/ui.tsx']) {
+    const o = owners(map, file, tracked);
+    assert.deepEqual(ruleIds(map, file), ['os-app'], file);
+    assert.deepEqual(o.teams.sort(), ['design', 'engineering'], file);
+    assert.deepEqual(o.checklists.sort(), ['frontend-engineer', 'ux-designer'], file);
+  }
+});
+
+test('classification: os-ai covers lib/ai, lib/agents and lib/evaluation only', () => {
+  const { map, tracked } = realMap();
+  for (const file of ['os/src/lib/ai/callModel.ts', 'os/src/lib/agents/runAgent.ts', 'os/src/lib/evaluation/checkers.ts']) {
+    assert.deepEqual(ruleIds(map, file), ['os-ai'], file);
+    assert.deepEqual(owners(map, file, tracked).teams, ['engineering'], file);
+  }
+});
+
+test('classification: os-lib is the rest of lib, never the AI areas', () => {
+  const { map, tracked } = realMap();
+  assert.deepEqual(ruleIds(map, 'os/src/lib/leads/intake.ts'), ['os-lib']);
+  assert.deepEqual(owners(map, 'os/src/lib/leads/intake.ts', tracked).teams, ['engineering']);
+  // Narrower rules still add to it.
+  assert.deepEqual(ruleIds(map, 'os/src/lib/finance/invoices.ts').sort(), ['os-finance', 'os-lib']);
+});
+
+test('classification: os keeps the rest of os/ (API routes, scripts, config), with no Design key', () => {
+  const { map, files, tracked } = realMap();
+  for (const file of ['os/src/app/api/intake/route.ts', 'os/scripts/create-user.ts', 'os/tsconfig.json']) {
+    assert.deepEqual(ruleIds(map, file), ['os'], file);
+    assert.deepEqual(owners(map, file, tracked).teams, ['engineering'], file);
+  }
+  // Every tracked OS file still has an explicit rule (no reliance on the catch-all).
+  for (const f of files.filter((x) => x.startsWith('os/'))) assert.ok(ruleIds(map, f).length > 0 || (map.named_files ?? []).some((n) => n.paths.includes(f)), f);
+});
+
+test('classification: a website page-only change runs the frontend-engineer checklist (website-frontend)', () => {
+  const { map, tracked } = realMap();
+  const page = owners(map, 'website/src/index.njk', tracked);
+  assert.ok(ruleIds(map, 'website/src/index.njk').includes('website-frontend'));
+  assert.ok(page.teams.includes('engineering'));
+  assert.ok(page.checklists.includes('frontend-engineer'));
+  // Its generated output follows the source.
+  assert.ok(owners(map, 'website/public/index.html', tracked).checklists.includes('frontend-engineer'));
+  // A page that already has three owners is excluded, so it stays at three.
+  const price = owners(map, 'website/src/pricing.njk', tracked);
+  assert.ok(!price.teams.includes('engineering'));
+  assert.equal(price.teams.length, 3);
+});
+
+test('repository: no tracked file is owned by more than three teams (a PR with more is split, and one file cannot be)', () => {
+  const { map, files, tracked } = realMap();
+  const over = files.map((f) => [f, owners(map, f, tracked).teams]).filter(([, t]) => t.length > 3).map(([f, t]) => `${f}: ${t.join(', ')}`);
+  assert.deepEqual(over, []);
+});

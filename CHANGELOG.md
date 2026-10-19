@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-19: The ruleset does not require up-to-date branches
+
+- The ruleset "main: two keys" has `strict_required_status_checks_policy`
+  `false`: branches need not be up to date with `main` before merge, unlike
+  the 2026-10-18 entry below says. `docs/operations/pr-review.md` now says so;
+  turning it back on is the founder's decision (F3 in
+  `docs/operations/2026-10-18-review-loop-decisions.md`).
+
 ## 2026-10-18: The Founder Proxy replaces the founder's approval on founder classes
 
 - Founder's decision: founder classes A to F get the Founder Proxy (agent,
