@@ -202,6 +202,8 @@ export async function dispatchTask(taskId: string, options: DispatchOptions = {}
       model: result.model,
       inputTokens: result.usage?.inputTokens,
       outputTokens: result.usage?.outputTokens,
+      cacheReadInputTokens: result.usage?.cacheReadInputTokens,
+      cacheCreationInputTokens: result.usage?.cacheCreationInputTokens,
       costUsd,
       costSource: result.costUsd !== undefined ? "REPORTED" : costUsd !== null ? "ESTIMATED" : "UNKNOWN",
       latencyMs,
