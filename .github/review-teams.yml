@@ -162,10 +162,8 @@ rules:
     teams: [business]
     checklists: [finance-estimation]
 
-  # OS. Split by area (capability P1 item 5) so that each hiring PR only
-  # re-points a rule to the new unit. Until then every area keeps the interim
-  # Engineering team; os-app adds Design. Target owners: os-app Web and
-  # Design, os-ai AI and ML, os-lib Web, os the catch-all owner (Platform).
+  # OS. Split by area, so that moving one area to another team later changes
+  # one rule. Every area keeps the Engineering team; os-app adds Design.
   - id: os-app
     # Screens: pages, layouts, _components, styles and fonts. API route
     # handlers are server code and stay with `os`.
