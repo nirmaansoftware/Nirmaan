@@ -22,5 +22,7 @@
   "max_diff_bytes": 200000,
   "check_names": { "key1": "review/team-lead", "key2": "review/executive" },
   "review_app_slug": "nirmaan-review",
-  "legal_teams": ["business"]
+  "legal_teams": ["business"],
+  "strict_citations": { "teams": ["business", "brand-content"], "checklists": ["market-research"] },
+  "key2_max_findings": 10
 }

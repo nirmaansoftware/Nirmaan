@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runReview, EXIT } from './review.mjs';
-import { acquireLock, classify, findingsBySeverity, founderClassBlock, verdictCacheName, withFounderClassBlock, FOUNDER_BLOCK_OPEN, FOUNDER_BLOCK_CLOSE, parseNameStatusZ, parseVerdictText, prTextBlock, PROXY_DELEGATION, renderComment, validateVerdict, PR_TEXT_FILE } from './lib.mjs';
+import { acquireLock, capFindings, classify, findingsBySeverity, founderClassBlock, verdictCacheName, withFounderClassBlock, FOUNDER_BLOCK_OPEN, FOUNDER_BLOCK_CLOSE, parseNameStatusZ, parseVerdictText, prTextBlock, PROXY_DELEGATION, renderComment, validateVerdict, PR_TEXT_FILE } from './lib.mjs';
 import { claudeArgs, interpret, reviewerEnv } from './claude.mjs';
 import { appJwt, appConfigFromEnv } from './github.mjs';
 import { parseYaml } from '../review-teams.mjs';
@@ -282,13 +282,142 @@ test('CLI output that is not JSON: deferred after one retry', async () => {
   } finally { t.cleanup(); }
 });
 
-test('a cited file:line that does not exist at the head: deferred', async () => {
+test('a minor finding whose citation does not exist is dropped with a posted note; the verdict is unchanged and no repair run is made', async () => {
   const t = setup({ responses: [{ type: 'verdict', verdict: 'pass', findings: [{ file: 'os/app.js', line: 99, severity: 'minor', text: 'x' }] }] });
   try {
-    await t.run();
+    const r = await t.run();
+    assert.equal(t.calls().length, 2, 'key 1 and key 2, no repair run');
+    assert.equal(r.key1[0].status, 'pass');
+    assert.deepEqual(r.key1[0].verdict.findings, []);
+    assert.match(t.posts[0].body, /Dropped finding 1 \(minor\): cited os\/app\.js:99 does not exist at the head/);
+    assert.equal(t.check('review/team-lead').state, 'success');
+  } finally { t.cleanup(); }
+});
+
+const BAD_BLOCKER = { file: 'os/app.js', line: 99, severity: 'critical', text: 'made-up line' };
+const GOOD_BLOCKER = { file: 'os/app.js', line: 2, severity: 'blocker', text: 'real line' };
+
+test('a sole blocker whose citation does not exist: exactly one repair run with the validator\'s error, then deferred (pending, never success)', async () => {
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [BAD_BLOCKER] }] });
+  try {
+    const r = await t.run();
+    assert.equal(t.calls().length, 2, 'key 1, then one repair run; key 2 not run');
+    assert.match(t.calls()[1].stdin, /Repair request from the review script[\s\S]*finding 1: cited os\/app\.js:99 does not exist at the head/);
+    assert.equal(r.key1[0].status, 'deferred');
+    assert.match(r.key1[0].reason, /after one repair run/);
     assert.equal(t.check('review/team-lead').state, 'pending');
-    assert.match(t.posts[0].body, /os\/app\.js:99 does not exist/);
+    assert.deepEqual(t.log().map((l) => l.phase ?? 'first'), ['first', 'repair']);
     noSuccess(t);
+  } finally { t.cleanup(); }
+});
+
+test('the repair run corrects the citation: the fail stands with the corrected finding', async () => {
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [BAD_BLOCKER] }, { type: 'verdict', verdict: 'fail', findings: [{ ...BAD_BLOCKER, line: 2 }] }] });
+  try {
+    const r = await t.run();
+    assert.equal(t.calls().length, 2);
+    assert.equal(r.key1[0].status, 'fail');
+    assert.equal(r.key1[0].verdict.findings[0].line, 2);
+    assert.equal(t.check('review/team-lead').state, 'failure');
+  } finally { t.cleanup(); }
+});
+
+test('must-fail: no path turns a bad citation into success (a repair that answers pass is deferred; a bad blocker never passes)', async () => {
+  for (const responses of [
+    [{ type: 'verdict', verdict: 'fail', findings: [BAD_BLOCKER] }, { type: 'verdict', verdict: 'pass' }],
+    [{ type: 'verdict', verdict: 'pass', findings: [BAD_BLOCKER] }, { type: 'verdict', verdict: 'pass' }],
+    [{ type: 'verdict', verdict: 'fail', findings: [BAD_BLOCKER] }, { type: 'verdict', verdict: 'fail', findings: [BAD_BLOCKER] }],
+    [{ type: 'verdict', verdict: 'fail', findings: [BAD_BLOCKER] }, { type: 'result', text: 'not json' }],
+  ]) {
+    const t = setup({ responses });
+    try {
+      const r = await t.run();
+      assert.equal(r.key1[0].status, 'deferred', JSON.stringify(responses[1]));
+      assert.equal(t.calls().length, 2);
+      noSuccess(t);
+    } finally { t.cleanup(); }
+  }
+});
+
+test('a bad blocker beside a validly cited blocker: posted as "citation unverified", no repair run, the fail stands', async () => {
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [GOOD_BLOCKER, BAD_BLOCKER] }] });
+  try {
+    const r = await t.run();
+    assert.equal(t.calls().length, 1, 'no repair run, key 2 not run');
+    assert.equal(r.key1[0].status, 'fail');
+    assert.equal(r.key1[0].verdict.findings[1].citation_unverified, true);
+    assert.match(t.posts[0].body, /critical \(citation unverified\)/);
+    assert.match(t.posts[0].body, /posted as "citation unverified"/);
+    assert.equal(t.check('review/team-lead').state, 'failure');
+  } finally { t.cleanup(); }
+});
+
+test('base-side and main-side citations are checked against their own trees', async () => {
+  const t = setup({
+    change: (w) => write(w, 'os/app.js', 'only line\n'),
+    responses: [{ type: 'verdict', verdict: 'pass', findings: [
+      { file: 'os/app.js', line: 3, side: 'base', severity: 'minor', text: 'removed line' },
+      { file: 'os/main-only.js', line: 1, side: 'main', severity: 'minor', text: 'on main' },
+      { file: 'os/app.js', line: 3, severity: 'minor', text: 'not at the head' },
+      { file: 'os/main-only.js', line: 1, severity: 'minor', text: 'not at the head either' },
+    ] }],
+  });
+  try {
+    // main moves after the PR branched: a file only main has.
+    write(t.work, 'os/main-only.js', 'main line\n');
+    sh(t.work, 'add', '-A'); sh(t.work, 'commit', '-qm', 'main moves'); sh(t.work, 'push', '-q', 'origin', 'main');
+    const r = await t.run();
+    assert.deepEqual(r.key1[0].verdict.findings.map((f) => f.text), ['removed line', 'on main']);
+    assert.match(t.posts[0].body, /`base:os\/app\.js:3`/);
+    assert.match(t.posts[0].body, /`main:os\/main-only\.js:1`/);
+    assert.equal(r.key1[0].notes.filter((n) => /^Dropped/.test(n)).length, 2);
+  } finally { t.cleanup(); }
+});
+
+test('the legal checklist is strict: a bad minor citation from Business key 1 repairs, then defers; the same from Engineering is dropped', async () => {
+  const t = setup({ change: (w) => write(w, 'os/app.js', 'line one\nthe price is up\n'), responses: [{ type: 'verdict', verdict: 'pass', findings: [{ file: 'os/app.js', line: 99, severity: 'minor', text: 'x' }] }] });
+  try {
+    const r = await t.run();
+    assert.deepEqual(r.key1.map((k) => [k.team, k.status]), [['engineering', 'pass'], ['business', 'deferred']]);
+    assert.equal(t.calls().length, 3, 'engineering 1, business 1 plus one repair run');
+    assert.equal(t.check('review/team-lead').state, 'pending');
+    noSuccess(t);
+  } finally { t.cleanup(); }
+});
+
+test('a claim cited as file:line that does not exist is caught (repair, then deferred); other claim citations are not resolved', async () => {
+  const claim = (citation) => ({ type: 'verdict', verdict: 'pass', extra: { claims: [{ claim: 'tests added', verdict: 'supported', citation }] } });
+  const a = setup({ responses: [claim('os/app.js:42')] });
+  try {
+    const r = await a.run();
+    assert.equal(r.key1[0].status, 'deferred');
+    assert.match(r.key1[0].reason, /claim 1: cited os\/app\.js:42 does not exist at the head/);
+    assert.equal(a.calls().length, 2);
+  } finally { a.cleanup(); }
+  const b = setup({ responses: [claim('CI job os-test')] });
+  try {
+    const r = await b.run();
+    assert.equal(r.key1[0].status, 'pass');
+  } finally { b.cleanup(); }
+  const c = setup({ responses: [claim('os/app.js:2')] });
+  try {
+    assert.equal((await c.run()).key1[0].status, 'pass');
+  } finally { c.cleanup(); }
+});
+
+test('key 2 output over the cap is cut to the worst findings, with the flag set and the fail kept', async () => {
+  const many = Array.from({ length: 11 }, (_, i) => ({ file: 'os/app.js', line: 1, severity: 'minor', text: `minor ${i}` }));
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'pass' }, { type: 'verdict', verdict: 'fail', findings: [...many, { file: 'os/app.js', line: 2, severity: 'critical', text: 'the real problem' }] }] });
+  try {
+    const r = await t.run();
+    assert.equal(r.key2.status, 'fail');
+    assert.equal(r.key2.verdict.findings.length, CONFIG.key2_max_findings);
+    assert.equal(r.key2.verdict.findings[0].text, 'the real problem', 'worst first');
+    assert.equal(r.key2.verdict.more_not_listed, true);
+    assert.match(t.posts.find((p) => p.type === 'comment' && /key 2/.test(p.body)).body, /2 more findings not listed/);
+    assert.equal(t.check('review/executive').state, 'failure');
+    const sys = t.calls()[1].argv[t.calls()[1].argv.indexOf('--system-prompt') + 1];
+    assert.match(sys, /List at most 10 findings, worst first/);
   } finally { t.cleanup(); }
 });
 
@@ -873,7 +1002,7 @@ test('the verdict cache is keyed on the role too: the same key and team under an
 });
 
 test('each key result carries when it started and ended, and the validator\'s error when the verdict failed validation', async () => {
-  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/app.js', line: 999, severity: 'minor', text: 'x' }] }] });
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/app.js', line: 999, severity: 'critical', text: 'x' }] }] });
   try {
     const r = await t.run();
     const k = r.key1[0];
@@ -936,13 +1065,56 @@ test('validateVerdict: schema errors', () => {
     [{ ...ok, findings: [{ file: 'a', line: 0, severity: 'minor', text: 'x' }] }, /positive integer/],
     [{ ...ok, findings: [{ file: 'a', line: 1, severity: 'huge', text: 'x' }] }, /severity/],
     [{ ...ok, findings: [{ file: '../etc/passwd', line: 1, severity: 'minor', text: 'x' }] }, /repository-relative/],
-    [{ ...ok, findings: [{ file: PR_TEXT_FILE, line: 6, severity: 'minor', text: 'x' }] }, /does not exist/],
+    [{ ...ok, findings: [{ file: 'a', line: 1, side: 'left', severity: 'minor', text: 'x' }] }, /side must be/],
+    [{ ...ok, more_not_listed: 'yes' }, /more_not_listed/],
     [{ ...ok, not_run: 'tests' }, /list/],
   ]) {
     const r = validateVerdict(bad, env);
     assert.equal(r.ok, false);
     assert.match(r.error, why);
   }
+});
+
+test('validateVerdict: citation tiers', () => {
+  const ok = { verdict: 'pass', sha: SHA, findings: [], checks_run: [], not_run: [] };
+  const seen = [];
+  const env = { headSha: SHA, lineExists: (f, l, side) => { seen.push([f, l, side]); return l < 10; }, prTextLines: 5 };
+  // major, minor, info and PR-text: dropped, verdict unchanged.
+  for (const verdict of ['pass', 'fail']) {
+    const r = validateVerdict({ ...ok, verdict, findings: [{ file: 'a', line: 50, severity: 'major', text: 'x' }, { file: 'a', line: 1, severity: 'minor', text: 'kept' }, { file: 'a', line: 60, severity: 'info', text: 'x' }, { file: PR_TEXT_FILE, line: 6, severity: 'minor', text: 'x' }] }, env);
+    assert.ok(r.ok);
+    assert.equal(r.verdict.verdict, verdict, 'the verdict is unchanged');
+    assert.deepEqual(r.verdict.findings.map((f) => f.text), ['kept']);
+    assert.equal(r.notes.filter((n) => /^Dropped/.test(n)).length, 3);
+  }
+  // A sole bad blocker: repair, with the exact error.
+  const s = validateVerdict({ ...ok, verdict: 'fail', findings: [{ file: 'a', line: 50, severity: 'blocker', text: 'x' }] }, env);
+  assert.deepEqual([s.ok, s.repair, s.error], [false, true, 'finding 1: cited a:50 does not exist at the head']);
+  // Beside a valid blocker: unverified, no repair.
+  const u = validateVerdict({ ...ok, verdict: 'fail', findings: [{ file: 'a', line: 2, severity: 'critical', text: 'x' }, { file: 'a', line: 50, severity: 'blocker', text: 'y' }] }, env);
+  assert.ok(u.ok);
+  assert.equal(u.verdict.findings[1].citation_unverified, true);
+  // Strict: never dropped.
+  const st = validateVerdict({ ...ok, findings: [{ file: 'a', line: 50, severity: 'info', text: 'x' }] }, { ...env, strict: true });
+  assert.equal(st.repair, true);
+  // The side reaches lineExists.
+  seen.length = 0;
+  validateVerdict({ ...ok, findings: [{ file: 'a', line: 1, side: 'base', severity: 'minor', text: 'x' }, { file: 'b', line: 1, side: 'main', severity: 'minor', text: 'x' }] }, env);
+  assert.deepEqual(seen, [['a', 1, 'base'], ['b', 1, 'main']]);
+  // Claims: file:line resolved (with an optional side); anything else is not.
+  assert.equal(validateVerdict({ ...ok, claims: [{ claim: 'c', verdict: 'supported', citation: 'main:docs/x.md:50' }] }, env).repair, true);
+  assert.ok(validateVerdict({ ...ok, claims: [{ claim: 'c', verdict: 'supported', citation: 'os-test job' }] }, env).ok);
+});
+
+test('capFindings: worst first, flag and note, verdict unchanged', () => {
+  const f = (severity, text) => ({ file: 'a', line: 1, severity, text });
+  const v = { verdict: 'fail', findings: [f('info', 'i'), f('minor', 'm'), f('blocker', 'b'), f('major', 'j')] };
+  const c = capFindings(v, 2);
+  assert.deepEqual(c.verdict.findings.map((x) => x.text), ['b', 'j']);
+  assert.equal(c.verdict.more_not_listed, true);
+  assert.equal(c.verdict.verdict, 'fail');
+  assert.match(c.note, /2 more findings not listed/);
+  assert.equal(capFindings(v, 10).verdict, v);
 });
 
 test('parseVerdictText: one JSON object only', () => {
