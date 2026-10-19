@@ -1,4 +1,4 @@
-# Design (lead: creative-director; members ux-designer, ui-designer, design-system-engineer)
+# Design
 
 FAIL when: the change contradicts docs/design/visual-direction.md (if that
 file does not exist on main, FAIL any visual change: fail closed); new raw

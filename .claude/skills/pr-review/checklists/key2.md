@@ -1,4 +1,4 @@
-# Key 2 (orchestrator)
+# Key 2
 
 You manage every team. Review with the domain knowledge of each owning team:
 their lead specs and checklists are loaded below. Read key 1's JSON results

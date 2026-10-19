@@ -40,15 +40,12 @@ Each team has one lead, who holds key 1 for that team. Members' checklists run
 inside the lead's review and are cited by name; there is one key-1 verdict per
 team.
 
-| Team | Lead (key 1) | Members |
-|---|---|---|
-| Executive | orchestrator (key 2 on every PR, never key 1) | none |
-| Product | product-manager | business-analyst, market-research |
-| Brand and Content | brand-strategist | content-strategist, technical-writer, seo-specialist |
-| Design | creative-director | ux-designer, ui-designer, design-system-engineer |
-| Engineering | principal-architect | frontend-engineer, backend-engineer, database-engineer, ai-ml-engineer |
-| Platform and Quality | security-engineer | sre, devops-engineer, qa-engineer, performance-engineer |
-| Business | legal-compliance | finance-estimation, tax-accounts, legal-counsel, sales-partnerships, client-communication |
+The teams, their leads and members are listed in the team table of
+[`agents/README.md`](../../agents/README.md#teams), which is generated from the
+org chart [`agents/org-chart.yml`](../../agents/org-chart.yml). This page does
+not copy it. The orchestrator holds key 2 on every PR and never key 1. A
+repo-checks step (`node .github/scripts/org-chart.mjs`) fails when the chart,
+that table and the teams in `review-teams.yml` disagree.
 
 legal-counsel never holds a key. Role specs are in [`agents/`](../../agents/README.md).
 

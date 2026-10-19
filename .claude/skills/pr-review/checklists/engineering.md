@@ -1,4 +1,4 @@
-# Engineering (lead: principal-architect; members frontend-engineer, backend-engineer, database-engineer, ai-ml-engineer)
+# Engineering
 
 FAIL when: a claim is not backed by code; behaviour changes without a test;
 lockfile drift or a new dependency without a reason; an action not pinned by
