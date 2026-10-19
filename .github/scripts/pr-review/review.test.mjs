@@ -946,6 +946,15 @@ test('classify: generated, renamed and added files; prTextBlock numbering', () =
   assert.doesNotMatch(p.text, /\| a$/m);
 });
 
+test('classify: notify comes from path rules and from named files (legal pages and the shared layer tell the IP chair)', () => {
+  const map = parseYaml(readFileSync(join(HERE, '..', '..', 'review-teams.yml'), 'utf8'));
+  const tracked = new Set(['website/src/static/styles.css', 'website/src/privacy.njk', 'website/src/index.njk']);
+  const one = (path) => classify(map, [{ status: 'M', path }], '', tracked).notify;
+  assert.deepEqual(one('website/src/static/styles.css'), ['ip-council-chair']);
+  assert.deepEqual(one('website/src/privacy.njk'), ['ip-council-chair']);
+  assert.deepEqual(one('website/src/index.njk'), []);
+});
+
 test('validateVerdict: the Founder Proxy may say needs-founder, with reasons; the keys may not', () => {
   const ok = { verdict: 'needs-founder', sha: SHA, findings: [], checks_run: [], not_run: [], founder_reasons: ['a paid runner'] };
   const env = { headSha: SHA, lineExists: () => true, prTextLines: 5 };
