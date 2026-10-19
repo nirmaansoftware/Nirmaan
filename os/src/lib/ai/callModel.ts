@@ -7,7 +7,8 @@ import { providerFor } from "@/lib/ai/providerFor";
 
 /**
  * The metered way to call a model. Every call through here writes one
- * AiUsage row (success or failure) with model, tokens, cost, latency and
+ * AiUsage row (success or failure) with model, tokens (cache reads and
+ * writes included when the provider reports them), cost, latency and
  * what it was for, so "what does AI cost us, per task and per project?"
  * is a query instead of a guess. See /docs/ai/ai-cost-governance.md.
  *
@@ -55,6 +56,8 @@ export async function callModel(input: CallModelInput): Promise<CallModelResult>
         model: completion.model,
         inputTokens: completion.usage?.inputTokens,
         outputTokens: completion.usage?.outputTokens,
+        cacheReadInputTokens: completion.usage?.cacheReadInputTokens,
+        cacheCreationInputTokens: completion.usage?.cacheCreationInputTokens,
         costUsd: cost.usd,
         costSource: cost.source,
         latencyMs: Date.now() - started,

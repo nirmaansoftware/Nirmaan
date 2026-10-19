@@ -17,6 +17,7 @@ function fakeResult(overrides: Partial<RunAgentResult["metadata"]> = {}, body = 
     rawResponse: `---\nstatus: "${overrides.status ?? "ready-for-handoff"}"\n---\n\n${body}`,
     model: "fake-model",
     provider: "fake",
+    durationMs: 0,
     metadata: {
       project: "test",
       agent: "test-agent",
