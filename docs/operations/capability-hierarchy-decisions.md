@@ -1,14 +1,22 @@
 # Capability build-out and hierarchy: decisions (P0, Nirmaan, 2026-10-18)
 
-Status: DECIDED by the decision meeting (round 2, chaired by the Orchestrator).
-Founder-class items wait for the founder (section 9). The founder may overrule
-any decision here, and this record will say so.
+Status: DECIDED by the decision meeting (round 2, chaired by the Orchestrator),
+except where marked PROPOSAL. Two items change the review system's own gates,
+which the founder keeps, so the meeting could only propose them: the deputy
+and rate-limit rules (D4.4) and the narrowing of the `money` and
+`market-claims` content rules (D5.2). Each takes effect only if the founder
+approves the founder class A PR that implements it. These and the other
+founder-class items wait for the founder (section 9). The founder may
+overrule any decision here, and this record will say so.
 
 Process: [docs/operations/decision-meetings.md](../../docs/operations/decision-meetings.md).
 27 seats gave independent positions (every agent role except the chair). The
 chair read every position and checked the disputed facts against the code at
-`main` bac3965. Internal minutes, with every position, are kept outside this
-repository.
+`main` bac3965 (the merge of #110 on 2026-10-18, an ancestor of today's
+`main`). Internal minutes, with every position, are kept outside this
+repository, as is "the plan": the internal capability build-out plan (v3)
+that this record amends. Every amendment is stated here in full, so the
+record reads on its own.
 
 How to read the chart: L0 is the founder (human); L1 is the agent apex; L2 a
 chief; L3 a VP; L4 a head of department; L5 a lead (only above 8 ICs); L6 an
@@ -40,8 +48,9 @@ qa-engineer and technical-writer; checked by the chair):
    maximum. There are at most 6 layers below the founder, and layers may be
    skipped, but a chain must rise strictly. Section 10 of the plan is amended
    from "4 or more ICs" to "3 or more reports". Why 3: Design and Brand and
-   Content already work at 3. For agents, the limit is reviewer context, not
-   coaching time (market-research flagged this assumption). A minimum of 4
+   Content already work at 3. ASSUMPTION (unsourced; market-research flagged
+   it): for agents, the limit is reviewer context, not coaching time. A
+   minimum of 4
    would force hires made only to satisfy a number.
 2. **Activation rule (principal-architect's, adopted).** Every position is
    `active` or `planned`. A manager position is active only when it has an
@@ -66,7 +75,7 @@ qa-engineer and technical-writer; checked by the chair):
    `review_by` date in the chart. The validator fails once that date has
    passed. Recorded exceptions at decision time:
    - Product interim, with 2 members, until wave 6.
-   - Legal and Compliance has no deputy, permanently (D4.4).
+   - Legal and Compliance has no deputy, permanently (D4.4, a proposal).
    - The interim units that fall below 3 members while a split is in
      progress.
 
@@ -151,7 +160,7 @@ L0 Founder (human)
    │  └─ L4 Head of Capability · hire (P1) · manager · 3
    │     ├─ L6 org-designer · hire (deputy; chart and hiring PRs)
    │     ├─ L6 capability-programme-manager · hire (queue, tracker, pacing)
-   │     └─ L6 knowledge-quality-reviewer · hire (skill validator, sign-off standards)
+   │     └─ L6 knowledge-quality-reviewer · hire (skill validator, check-record standards)
    └─ L4 Head of Legal and Compliance (agent; not a lawyer) · legal-compliance · manager · 3, no deputy
       ├─ L6 legal-counsel (never holds a key, never a deputy)
       ├─ L6 privacy-counsel · hire (P1; agent; not a lawyer; not a statutory officer)
@@ -235,12 +244,12 @@ moves paths from an interim unit to the new unit.
      `governance-docs` move to Capability.
 8. **Design stays central** (ui-designer). Mobile and Systems and Frontier get
    design by staffing, not by having their own designers. Design gains key 1
-   on OS screens (ux-designer). Nirmaan Design is the single owner of the
+   on OS screens (ux-designer). Nirmaan's Design department is the single owner of the
    shared design system (D7).
 9. **Chief of Operations** (brand-strategist; same job as IP Nirmaan's COO):
    Commercial, Delivery and Capability. It stays planned until all three are
    active, and they report to the Orchestrator until then.
-10. **Capability office** is hired in P1: the pilot needs its queue, sign-off
+10. **Capability office** is hired in P1: the pilot needs its queue, check-record
     standards and org-design work. Eval harness code stays with AI and ML;
     the plan's separate "eval engineering" seat is not created.
 
@@ -389,7 +398,14 @@ exactly one owning unit and exactly one client-voice unit, both active
      to a lower role;
    - only the founder overrides a Security fail;
    - a timeout moves a question up a rung and never turns a block into a pass.
-4. **Deputies (rule 2.3.6, amended):**
+4. **Deputies and rate limits (rule 2.3.6): PROPOSAL, not in effect.** These
+   rules change when a key may pause and who may take a key, which is a
+   review-gate change the founder keeps. The meeting proposes them; they take
+   effect only through the founder's own approval of the founder class A PR
+   that implements them (section 9, item 2). Until then, `main`'s rules in
+   `docs/operations/pr-review.md` apply unchanged: a deferred key, including
+   one deferred for a rate limit, stops the loop with `needs-founder`, and no
+   other role takes a key. The proposal:
    - **Rate or session limit:** the key pauses and stays pending. The loop
      retries after the reset, with no `needs-founder` label and no deputy,
      because a deputy on the same plan fails the same way (sre).
@@ -430,10 +446,15 @@ exactly one owning unit and exactly one client-voice unit, both active
      including the shared layer, until that path's head is active.
 2. **Content rules scoped for the knowledge folders (backend-engineer,
    legal-compliance).**
-   - Content rules gain `exclude`. `money` (C) and `market-claims` (E) exclude
-     `skills/**`, `examples/**` and `capability/**`, so a skill that says
-     "payments", "GST" or "versus" is not founder class. Instead, the skill
-     validator fails currency amounts and company-claim voice.
+   - PROPOSAL, not in effect: content rules gain `exclude`, and `money` (C)
+     and `market-claims` (E) exclude `skills/**`, `examples/**` and
+     `capability/**`, so a skill that says "payments", "GST" or "versus" is
+     not founder class. Instead, the skill validator fails currency amounts
+     and company-claim voice. This narrows founder classes, which the founder
+     keeps: it takes effect only through the founder's own approval of the
+     founder class A PR that implements it (section 9, item 3). Until then the
+     rules on `main` (`.github/review-teams.yml`) match those folders as they
+     do today.
    - `legal-and-data` (D) keeps its scope, the product surfaces that collect
      data. A new rule, `knowledge-legal`, covers the knowledge folders. It
      adds Legal as key 1, with no founder class, and matches personal data,
@@ -495,7 +516,7 @@ exactly one owning unit and exactly one client-voice unit, both active
      organisation's skills), `tools` (free and connected, or paid and known
      only), `eval_cases`, `held_by`, `owners` (writer role, checker role,
      unit), `volatility`, `as_of` and `review_by`. There is no level and no
-     sign-off in the front matter.
+     check record in the front matter.
    - Line 1 of the body is "Use when: ...".
    - Then the plan's 8 headings, exact and in order. An empty section says
      "None: <reason>". Section 7 is always present, and a knowledge-only file
@@ -524,27 +545,27 @@ exactly one owning unit and exactly one client-voice unit, both active
    - Standards are cited by number and summarised, never copied.
 6. **Licence.** The Nirmaan repository has no licence today: there is no
    LICENSE file, while IP Nirmaan is Apache-2.0. The outbound licence is a
-   founder item (F2). Content is linked, never copied, across repositories.
-   Each knowledge PR lists the licences of its datasets, model weights and
+   founder item (section 9, item 4). Content is linked, never copied,
+   across repositories. Each knowledge PR lists the licences of its datasets, model weights and
    dependencies. Compliance skills say "not legal advice".
 7. **Levels are renamed: Checked, Tested, Used** (they were Knowledge,
    Practised, Proven). "Proven" clashes with the site's "proven technology"
    (`technology.njk:4,5,12`), and the tier "practising" was confusable with
    the level "Practised". brand-strategist proposed "Written, Tested, Used";
    "Checked" replaces "Written" because the first level needs a checker's
-   sign-off.
+   check record.
 8. **Records (database-engineer, qa-engineer):**
    - `capability/records/*.jsonl` are append-only and committed: one line per
-     event (`signoff`, `eval_run`, `pr_use`).
+     event (`check`, `eval_run`, `pr_use`).
    - Each line records the record id, skill id, agent, commit, skill file
      SHA, model and provider, judge type (tool, rubric or heuristic), the
      command and exit code, n, result, evidence pointer and writer session.
    - Corrections are new lines with `supersedes`; nothing is edited.
    - `levels.json` is a pure function of the records. CI regenerates it and
      fails on a diff.
-   - Sign-offs are written by the checker session and eval lines by the tool
+   - Check records are written by the checker session and eval lines by the tool
      run, never by the writer.
-   - A sign-off binds to the file's SHA, so an edit or a model-route change
+   - A check record binds to the file's SHA, so an edit or a model-route change
      makes the level stale, and levels can drop.
    - Evidence from client work stays private.
 9. **Evals.**
@@ -581,16 +602,17 @@ exactly one owning unit and exactly one client-voice unit, both active
    whose reports would cross both repositories; this is declined for now
    (section 7). Both IP Nirmaan seats map to their own org roles, which the IP
    Nirmaan meeting decides.
-2. **One legal entity or two is a founder question** (F3). It goes to a
-   qualified lawyer and a chartered accountant. Until the founder answers:
+2. **One legal entity or two is a founder question** (section 9, item 5).
+   It goes to a qualified lawyer and a chartered accountant. Until the founder answers:
    - the chart records `legal_entity: undetermined`;
    - treatments between the two organisations stay low confidence;
    - drafts take party names only from that field, never from unit names.
 3. **Public wording.** No public page or README describes Nirmaan and IP
    Nirmaan as a group, as two companies, or as having a common owner, and
    none implies a lawyer on staff, until the founder confirms the facts. The
-   consistent public phrasing today is "IP Nirmaan, an open-source project
-   Nirmaan publishes" (`terms.njk:33`).
+   consistent public phrasing today is the terms page's: "Open-source
+   projects we publish, such as IP Nirmaan, are covered by the license in
+   their own repository" (`website/src/terms.njk:33`).
 4. **Public claims (brand-strategist):**
    - No agent level, skill count, roster or capability claim appears on any
      public page, with or without records. Records may back client outcomes,
@@ -669,8 +691,8 @@ exactly one owning unit and exactly one client-voice unit, both active
    - `RATE_LIMIT` in `.github/scripts/pr-review/claude.mjs:44` does not match
      "You've hit your session limit", so a session limit is logged as an
      error.
-   - It is fixed first, and rate limits then pause instead of stopping
-     (D4.4).
+   - It is fixed first. If the founder approves the D4.4 proposal, rate
+     limits then pause instead of stopping.
 4. **Cache tokens undercounted** (performance-engineer, narrowed by the
    chair). The review log already records cache-read and cache-write tokens
    (`claude.mjs:49-54`). The OS runtime providers record only input and
@@ -796,7 +818,8 @@ class A PRs.
 - 2.1 is corrected as in section 1.
 - 2.3.3 has five relations.
 - 2.3.5 sets the minimum at 3 and adds the activation rule.
-- 2.3.6 has the deputy rules of D4.4.
+- 2.3.6 has the deputy rules of D4.4, if the founder approves them
+  (proposal).
 - 2.4 is applied through the shadow run.
 - 2.6 is replaced by D2.
 - 3.1 and 3.4 are replaced by D6.
@@ -811,8 +834,8 @@ class A PRs.
 |---|---|---|---|
 | product-manager, frontend-engineer, backend-engineer | Web as the pilot | AI and ML pilot; Web second | The pilot must test runtime loading and the eval harness. CI concerns are answered by local live evals as records. frontend-engineer declared a bias |
 | finance-estimation | Keep one Business department under legal-compliance | Separate Legal (under L1) and Commercial | That shape keeps legal over the sales it checks |
-| security-engineer | Quality under a VP Platform, Security and Quality; deputies on rate limits | Quality and Security report to the Chief of Engineering directly; rate limits pause | Platform's VP would manage both checkers of Platform's work. A deputy on the same plan hits the same limit (sre) |
-| sre | One deputy try on bad output | No deputy on invalid output; the PR stops for the founder | PR text can induce invalid output (security). The shadow run measures it, and the pilot retrospective revisits the rule |
+| security-engineer | Quality under a VP Platform, Security and Quality; deputies on rate limits | Quality and Security report to the Chief of Engineering directly; proposed (D4.4): rate limits pause | Platform's VP would manage both checkers of Platform's work. A deputy on the same plan hits the same limit (sre) |
+| sre | One deputy try on bad output | Proposed (D4.4): no deputy on invalid output; the PR stops for the founder | PR text can induce invalid output (security). The shadow run measures it, and the pilot retrospective revisits the rule |
 | legal-compliance | `legal-and-data` (founder class D) widened to the knowledge folders; the entity question answered before the first knowledge PR | `knowledge-legal` adds Legal key 1 without a founder class. The licence is a gate (G4); the entity question gates shared arrangements and public wording only | Class D on every web skill would make the founder the bottleneck. Legal still reviews every match |
 | tax-accounts | A shared Finance unit across both repositories with 4 ICs; no Nirmaan finance manager | Shared tax positions, separate seats; finance inside Commercial | Two review systems; no role holds keys across repositories; the entity facts are unknown |
 | legal-counsel | A shared Legal unit containing IP Nirmaan seats | Nirmaan Legal reaches 3 with privacy-counsel and licensing-counsel | Same reason; the IP Nirmaan meeting decides IP Nirmaan's seats |
@@ -822,7 +845,7 @@ class A PRs.
 | market-research | Systems and Emerging under one head, and a sources-based case for fewer managers | Adopted as Head of Systems and Frontier; the minimum stays 3 | The activation rule prevents empty managers; human span data does not transfer directly to agents |
 | ai-ml-engineer | A 48 KB prompt cap | 64 KiB, with K = 3 and 16 KB files | 48 KB cannot hold a role spec plus three files at the agreed file cap; the pilot may lower it |
 | technical-writer | `[NEEDS SOURCE]` blocks the Checked level | It blocks merge | One rule, enforced by the validator, is sharper |
-| brand-strategist | Levels named Written, Tested, Used | Checked, Tested, Used | The first level needs a checker's sign-off |
+| brand-strategist | Levels named Written, Tested, Used | Checked, Tested, Used | The first level needs a checker's check record |
 | client-communication | Customer support under Clients | Adopted, under Commercial | |
 | design-system-engineer | Deputy candidacy for Design | ui-designer is the Design deputy | ui-designer's checklist already runs on every visual PR |
 
@@ -834,7 +857,7 @@ class A PRs.
 | G2 | `os/**` is split before any new head holds key 1 | principal-architect |
 | G3 | The content rules are scoped and `knowledge-legal` and `internal-org` are live before the first knowledge PR | legal-compliance (rules), backend-engineer (fixtures) |
 | G4 | The founder records Nirmaan's outbound licence decision, which may be "unlicensed", before the first knowledge PR merges | legal-compliance |
-| G5 | The classifier fix and rate-limit pause are merged, and the OS records cache tokens and duration, before the pilot | sre, performance-engineer |
+| G5 | The classifier fix is merged (and the rate-limit pause, if the founder approves D4.4), and the OS records cache tokens and duration, before the pilot | sre, performance-engineer |
 | G6 | Author-side usage is logged before any wave pace is set | finance-estimation |
 | G7 | The derived key 2 switch needs: the derived role active; at least 20 shadowed PRs, including planted-defect PRs, where the derived reviewer catches at least what the Orchestrator caught; the security controls of D4.3 merged; the founder's approval | qa-engineer, security-engineer |
 | G8 | No level is shown anywhere until the records generator and its CI diff are merged | database-engineer |
@@ -849,20 +872,30 @@ class A PRs.
 ## 9. Founder items
 
 1. Approve the founder-class P1 PRs and each hiring PR (class A).
-2. Nirmaan's outbound licence for the repository, or for `skills/` and
+2. Whether to adopt the D4.4 proposal: a rate-limited key pauses and retries
+   without `needs-founder`, and after a timeout or a process failure with no
+   output one deputy role may take the key. It takes effect only through the
+   founder's own approval of the class A PR that implements it; until then
+   `main`'s rules apply.
+3. Whether to adopt the D5.2 proposal: the `money` (C) and `market-claims`
+   (E) content rules exclude `skills/**`, `examples/**` and `capability/**`.
+   It takes effect only through the founder's own approval of the class A PR
+   that implements it; until then those folders stay founder class C and E
+   when they match.
+4. Nirmaan's outbound licence for the repository, or for `skills/` and
    `examples/`, recorded before the first knowledge PR merges (G4).
    Choosing "unlicensed" explicitly is a valid answer.
-3. Whether Nirmaan and IP Nirmaan are one legal entity or two, with a
+5. Whether Nirmaan and IP Nirmaan are one legal entity or two, with a
    qualified lawyer and a chartered accountant. Public wording follows the
    answer.
-4. Switching key 2 from the Orchestrator to the derived rule, after G7. The
+6. Switching key 2 from the Orchestrator to the derived rule, after G7. The
    switch adds a dated "Superseded by" note to
    `docs/operations/pr-review-decisions.md`.
-5. The weekly pace at the usage review (T28).
-6. Whether a statutory data protection officer is required (with counsel).
-7. Any sandbox or third-party accounts that Integrations examples would need
+7. The weekly pace at the usage review (T28).
+8. Whether a statutory data protection officer is required (with counsel).
+9. Any sandbox or third-party accounts that Integrations examples would need
    (no spending).
-8. Any overrule of the decisions above.
+10. Any overrule of the decisions above.
 
 ## 10. Not decided here
 
