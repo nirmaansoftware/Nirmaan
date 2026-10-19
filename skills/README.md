@@ -50,7 +50,7 @@ Exactly these fields, in a YAML block at the top of the file:
 | `as_of` | the date the sources were last checked (not in the future) |
 | `review_by` | at most 3 months after `as_of` when fast, 6 when medium, 12 when stable |
 
-There is no level and no sign-off in the front matter. Levels (Checked,
+There is no level and no check record in the front matter. Levels (Checked,
 Tested, Used) come only from records, never from the file.
 
 ## Body **(checked)**

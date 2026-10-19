@@ -5,7 +5,7 @@
 //
 //   front-matter    a missing or unknown field, or a malformed value (tier,
 //                   volatility, lists, tools, owners)
-//   no-level        a level or sign-off field in the front matter
+//   no-level        a level or check-record field in the front matter
 //   use-when        line 1 of the body is not "Use when: ..."
 //   headings        the eight headings are not exact and in order, or a
 //                   section is empty (an empty section says "None: <reason>")
@@ -74,7 +74,7 @@ export const HEADINGS = [
   'Sources',
 ];
 export const FIELDS = ['id', 'name', 'unit', 'tier', 'prerequisites', 'related', 'tools', 'eval_cases', 'held_by', 'owners', 'volatility', 'as_of', 'review_by'];
-const LEVEL_FIELDS = /^(levels?|proficiency|checked|tested|used|sign_?off|signed_?off|signoffs?|verified_?by|approved_?by)$/i;
+const LEVEL_FIELDS = /^(levels?|proficiency|checked|tested|used|check_?records?|sign_?off|signed_?off|signoffs?|verified_?by|approved_?by)$/i;
 export const VOLATILITY_MONTHS = { fast: 3, medium: 6, stable: 12 };
 const TOOL_ACCESS = /\((free, connected|paid, known only)\)$/;
 
@@ -158,7 +158,7 @@ export function checkSkill(file, text, ctx) {
 
   // Front matter.
   for (const k of Object.keys(fm)) {
-    if (LEVEL_FIELDS.test(k)) p('no-level', `front matter field "${k}": levels and sign-offs come only from records`);
+    if (LEVEL_FIELDS.test(k)) p('no-level', `front matter field "${k}": levels and check records come only from records`);
     else if (!FIELDS.includes(k)) p('front-matter', `unknown field "${k}"`);
   }
   if (front) for (const k of FIELDS) if (!(k in fm)) p('front-matter', `missing field "${k}"`);

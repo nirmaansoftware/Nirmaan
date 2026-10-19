@@ -87,7 +87,7 @@ test('front-matter: missing, unknown or malformed fields fail', () => {
   mustFail('front-matter', 'Use when: no front matter at all.\n');
 });
 
-test('no-level: a level or sign-off in the front matter fails', () => {
+test('no-level: a level or check record in the front matter fails', () => {
   mustFail('no-level', skill({ front: { level: 'Checked' } }));
   mustFail('no-level', skill({ front: { signed_off: 'qa-engineer' } }));
 });
