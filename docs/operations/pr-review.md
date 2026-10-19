@@ -189,7 +189,9 @@ What the script does, in order:
    "Key 1 review" section, the orchestrator's "Key 2 review" section and
    members' "Checklist for my team lead" sections, with
    `.claude/skills/pr-review/checklists/` as the fallback. With neither, the
-   key is deferred. Design key 1 is deferred until
+   key is deferred. Key 2 always also gets the generic key-2 checklist
+   (`checklists/key2.md`), even when the key-2 role's spec has its own
+   "Key 2 review" section: it is the floor for any key-2 holder. Design key 1 is deferred until
    `docs/design/visual-direction.md` exists on `main`. The script itself
    refuses to post unless it is `main`'s copy. It then keeps its
    founder-class block (`<!-- review:founder-class -->`) at the top of the PR
@@ -226,7 +228,8 @@ What the script does, in order:
    and what was not run. The script checks the schema, that the SHA is the
    head, and that every cited file and line exists at the head. A `pass` with
    a blocker or critical finding is recorded as `fail`.
-9. **Fail closed.** A failed call, a timeout or a rate limit gets one retry
+9. **Fail closed.** A failed call, a timeout or a rate limit (the plan's
+   "session limit" message counts as one) gets one retry
    after a backoff; after that, and on any invalid output or missing
    citation, the key is posted as "review deferred" and stays pending. It
    never passes by default.
@@ -242,11 +245,12 @@ What the script does, in order:
     not posted again when the App's latest one for that key, team and head
     already says the same (a rerun that reused its cached verdicts); the
     comment's marker carries a digest of the result for this.
-11. **Records.** Every model call (tokens, duration, outcome) is logged
-    outside the repository in `~/.nirmaan/pr-review/calls.jsonl`. Validated
-    verdicts are cached per head commit, `main` commit and a digest of the PR
-    title and body (the reviewers read both, so changed PR text is reviewed
-    again), so re-running after the founder decides a `needs-founder` PR
+11. **Records.** Every model call (key, team, role, tokens, duration,
+    outcome) is logged outside the repository in
+    `~/.nirmaan/pr-review/calls.jsonl`. Validated verdicts are cached per head
+    commit, `main` commit, a digest of the PR title and body (the reviewers
+    read both, so changed PR text is reviewed again), key, team and role (a
+    new holder of a key reviews again), so re-running after the founder decides a `needs-founder` PR
     does not call the model again. Each run's worktrees, and
     the per-run folder that holds them under `~/.nirmaan/pr-review/worktrees`,
     are removed when it ends.
@@ -320,13 +324,12 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
    require.
 6. **The loop, not the model, finishes the round.** It throws the fix away
    and stops if the fixer changed anything it may not change: `.github/**`
-   (the review map, workflows, the review and loop scripts), the Founder
-   Proxy's spec (`agents/founder-proxy/**`),
+   (the review map, workflows, the review and loop scripts), anything under
+   `agents/**` (every role spec with its review sections, the base checklist
+   in `agents/README.md`, the Founder Proxy's spec),
    `.claude/**` (the `pr-review` skill and settings), `AGENTS.md`,
    `CLAUDE.md`, `.gitignore`, this page, the decision record, the loop's
-   plist, any `package.json` or `package-lock.json`, or a review section of
-   an agent spec ("Key 1 review", "Key 2 review", "Checklist for my team
-   lead", the base checklist in `agents/README.md`). A fixer that says a
+   plist, or any `package.json` or `package-lock.json`. A fixer that says a
    finding needs such a change stops the loop the same way. Otherwise the
    loop regenerates `website/public` when `website/src` changed, commits with
    the `Co-Authored-By` line, runs the local checks for the changed paths
@@ -372,8 +375,18 @@ behind main instead of merging it.
 
 **Records.** Every review call, fixer call and loop step (updated, review,
 reviewed, fixed, ready, auto-merge, stopped) is a line in
-`~/.nirmaan/pr-review/calls.jsonl`. Per-PR loop state (rounds, findings seen,
-the last head it pushed) is in `~/.nirmaan/pr-review/loop/`.
+`~/.nirmaan/pr-review/calls.jsonl`; a stop line also names its class (such as
+`merge-conflict`, `validation`, `rate-limit`, `loop-may-not-fix`,
+`local-check`; the list is `STOP_CLASSES` in `pr-loop.mjs`). Each review step
+also writes one per-phase line (`kind` `phase`): when required CI went green
+on the head (the latest completion among the required jobs), how long the PR
+waited for the review lock, each key's start and end (key 1 per team), its
+verdict, findings by severity and validation error if any, the step's outcome,
+and for a stop its reason and class. When a PR the loop armed for merge leaves
+the open list, the next pass writes one `merged` (or `closed`) line with
+GitHub's merge time. Nothing is written under the repository. Per-PR loop
+state (rounds, findings seen, the last head it pushed, lock wait) is in
+`~/.nirmaan/pr-review/loop/`.
 
 **Running it.** It runs on the founder's Mac with the Mac's own `claude` login
 (the plan) and `gh` login, so it adds no spend and no secret in GitHub

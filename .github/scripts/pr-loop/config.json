@@ -11,7 +11,7 @@
     "CLAUDE.md",
     ".gitignore",
     ".gitattributes",
-    "agents/founder-proxy/**",
+    "agents/**",
     "docs/operations/pr-review.md",
     "docs/operations/pr-review-decisions.md",
     "docs/operations/pr-loop.plist",

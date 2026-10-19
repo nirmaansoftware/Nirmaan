@@ -10,7 +10,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ciState, loadState, runTick, stepPr } from './pr-loop.mjs';
+import { ciState, loadState, phaseRecord, runTick, STOP_CLASSES, stepPr } from './pr-loop.mjs';
 import { fingerprint, findingsToFix, fixerArgs, forbiddenChanges, validateFixerOutput } from './fixer.mjs';
 import { acquireLock } from '../pr-review/lib.mjs';
 
@@ -92,7 +92,9 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     // on mid-run; updateError makes the update fail the way gh does;
     // beforeUpdate() runs first (a person's push); updateAsync leaves the
     // branch as it was (GitHub has not made the merge commit yet).
-    behind: gh.behind ?? false, behindWhen: null, updateError: null, beforeUpdate: null, updateAsync: false };
+    behind: gh.behind ?? false, behindWhen: null, updateError: null, beforeUpdate: null, updateAsync: false,
+    // GitHub merged (or closed) the PR: it leaves the open list.
+    closed: false, merged: false };
   const originHead = () => sh(origin, 'rev-parse', 'refs/heads/feature');
   // A new commit on main in origin, so the PR branch is really behind.
   const advanceMain = (rel = 'os/other.js') => {
@@ -123,9 +125,9 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     async getPull() {
       const head = originHead();
       sh(origin, 'update-ref', 'refs/pull/1/head', head); // GitHub keeps this in step with the branch
-      return { number: 1, state: 'open', draft: g.draft, title: 'Change app', body: g.body, author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : g.behind || g.behindWhen?.() ? 'behind' : 'clean' };
+      return { number: 1, state: g.closed ? 'closed' : 'open', merged: g.merged, mergedAt: g.merged ? '2026-10-17T01:00:00Z' : null, mergeSha: g.merged ? 'c'.repeat(40) : null, draft: g.draft, title: 'Change app', body: g.body, author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : g.behind || g.behindWhen?.() ? 'behind' : 'clean' };
     },
-    async listOpenPulls() { return [await this.getPull()]; },
+    async listOpenPulls() { return g.closed ? [] : [await this.getPull()]; },
     async updatePullBody(n, body) { posts.push({ type: 'body', body }); g.body = body; },
     async addLabels(n, labels) { posts.push({ type: 'label', labels }); g.labels.push(...labels); },
     async listReviews() { return g.reviews; },
@@ -722,6 +724,103 @@ test('--no-post: the fix is committed locally and never pushed', async () => {
 
 // ---------------------------------------------------------------- units
 
+// ---------------------------------------------------------------- per-phase log
+
+const phases = (t) => t.log().filter((l) => l.kind === 'phase');
+
+test('per-phase log: a review step appends one line with CI green time, lock wait, each key\'s start and end, verdicts, findings by severity and the outcome; then one "merged" line; nothing under the repository', async () => {
+  const t = setup();
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    const p = phases(t);
+    assert.equal(p.length, 1, 'one line per review step');
+    const l = p[0];
+    assert.equal(l.pr, 1);
+    assert.equal(l.head, t.firstHead);
+    assert.equal(l.ci_green_at, '2026-10-17T00:00:00Z', 'the latest completed_at of the required CI runs');
+    assert.equal(l.lock_wait_ms, 0);
+    for (const k of ['step_started_at', 'step_ended_at']) assert.match(l[k], /^\d{4}-\d\d-\d\dT/);
+    assert.match(l.key1.started_at, /^\d{4}-/);
+    assert.ok(l.key1.ended_at >= l.key1.started_at);
+    assert.deepEqual(l.key1.teams.map((k) => [k.team, k.role, k.status]), [['engineering', 'principal-architect', 'pass']]);
+    assert.deepEqual(l.key1.teams[0].findings, { blocker: 0, critical: 0, major: 0, minor: 0, info: 0 });
+    assert.equal(l.key1.teams[0].validation_error, null);
+    assert.equal(l.key2.status, 'pass');
+    assert.equal(l.key2.role, CONFIG.key2_role);
+    assert.ok(l.key2.started_at >= l.key1.ended_at, 'key 2 runs after key 1');
+    assert.equal(l.proxy, null, 'no founder class, no proxy');
+    assert.equal(l.outcome, 'auto-merge');
+    assert.equal(l.stop_reason, null);
+    assert.equal(l.stop_class, null);
+    assert.equal(l.merged, false, 'the step arms auto-merge; the merge comes later');
+    // GitHub merges it: the next pass logs one "merged" line, once.
+    t.g.closed = true; t.g.merged = true;
+    await t.tick();
+    await t.tick();
+    const m = t.log().filter((x) => x.event === 'merged');
+    assert.equal(m.length, 1);
+    assert.equal(m[0].merged_at, '2026-10-17T01:00:00Z');
+    assert.equal(m[0].head, t.firstHead);
+    assert.equal(m[0].merge_sha, 'c'.repeat(40));
+    // The log is in the state directory, outside the repository.
+    assert.ok(existsSync(join(t.stateDir, 'calls.jsonl')));
+    assert.ok(!t.stateDir.startsWith(t.work));
+    assert.equal(sh(t.work, 'status', '--porcelain', '--untracked-files=all'), '', 'nothing written under the repository');
+  } finally { t.cleanup(); }
+});
+
+test('per-phase log: lock wait is measured from the first pass the lock was busy for this head', async () => {
+  const t = setup();
+  try {
+    const held = acquireLock(t.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    assert.deepEqual(outcomes(await t.tick()), ['busy']);
+    assert.equal(phases(t).length, 0, 'no review ran, no phase line');
+    await new Promise((r) => setTimeout(r, 30));
+    held.release();
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.ok(phases(t)[0].lock_wait_ms >= 30, `lock wait ${phases(t)[0].lock_wait_ms}`);
+    assert.equal(t.state().lockWait, undefined, 'cleared once taken');
+  } finally { t.cleanup(); }
+});
+
+test('per-phase log: a stop records its reason and class, in the stop line and the phase line; a validation deferral records the validator\'s error', async () => {
+  const cases = [
+    [{ reviews: [{ verdict: 'fail', findings: [{ file: 'os/app.js', line: 999, severity: 'critical', text: 'x' }] }] }, 'validation', /does not exist at the head/],
+    [{ reviews: [{ type: 'rate_limit' }] }, 'rate-limit', null],
+    [{ reviews: [fail('bad')], fixes: [{ edits: { '.github/review-teams.yml': 'teams: []\n' } }] }, 'fixer-forbidden-path', null],
+    [{ reviews: [fail('bad')], fixes: [{ status: 'needs_founder', notAddressed: [{ id: 'F1', reason: 'PR text' }] }] }, 'loop-may-not-fix', null],
+  ];
+  for (const [s, cls, verr] of cases) {
+    const t = setup(s);
+    try {
+      assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+      assert.ok(STOP_CLASSES.includes(cls));
+      const stopLine = t.log().filter((l) => l.event === 'stopped').pop();
+      assert.equal(stopLine.class, cls);
+      const p = phases(t).pop();
+      assert.equal(p.outcome, 'stopped');
+      assert.equal(p.stop_class, cls);
+      assert.equal(p.stop_reason, stopLine.reason);
+      assert.equal(t.state().stopped.class, cls);
+      if (verr) assert.match(p.key1.teams[0].validation_error, verr);
+      if (cls === 'rate-limit') assert.equal(p.key1.teams[0].call_outcome, 'rate_limit');
+      if (cls === 'fixer-forbidden-path') assert.deepEqual(p.key1.teams[0].findings, { blocker: 0, critical: 1, major: 0, minor: 0, info: 0 });
+      assert.ok(t.labeled(), 'stops still label needs-founder (unchanged here)');
+    } finally { t.cleanup(); }
+  }
+});
+
+test('phaseRecord: key 1 span over teams; null keys when not run', () => {
+  const k = (team, s, e) => ({ team, role: `${team}-lead`, status: 'pass', startedAt: s, endedAt: e, verdict: { findings: [{ severity: 'minor' }, { severity: 'minor' }, { severity: 'info' }] } });
+  const r = phaseRecord({ ciGreenAt: 'g', lockWaitMs: 5, startedAt: 'a', endedAt: 'b', review: { key1: [k('x', '2026-01-01T00:00:02Z', '2026-01-01T00:00:03Z'), k('y', '2026-01-01T00:00:01Z', '2026-01-01T00:00:09Z')], key2: null, proxy: null }, result: { outcome: 'fixed' } });
+  assert.equal(r.key1.started_at, '2026-01-01T00:00:01Z');
+  assert.equal(r.key1.ended_at, '2026-01-01T00:00:09Z');
+  assert.deepEqual(r.key1.teams[0].findings, { blocker: 0, critical: 0, major: 0, minor: 2, info: 1 });
+  assert.equal(r.key2, null);
+  assert.equal(r.stop_class, null);
+  assert.equal(r.outcome, 'fixed');
+});
+
 test('findingsToFix takes a failed Founder Proxy\'s findings too', () => {
   const f = findingsToFix({ key1: [{ key: 1, team: 'eng', status: 'pass', verdict: { findings: [] } }], key2: { key: 2, team: null, status: 'pass', verdict: { findings: [] } }, proxy: { key: 'proxy', team: null, role: 'founder-proxy', status: 'fail', verdict: { findings: [{ file: 'a', line: 3, severity: 'blocker', text: 'p' }] } } });
   assert.deepEqual(f.map((x) => [x.id, x.key, x.team, x.text]), [['F1', 'proxy', 'founder-proxy', 'p']]);
@@ -742,9 +841,12 @@ test('validateFixerOutput and forbiddenChanges', () => {
   assert.match(validateFixerOutput({ status: 'merged', addressed: [], not_addressed: [], summary: '' }, fs).error, /status/);
   const io = { readBefore: () => '# x\n\n## Key 1 review\nold\n\n## Other\na\n', readAfter: () => '# x\n\n## Key 1 review\nold\n\n## Other\nb\n' };
   const rules = { forbidden: REAL_LOOP.fixer_forbidden, sections: REAL_LOOP.review_sections };
-  assert.deepEqual(forbiddenChanges(['agents/sre/agent.md', 'os/a.ts'], rules, io), [], 'a non-review section of a spec may change');
+  assert.deepEqual(forbiddenChanges(['os/a.ts'], rules, io), []);
+  // agents/** is forbidden whole: the specs, the org chart to come and the
+  // review sections in them are founder class A.
+  assert.deepEqual(forbiddenChanges(['agents/sre/agent.md', 'os/a.ts'], rules, io).map((b) => b.path), ['agents/sre/agent.md'], 'even a non-review section of a spec');
   assert.equal(forbiddenChanges(['agents/sre/agent.md'], rules, { ...io, readAfter: () => '# x\n\n## Key 1 review\nnew\n' }).length, 1);
-  for (const p of ['.github/workflows/os.yml', '.github/review-teams.yml', 'agents/founder-proxy/agent.md', '.github/scripts/pr-loop/pr-loop.mjs', '.claude/skills/pr-review/SKILL.md', '.claude/settings.json', 'AGENTS.md', 'package.json', 'os/package-lock.json', 'docs/operations/pr-loop.plist']) {
+  for (const p of ['.github/workflows/os.yml', '.github/review-teams.yml', 'agents/founder-proxy/agent.md', 'agents/README.md', 'agents/org-chart.yml', 'agents/new-role/agent.md', '.github/scripts/pr-loop/pr-loop.mjs', '.claude/skills/pr-review/SKILL.md', '.claude/settings.json', 'AGENTS.md', 'package.json', 'os/package-lock.json', 'docs/operations/pr-loop.plist']) {
     assert.equal(forbiddenChanges([p], rules, io).length, 1, p);
   }
   const a = fixerArgs({ model: 'm', systemPrompt: 's', forbidden: ['.github/**'] });

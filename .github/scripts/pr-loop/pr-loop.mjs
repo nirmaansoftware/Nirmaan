@@ -45,7 +45,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globMatch } from '../review-teams.mjs';
-import { acquireLock, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText, redact, requiredCi } from '../pr-review/lib.mjs';
+import { acquireLock, findingsBySeverity, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText, redact, requiredCi } from '../pr-review/lib.mjs';
 import { reviewerEnv, runOnce } from '../pr-review/claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from '../pr-review/github.mjs';
 import { defaults, differsFromMain, EXIT, runReview } from '../pr-review/review.mjs';
@@ -56,6 +56,13 @@ const MARK = 'nirmaan-pr-loop';
 // After asking GitHub to update a branch, how long the loop waits for the new
 // head before asking again (GitHub makes the merge commit asynchronously).
 const UPDATE_WAIT_MS = 10 * 60 * 1000;
+// The kinds of stop, logged as `class` with every stop (and in the per-phase
+// line): the comment gives the reason, the class groups them for reports.
+export const STOP_CLASSES = [
+  'merge-conflict', 'ci-failed-after-fix', 'deferred', 'validation', 'rate-limit', 'call-failed', 'needs-founder',
+  'update-failed', 'merge-failed', 'no-findings', 'repeated-finding', 'rounds-used-up', 'fixer-forbidden-path',
+  'fixer-invalid-output', 'loop-may-not-fix', 'fixer-could-not-fix', 'local-check', 'push-failed', 'error',
+];
 
 export function loopDefaults(env = process.env) {
   return {
@@ -103,7 +110,42 @@ function saveState(stateDir, repo, st) {
 // of each job, and a run still in progress is pending.
 export function ciState(required, runs) {
   const ci = requiredCi(required, runs);
-  return { state: ci.state, jobs: ci.jobs.map((j) => ({ name: j.name, state: j.conclusion })), text: ci.text };
+  return { state: ci.state, jobs: ci.jobs.map((j) => ({ name: j.name, state: j.conclusion })), text: ci.text, greenAt: ci.greenAt ?? null };
+}
+
+// ---------------------------------------------------------------- per-phase log
+
+// One key's part of the per-phase log line: when it ran, its verdict, its
+// findings by severity and the validation error, if any.
+function keyPhase(k) {
+  if (!k) return null;
+  return {
+    team: k.team ?? null, role: k.role ?? null, status: k.status, reused: !!k.reused,
+    started_at: k.startedAt ?? null, ended_at: k.endedAt ?? null,
+    findings: findingsBySeverity(k.verdict), validation_error: k.validationError ?? null, call_outcome: k.callOutcome ?? null,
+  };
+}
+
+// The per-phase fields of one review step (docs/operations/pr-review.md,
+// "Records"): CI green time, lock wait, each key's start and end, verdicts,
+// findings by severity, validation errors, the step's outcome and, for a
+// stop, its reason and class. `merged` is false here: the step only arms
+// auto-merge; a separate "merged" line follows when the loop sees the merge.
+export function phaseRecord({ ciGreenAt, lockWaitMs, startedAt, endedAt, review, result }) {
+  const k1 = (review?.key1 ?? []).map(keyPhase);
+  const span = (list) => {
+    const s = list.map((x) => x.started_at).filter(Boolean).sort(), e = list.map((x) => x.ended_at).filter(Boolean).sort();
+    return { started_at: s[0] ?? null, ended_at: e[e.length - 1] ?? null };
+  };
+  return {
+    ci_green_at: ciGreenAt ?? null, lock_wait_ms: lockWaitMs, step_started_at: startedAt, step_ended_at: endedAt,
+    key1: k1.length ? { ...span(k1), teams: k1 } : null,
+    key2: keyPhase(review?.key2), proxy: keyPhase(review?.proxy),
+    outcome: result?.outcome ?? null,
+    stop_reason: result?.outcome === 'stopped' ? result.reason ?? null : null,
+    stop_class: result?.outcome === 'stopped' ? result.class ?? null : null,
+    merged: false,
+  };
 }
 
 // ---------------------------------------------------------------- commands
@@ -168,14 +210,16 @@ export async function stepPr(o, listed) {
     if (o.post === 'none') { out(`----- comment (not posted)\n${body}`); return null; }
     return (await o.github.createComment(n, body)).url;
   };
-  const stop = async (head, why) => {
+  // `cls` names the kind of stop for the log (STOP_CLASSES); the reason is
+  // what the comment says.
+  const stop = async (head, why, cls = 'error') => {
     // Reasons can carry gh or git error text: redacted before it is logged,
     // saved or posted.
     const reason = redact(why);
     out(`pr-loop: #${n} stopped: ${reason}`);
-    st.stopped = { head, reason, at: new Date().toISOString(), labeled: false };
+    st.stopped = { head, reason, class: cls, at: new Date().toISOString(), labeled: false };
     saveState(o.stateDir, cfg.repo, st);
-    log('stopped', { reason });
+    log('stopped', { reason, class: cls });
     try {
       if (o.post !== 'none') { await o.github.addLabels(n, [lc.needs_founder_label]); st.stopped.labeled = true; saveState(o.stateDir, cfg.repo, st); }
       await say([
@@ -187,7 +231,7 @@ export async function stepPr(o, listed) {
         `The loop does nothing more on this PR while the \`${lc.needs_founder_label}\` label is set. Remove the label to let it resume (the fix-round count starts again).`,
       ].join('\n'));
     } catch (e) { out(`pr-loop: #${n}: could not label or comment: ${e.message}`); }
-    return { outcome: 'stopped', reason };
+    return { outcome: 'stopped', reason, class: cls };
   };
 
   try {
@@ -200,55 +244,81 @@ export async function stepPr(o, listed) {
       if (u) return u;
     }
     if (st.done?.head === head) return skip(`${st.done.outcome} on this head`);
-    if (pull.mergeable === false || pull.mergeableState === 'dirty') return await stop(head, 'the branch has a merge conflict with main; a person resolves it');
+    if (pull.mergeable === false || pull.mergeableState === 'dirty') return await stop(head, 'the branch has a merge conflict with main; a person resolves it', 'merge-conflict');
 
     const ci = ciState(cfg.required_ci, await o.github.listCheckRuns(head));
     if (ci.state === 'pending') { out(`pr-loop: #${n} waiting for CI on ${head.slice(0, 7)}: ${ci.text}`); return { outcome: 'wait', reason: ci.text }; }
     if (ci.state === 'failed') {
-      if (st.lastFixHead === head) return await stop(head, `CI failed after fix round ${st.rounds} (${ci.text})`);
+      if (st.lastFixHead === head) return await stop(head, `CI failed after fix round ${st.rounds} (${ci.text})`, 'ci-failed-after-fix');
       return skip(`CI failed on ${head.slice(0, 7)} (${ci.text}); the author fixes it`);
     }
 
     // One PR at a time across both repositories: the review's lock, held
-    // for the review and the fix round together.
+    // for the review and the fix round together. Lock wait: from the first
+    // pass that found this head ready but the lock held, to the pass that
+    // takes it (kept in the PR's state between passes).
     const lock = acquireLock(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop' });
-    if (!lock.ok) return { outcome: 'busy', reason: `lock held by ${lock.holder ? `${lock.holder.repo} #${lock.holder.pr}` : 'another process'}` };
+    if (!lock.ok) {
+      if (st.lockWait?.head !== head) { st.lockWait = { head, since: new Date().toISOString() }; saveState(o.stateDir, cfg.repo, st); }
+      return { outcome: 'busy', reason: `lock held by ${lock.holder ? `${lock.holder.repo} #${lock.holder.pr}` : 'another process'}` };
+    }
+    const stepStarted = new Date();
+    const lockWaitMs = st.lockWait?.head === head ? Math.max(0, stepStarted.getTime() - Date.parse(st.lockWait.since)) : 0;
+    if (st.lockWait) { delete st.lockWait; saveState(o.stateDir, cfg.repo, st); }
+    let r = null, result = null;
+    const roundAtStart = st.rounds;
     try {
       log('review', { ci: ci.text });
-      const r = await runReview({
+      r = await runReview({
         repoRoot: o.repoRoot, pr: n, config: cfg, github: o.github, post: o.post, claudeBin: o.claudeBin, stateDir: o.stateDir,
         models: o.models, timeoutMs: o.timeoutMs, backoffMs: o.backoffMs, sleep: o.sleep, out, heldLock: true,
         callerBranch: o.callerBranch, inClaudeSession: o.inClaudeSession,
       });
-      if (r.exit === EXIT.headMoved) { log('head-moved'); return { outcome: 'head-moved' }; }
-      if (r.exit === EXIT.refused) { st.done = { head, outcome: 'refused' }; saveState(o.stateDir, cfg.repo, st); return { outcome: 'skip', reason: r.reason }; }
-      if (r.exit !== EXIT.ok) return await stop(head, `the review exited ${r.exit}`);
-      if (r.waiting) return { outcome: 'wait', reason: r.waiting };
-      if (r.ciFailed) return st.lastFixHead === head ? await stop(head, `CI failed after fix round ${st.rounds} (${r.ciFailed})`) : skip(`${r.ciFailed}; the author fixes it`);
-      if (r.deferred) return await stop(head, `review deferred: ${r.deferred}`);
-      const k1 = r.key1 ?? [];
-      // The Founder Proxy (agent) is a reviewer like the keys: deferred
-      // stops, fail goes to the fixer.
-      const all = [...k1, ...(r.key2 ? [r.key2] : []), ...(r.proxy ? [r.proxy] : [])];
-      const deferred = all.filter((k) => k.status === 'deferred');
-      if (k1.length === 0) return await stop(head, 'review deferred: no owning team');
-      if (deferred.length) return await stop(head, `review deferred (${deferred.map((k) => `${k.teamName}: ${k.reason}`).join('; ')})`);
-      const failed = all.filter((k) => k.status === 'fail');
-      log('reviewed', { key1: k1.map((k) => `${k.team}:${k.status}`).join(','), key2: r.key2?.status ?? 'not run', proxy: r.proxy?.status ?? 'not run' });
-      // What the founder keeps: the loop stops and the founder decides on
-      // GitHub. Their own review approving this head lets the review pass
-      // review/executive; removing the label lets the loop resume.
-      if (r.proxy?.status === NEEDS_FOUNDER && !r.founderApproved) {
-        const why = (r.proxy.verdict?.founder_reasons ?? []).join('; ');
-        return await stop(head, `the Founder Proxy (agent) returned needs-founder: ${why}. The founder decides: approve head ${head.slice(0, 7)} on GitHub (or not), then remove the label`);
-      }
-
-      if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, out });
-      return await fixRound(o, { n, head, pull, st, r, say, stop, log, out });
-    } finally { lock.release(); }
+      result = await afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out });
+      return result;
+    } finally {
+      lock.release();
+      // One per-phase line per review step that ran, whatever it ended in.
+      // Its own kind, so the loop's event lines stay as they were.
+      if (r) logCall(o.stateDir, { kind: 'phase', repo: cfg.repo, pr: n, head, round: roundAtStart, ...phaseRecord({ ciGreenAt: ci.greenAt, lockWaitMs, startedAt: stepStarted.toISOString(), endedAt: new Date().toISOString(), review: r, result }) });
+    }
   } catch (e) {
-    return await stop(listed.headSha, `error: ${e.message}`);
+    return await stop(listed.headSha, `error: ${e.message}`, 'error');
   }
+}
+
+// What follows a review: stop, merge path or fix round.
+async function afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out }) {
+  const cfg = o.config;
+  if (r.exit === EXIT.headMoved) { log('head-moved'); return { outcome: 'head-moved' }; }
+  if (r.exit === EXIT.refused) { st.done = { head, outcome: 'refused' }; saveState(o.stateDir, cfg.repo, st); return { outcome: 'skip', reason: r.reason }; }
+  if (r.exit !== EXIT.ok) return await stop(head, `the review exited ${r.exit}`, 'error');
+  if (r.waiting) return { outcome: 'wait', reason: r.waiting };
+  if (r.ciFailed) return st.lastFixHead === head ? await stop(head, `CI failed after fix round ${st.rounds} (${r.ciFailed})`, 'ci-failed-after-fix') : skip(`${r.ciFailed}; the author fixes it`);
+  if (r.deferred) return await stop(head, `review deferred: ${r.deferred}`, 'deferred');
+  const k1 = r.key1 ?? [];
+  // The Founder Proxy (agent) is a reviewer like the keys: deferred
+  // stops, fail goes to the fixer.
+  const all = [...k1, ...(r.key2 ? [r.key2] : []), ...(r.proxy ? [r.proxy] : [])];
+  const deferred = all.filter((k) => k.status === 'deferred');
+  if (k1.length === 0) return await stop(head, 'review deferred: no owning team', 'deferred');
+  if (deferred.length) {
+    // The class says why (the comment and the label are the same for all).
+    const cls = deferred.some((k) => k.validationError) ? 'validation' : deferred.some((k) => k.callOutcome === 'rate_limit') ? 'rate-limit' : deferred.some((k) => k.callOutcome) ? 'call-failed' : 'deferred';
+    return await stop(head, `review deferred (${deferred.map((k) => `${k.teamName}: ${k.reason}`).join('; ')})`, cls);
+  }
+  const failed = all.filter((k) => k.status === 'fail');
+  log('reviewed', { key1: k1.map((k) => `${k.team}:${k.status}`).join(','), key2: r.key2?.status ?? 'not run', proxy: r.proxy?.status ?? 'not run' });
+  // What the founder keeps: the loop stops and the founder decides on
+  // GitHub. Their own review approving this head lets the review pass
+  // review/executive; removing the label lets the loop resume.
+  if (r.proxy?.status === NEEDS_FOUNDER && !r.founderApproved) {
+    const why = (r.proxy.verdict?.founder_reasons ?? []).join('; ');
+    return await stop(head, `the Founder Proxy (agent) returned needs-founder: ${why}. The founder decides: approve head ${head.slice(0, 7)} on GitHub (or not), then remove the label`, 'needs-founder');
+  }
+
+  if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, out });
+  return await fixRound(o, { n, head, pull, st, r, say, stop, log, out });
 }
 
 // The branch is behind main: ask GitHub to merge main into it (REST
@@ -269,7 +339,7 @@ async function updateBehind(o, { n, head, st, say, stop, log, out }) {
   } catch (e) {
     const now = (await o.github.getPull(n)).headSha;
     if (now !== head) { log('head-moved', { new_head: now }); return { outcome: 'head-moved' }; }
-    return await stop(head, `could not update the branch with main ${ghFailure(e)}. A person resolves it (a merge conflict with main, or GitHub refused the update)`);
+    return await stop(head, `could not update the branch with main ${ghFailure(e)}. A person resolves it (a merge conflict with main, or GitHub refused the update)`, 'update-failed');
   }
   st.updated = { from: head, at: new Date().toISOString() };
   saveState(o.stateDir, cfg.repo, st);
@@ -297,26 +367,26 @@ async function mergePath(o, { n, head, st, r, say, stop, log, out }) {
     try {
       allowed = String(o.runGh(['api', `repos/${cfg.repo}`, '--jq', '.allow_auto_merge']) ?? '').trim();
     } catch (e) {
-      return await stop(head, `could not read the repository's auto-merge setting ${ghFailure(e)}`);
+      return await stop(head, `could not read the repository's auto-merge setting ${ghFailure(e)}`, 'merge-failed');
     }
     if (allowed === 'false') why = 'the repository does not allow auto-merge';
-    else if (allowed !== 'true') return await stop(head, `could not read the repository's auto-merge setting (gh answered "${allowed.slice(0, 40)}", not true or false)`);
+    else if (allowed !== 'true') return await stop(head, `could not read the repository's auto-merge setting (gh answered "${allowed.slice(0, 40)}", not true or false)`, 'merge-failed');
   }
   if (!why) {
     try {
       o.runGh(['pr', 'merge', String(n), '--repo', cfg.repo, '--auto', '--merge', '--match-head-commit', head]);
     } catch (e) {
-      return await stop(head, `gh pr merge --auto failed ${ghFailure(e)}`);
+      return await stop(head, `gh pr merge --auto failed ${ghFailure(e)}`, 'merge-failed');
     }
   }
   if (!why) {
     log('auto-merge');
     await say(`<!-- ${MARK} auto-merge head=${head} -->\n### Automated loop: ${passedWhat(r)} on \`${sha7}\`\n\nAuto-merge is on for this PR: GitHub merges it with a merge commit once every required check passes on this head.\n\n_Agent review, not a sign-off._`);
-    st.done = { head, outcome: 'auto-merge' };
+    st.done = { head, outcome: 'auto-merge', at: new Date().toISOString() };
   } else {
     log('ready', { why });
     await say(`<!-- ${MARK} ready head=${head} -->\n### Automated loop: ready\n\n${passedWhat(r, true)} on \`${sha7}\`, waiting for the founder's merge settings: ${why}. The founder merges this PR.\n\n_Agent review, not a sign-off._`);
-    st.done = { head, outcome: 'ready' };
+    st.done = { head, outcome: 'ready', at: new Date().toISOString() };
   }
   saveState(o.stateDir, cfg.repo, st);
   return { outcome: st.done.outcome };
@@ -333,12 +403,12 @@ function passedWhat(r, capital = false) {
 async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
   const cfg = o.config, lc = o.loop;
   const findings = findingsToFix(r);
-  if (!findings.length) return await stop(head, 'a key failed without findings to fix');
+  if (!findings.length) return await stop(head, 'a key failed without findings to fix', 'no-findings');
   const repeated = findings.filter((f) => st.seen[f.fingerprint]);
-  if (repeated.length) return await stop(head, `the same finding failed again after a fix: ${repeated.map((f) => `${f.file}:${f.line} ${f.text}`).join('; ')}`);
+  if (repeated.length) return await stop(head, `the same finding failed again after a fix: ${repeated.map((f) => `${f.file}:${f.line} ${f.text}`).join('; ')}`, 'repeated-finding');
   for (const f of findings) st.seen[f.fingerprint] = (st.seen[f.fingerprint] ?? 0) + 1;
   saveState(o.stateDir, cfg.repo, st);
-  if (st.rounds >= lc.max_fix_rounds) return await stop(head, `${lc.max_fix_rounds} fix rounds done and a key still fails`);
+  if (st.rounds >= lc.max_fix_rounds) return await stop(head, `${lc.max_fix_rounds} fix rounds done and a key still fails`, 'rounds-used-up');
   const round = st.rounds + 1;
 
   git(o.repoRoot, ['fetch', '--no-tags', '--quiet', 'origin', `+refs/heads/${cfg.base_branch}:refs/pr-review/main`, `+refs/pull/${n}/head:refs/pr-loop/pr-${n}`]);
@@ -357,33 +427,33 @@ async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
     out(`pr-loop: #${n} fix round ${round}: ${findings.length} finding(s), fixer model ${o.fixerModel}...`);
     const res = await runOnce({ bin: o.claudeBin, args: fixerArgs({ model: o.fixerModel, systemPrompt: system, forbidden: lc.fixer_forbidden }), input: user, cwd: dir, env: reviewerEnv(), timeoutMs: o.fixerTimeoutMs });
     logCall(o.stateDir, { repo: cfg.repo, pr: n, head, key: 'fixer', team: null, model: o.fixerModel, reported_model: res.reportedModel ?? null, round, attempt: 1, outcome: res.kind, duration_ms: res.durationMs, ...(res.tokens ?? {}), prompt_chars: system.length + user.length });
-    if (res.kind === 'rate_limit') return await stop(head, `fix round ${round}: the fixer hit a rate limit (${res.error})`);
-    if (res.kind !== 'ok') return await stop(head, `fix round ${round}: the fixer failed (${res.kind}: ${res.error})`);
+    if (res.kind === 'rate_limit') return await stop(head, `fix round ${round}: the fixer hit a rate limit (${res.error})`, 'rate-limit');
+    if (res.kind !== 'ok') return await stop(head, `fix round ${round}: the fixer failed (${res.kind}: ${res.error})`, 'call-failed');
 
     // Whatever the fixer says, its changes are checked first.
     const readAt = (ref) => (p) => { try { return git(o.repoRoot, ['show', `${ref}:${p}`]); } catch { return null; } };
     const regen = (lc.generate ?? []);
     let changed = worktreeChanges(dir);
     const bad = forbiddenChanges(changed, { forbidden: lc.fixer_forbidden, sections: lc.review_sections }, { readBefore: readAt(head), readAfter: (p) => (existsSync(join(dir, p)) ? readFileSync(join(dir, p), 'utf8') : null) });
-    if (bad.length) return await stop(head, `fix round ${round}: the fixer changed paths it may not change (${bad.map((b) => `${b.path}: ${b.why}`).join('; ')}). Its changes were discarded and nothing was pushed; a review-config change needs the founder`);
+    if (bad.length) return await stop(head, `fix round ${round}: the fixer changed paths it may not change (${bad.map((b) => `${b.path}: ${b.why}`).join('; ')}). Its changes were discarded and nothing was pushed; a review-config change needs the founder`, 'fixer-forbidden-path');
     let parsed;
-    try { parsed = res.structured ?? parseVerdictText(res.text); } catch (e) { return await stop(head, `fix round ${round}: the fixer's output is not JSON (${e.message}); nothing was pushed`); }
+    try { parsed = res.structured ?? parseVerdictText(res.text); } catch (e) { return await stop(head, `fix round ${round}: the fixer's output is not JSON (${e.message}); nothing was pushed`, 'fixer-invalid-output'); }
     const v = validateFixerOutput(parsed, findings);
-    if (!v.ok) return await stop(head, `fix round ${round}: the fixer's output failed validation (${v.error}); nothing was pushed`);
+    if (!v.ok) return await stop(head, `fix round ${round}: the fixer's output failed validation (${v.error}); nothing was pushed`, 'fixer-invalid-output');
     const fo = v.output;
     const notDone = fo.not_addressed.map((x) => `${x.id}: ${x.reason}`).join('; ');
-    if (fo.status === 'needs_founder') return await stop(head, `fix round ${round}: a finding needs a change the loop may not make (${notDone || fo.summary}); nothing was pushed`);
-    if (fo.status !== 'fixed' || fo.not_addressed.length) return await stop(head, `fix round ${round}: the fixer could not fix every finding (${notDone || fo.summary}); nothing was pushed`);
-    if (!changed.length) return await stop(head, `fix round ${round}: the fixer changed no file; nothing was pushed`);
+    if (fo.status === 'needs_founder') return await stop(head, `fix round ${round}: a finding needs a change the loop may not make (${notDone || fo.summary}); nothing was pushed`, 'loop-may-not-fix');
+    if (fo.status !== 'fixed' || fo.not_addressed.length) return await stop(head, `fix round ${round}: the fixer could not fix every finding (${notDone || fo.summary}); nothing was pushed`, 'fixer-could-not-fix');
+    if (!changed.length) return await stop(head, `fix round ${round}: the fixer changed no file; nothing was pushed`, 'fixer-could-not-fix');
 
     // Generated files (website/public from website/src), then the checks.
     for (const g of regen.filter((e) => applies(e, changed))) {
       const gr = runCommands(g.run, join(dir, g.cwd), { main: mainSha }, o.checkTimeoutMs);
-      if (!gr.ok) return await stop(head, `fix round ${round}: regenerating ${g.name} failed (${gr.command}: ${gr.detail}); nothing was pushed`);
+      if (!gr.ok) return await stop(head, `fix round ${round}: regenerating ${g.name} failed (${gr.command}: ${gr.detail}); nothing was pushed`, 'local-check');
     }
     changed = worktreeChanges(dir);
     const bad2 = forbiddenChanges(changed, { forbidden: lc.fixer_forbidden, sections: lc.review_sections }, { readBefore: readAt(head), readAfter: (p) => (existsSync(join(dir, p)) ? readFileSync(join(dir, p), 'utf8') : null) });
-    if (bad2.length) return await stop(head, `fix round ${round}: regenerating changed paths the loop may not change (${bad2.map((b) => b.path).join(', ')}); nothing was pushed`);
+    if (bad2.length) return await stop(head, `fix round ${round}: regenerating changed paths the loop may not change (${bad2.map((b) => b.path).join(', ')}); nothing was pushed`, 'fixer-forbidden-path');
 
     const ident = commitIdentity(o, head);
     git(dir, ['add', '-A']);
@@ -404,7 +474,7 @@ async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
     const ran = [];
     for (const c of lc.checks.filter((e) => applies(e, commitChanged))) {
       const cr = runCommands(c.run, join(dir, c.cwd), { main: mainSha, head: newSha }, o.checkTimeoutMs);
-      if (!cr.ok) return await stop(head, `fix round ${round}: the local check ${c.name} failed on the fix (${cr.command}: ${cr.detail}); nothing was pushed`);
+      if (!cr.ok) return await stop(head, `fix round ${round}: the local check ${c.name} failed on the fix (${cr.command}: ${cr.detail}); nothing was pushed`, 'local-check');
       ran.push(c.name);
     }
 
@@ -424,7 +494,7 @@ async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
     } catch (e) {
       const remote = (await o.github.getPull(n)).headSha;
       if (remote !== head) { log('head-moved', { round }); return { outcome: 'head-moved' }; }
-      return await stop(head, `fix round ${round}: the push failed (${String(e.stderr || e.message).trim().slice(0, 300)})`);
+      return await stop(head, `fix round ${round}: the push failed (${String(e.stderr || e.message).trim().slice(0, 300)})`, 'push-failed');
     }
     st.rounds = round;
     st.lastFixHead = newSha;
@@ -479,7 +549,9 @@ function commitIdentity(o, head) {
 // the pass goes on to the next).
 export async function runTick(o) {
   const cfg = o.config;
-  const pulls = (await o.github.listOpenPulls()).filter((p) => !o.onlyPr || p.number === o.onlyPr);
+  const open = await o.github.listOpenPulls();
+  await logMerges(o, new Set(open.map((p) => p.number)));
+  const pulls = open.filter((p) => !o.onlyPr || p.number === o.onlyPr);
   const inFlight = (p) => { const s = loadState(o.stateDir, cfg.repo, p.number); return s.lastFixHead && !s.done && !s.stopped ? 0 : 1; };
   pulls.sort((a, b) => inFlight(a) - inFlight(b) || a.number - b.number);
   const results = [];
@@ -503,6 +575,29 @@ export async function runTick(o) {
     if (r && r.outcome === 'auto-merge') break;
   }
   return results;
+}
+
+// A PR this loop armed for merge (auto-merge, or "ready" for the founder) that
+// is no longer open: one "merged" (or "closed") line with GitHub's merge time,
+// once, for the per-phase records. Only states the loop marked with a time
+// (from this version on) are looked at; a failed read is tried next pass.
+async function logMerges(o, openNumbers) {
+  const cfg = o.config;
+  const dir = join(o.stateDir, 'loop'), prefix = `${cfg.repo.replace('/', '_')}-pr-`;
+  let names = [];
+  try { names = readdirSync(dir).filter((f) => f.startsWith(prefix) && f.endsWith('.json')); } catch { return; }
+  for (const f of names) {
+    const n = Number(f.slice(prefix.length, -'.json'.length));
+    if (!Number.isInteger(n) || openNumbers.has(n)) continue;
+    const st = loadState(o.stateDir, cfg.repo, n);
+    if (!st.done?.at || st.done.closedLogged || !['auto-merge', 'ready'].includes(st.done.outcome)) continue;
+    let p;
+    try { p = await o.github.getPull(n); } catch { continue; }
+    if (p.state !== 'closed') continue;
+    logCall(o.stateDir, { kind: 'loop', repo: cfg.repo, pr: n, head: st.done.head, round: st.rounds, event: p.merged ? 'merged' : 'closed', merged: !!p.merged, merged_at: p.mergedAt ?? null, merge_sha: p.mergeSha ?? null, merged_head: p.headSha ?? null });
+    st.done.closedLogged = true;
+    saveState(o.stateDir, cfg.repo, st);
+  }
 }
 
 // The loop's own files and the review's must be main's copies to post.
