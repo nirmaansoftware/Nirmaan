@@ -24,7 +24,9 @@
 //   exception-expired  an exception's review_by date has passed
 //   exception-unused   an exception on an active position excuses nothing
 //   spec-position    an agents/<slug>/agent.md holds no position, or more
-//                    than one
+//                    than one, and is not on the `unplaced` list
+//   unplaced         an unplaced entry has no reason, names no spec, or
+//                    names a spec that also holds a position
 //   occupant-spec    an occupant or target_occupant has no spec, or a
 //                    target_occupant holds no position today
 //   unit-status      a unit's status differs from its head's
@@ -267,8 +269,15 @@ export function checkChart(chart, ctx) {
   const specs = ctx.specs ?? new Map();
   const held = new Map();
   for (const pos of positions.values()) if (pos.occupant) held.set(pos.occupant, [...(held.get(pos.occupant) ?? []), pos.id]);
+  const unplaced = new Map(list(chart.unplaced).map((u) => [u.slug, u]));
+  for (const u of list(chart.unplaced)) {
+    if (typeof u.reason !== 'string' || !u.reason.trim()) p('unplaced', `${u.slug}: an unplaced spec needs a reason (the founder decision it waits for)`);
+    if (!specs.has(u.slug)) p('unplaced', `${u.slug}: has no agents/${u.slug}/agent.md`);
+    if (held.has(u.slug)) p('unplaced', `${u.slug}: is unplaced but holds ${held.get(u.slug).join(', ')}`);
+  }
   for (const slug of specs.keys()) {
     const ids = held.get(slug) ?? [];
+    if (unplaced.has(slug)) continue;
     if (ids.length !== 1) p('spec-position', `agents/${slug}/agent.md holds ${ids.length} positions (${ids.join(', ') || 'none'}); it must hold exactly one`);
   }
   for (const pos of positions.values()) {

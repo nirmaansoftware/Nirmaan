@@ -7,10 +7,11 @@
 #     (node .github/scripts/org-chart.mjs --write);
 #   - the teams and leads in .github/review-teams.yml must equal its active
 #     key-1 units and their heads.
-# The target positions, the hiring order and the rules checked here come
-# from the hierarchy decision meeting of 2026-10-18; its written record is
-# proposed separately and is not on main yet, so nothing here relies on it:
-# each rule is stated in this header or in org-chart.mjs and enforced there.
+# Decisions behind it: docs/operations/capability-hierarchy-decisions.md
+# (D1 span, activation and exceptions; D2 the target chart, the interim chart,
+# stage ownership and titles; D3 this file and its checks; section 4 the hire
+# list that `hire` labels follow). Each rule is also stated in this header or
+# in org-chart.mjs and enforced there.
 # Changing this file is founder class A (agents/**).
 #
 # Layers: 0 the founder (human), 1 the agent apex, 2 a chief, 3 a VP,
@@ -26,8 +27,8 @@
 #   - status planned: the position exists in the plan and holds nothing (no
 #     key, deputy duty, path, skill or stage). `reports_to` is its line in the
 #     target chart; until it activates, its reports report to its nearest
-#     active ancestor. `hire` is a planning label: the hiring PR in planned
-#     order (H1 to H16) and its wave; the order can change. `target_occupant`
+#     active ancestor. `hire` is the hiring PR (H1 to H16, in the record's
+#     hire list) and its wave; the order can change. `target_occupant`
 #     names an existing agent that will move into it.
 #   - `interim: true`: today's review teams, recorded as interim units with
 #     their current heads and keys. Each hiring PR splits an interim unit
@@ -48,6 +49,12 @@ version: 1
 # only from this field, never from unit names.
 legal_entity: undetermined
 
+# Specs the chart does not place yet, each waiting for a founder decision. An
+# unplaced spec holds no position, and nothing here decides it.
+unplaced:
+  - slug: founder-proxy
+    reason: "How the chart records the Founder Proxy (agent) is the founder's decision (decision record, section 9, item 10)."
+
 positions:
   # ------------------------------------------------------------ apex
   - id: founder
@@ -64,17 +71,6 @@ positions:
     occupant: orchestrator
     status: active
     reports_to: founder
-  - id: founder-proxy
-    # Third reviewer of founder-class PRs under the founder's delegation of
-    # 2026-10-18; not the founder, and outside the agent line.
-    title: "Founder Proxy (agent)"
-    layer: 1
-    kind: staff
-    holder: agent
-    occupant: founder-proxy
-    status: active
-    reports_to: founder
-    plannable: false
 
   # ------------------------------------------------------------ interim units (today's review teams)
   - id: head-engineering-interim
@@ -938,8 +934,9 @@ stages:
     target_owner: product-target
     target_client_voice: commercial
   - id: project-pricing
-    # finance-estimation prices; before a proposal is sent, the engineering
-    # head who would staff the project records a feasibility check.
+    # finance-estimation drafts the estimate and the founder sets the client
+    # price; before a proposal is sent, the engineering head who would staff
+    # the project records a feasibility check.
     kind: project
     statuses: [ESTIMATION, PROPOSAL]
     owner: business

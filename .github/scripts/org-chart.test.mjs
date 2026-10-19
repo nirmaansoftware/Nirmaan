@@ -177,6 +177,17 @@ test('spec-position: a spec with no position, or with two, fails', () => {
   mustFail('spec-position', (f) => { f.at('head-t').status = 'active'; f.at('head-t').occupant = 'm-b1'; });
 });
 
+test('unplaced: an unplaced spec needs a reason, a spec, and no position', () => {
+  const ok = fixture();
+  ok.ctx.specs.set('proxy', '# Proxy\n');
+  ok.chart.unplaced = [{ slug: 'proxy', reason: 'waits for a founder decision' }];
+  assert.deepEqual(checkChart(ok.chart, ok.ctx), []);
+  mustFail('spec-position', (f) => { f.ctx.specs.set('proxy', '# Proxy\n'); });
+  mustFail('unplaced', (f) => { f.ctx.specs.set('proxy', '# Proxy\n'); f.chart.unplaced = [{ slug: 'proxy' }]; });
+  mustFail('unplaced', (f) => { f.chart.unplaced = [{ slug: 'ghost', reason: 'x' }]; });
+  mustFail('unplaced', (f) => { f.chart.unplaced = [{ slug: 'm-b1', reason: 'x' }]; });
+});
+
 test('occupant-spec: an occupant or target_occupant without a spec fails', () => {
   mustFail('occupant-spec', (f) => { f.ctx.specs.delete('m-b2'); });
   mustFail('occupant-spec', (f) => { f.at('head-t').target_occupant = 'not-hired'; });
@@ -312,11 +323,13 @@ test('repository: the README team table drifts on a hand edit', () => {
   assert.ok(checkChart(chart, { ...ctx, readme: edited }).some((x) => x.startsWith('readme:')));
 });
 
-test('repository: every agent spec holds exactly one position', () => {
+test('repository: every agent spec holds exactly one position, except the unplaced ones', () => {
   const { chart, files } = real();
-  const slugs = files.map((f) => /^agents\/([^/]+)\/agent\.md$/.exec(f)?.[1]).filter(Boolean).sort();
+  const unplaced = (chart.unplaced ?? []).map((u) => u.slug);
+  const slugs = files.map((f) => /^agents\/([^/]+)\/agent\.md$/.exec(f)?.[1]).filter(Boolean).filter((s) => !unplaced.includes(s)).sort();
   const occupants = chart.positions.map((p) => p.occupant).filter(Boolean).sort();
   assert.deepEqual(occupants, slugs);
+  assert.deepEqual(unplaced, ['founder-proxy']);
 });
 
 test('repository: README_PATH and CHART_PATH are tracked', () => {
