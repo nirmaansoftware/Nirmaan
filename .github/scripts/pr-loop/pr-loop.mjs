@@ -11,8 +11,8 @@
 // and a step never waits on CI:
 //   skip     draft, fork, other author, `hold` or `needs-founder` label, or
 //            this head already finished (ready, auto-merge);
-//   update   GitHub reports the branch behind main (the ruleset requires
-//            branches to be up to date): merge main into it with the gh
+//   update   GitHub reports the branch behind main (it does only while the
+//            ruleset requires up-to-date branches): merge main into it with the gh
 //            login (update-branch, pinned to the head the loop saw) before
 //            any review, and again after the review when main moved during
 //            it; a failed update stops, a person's push in between drops the
@@ -371,7 +371,7 @@ async function updateBehind(o, { n, head, st, say, stop, log, out }) {
   st.updated = { from: head, at: new Date().toISOString() };
   saveState(o.stateDir, cfg.repo, st);
   log('updated');
-  await say(`<!-- ${MARK} updated from=${head} -->\n### Automated loop: branch updated\n\nThe branch was behind \`main\`, and the ruleset requires branches to be up to date before merge, so the loop asked GitHub to merge \`main\` into it (update-branch, a merge commit, only while the head was still \`${sha7}\`). The new head is reviewed from scratch.`);
+  await say(`<!-- ${MARK} updated from=${head} -->\n### Automated loop: branch updated\n\nGitHub reported the branch behind \`main\` (the ruleset requires up-to-date branches while it reports that), so the loop asked GitHub to merge \`main\` into it (update-branch, a merge commit, only while the head was still \`${sha7}\`). The new head is reviewed from scratch.`);
   return { outcome: 'updated' };
 }
 
