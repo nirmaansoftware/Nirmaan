@@ -162,6 +162,12 @@ rules:
     teams: [business]
     checklists: [finance-estimation]
 
+  - id: capability
+    # Records, the levels generator and levels.json (capability/README.md).
+    globs: ["capability/**"]
+    teams: [engineering]
+    checklists: [database-engineer]
+
   # OS. Split by area, so that moving one area to another team later changes
   # one rule. Every area keeps the Engineering team; os-app adds Design.
   - id: os-app
@@ -518,3 +524,19 @@ content_rules:
     markers:
       - file: "os/src/lib/auth/permissions.ts"
       - file: "os/src/lib/prospecting/outreach.ts"
+  - id: knowledge-legal
+    # Legal topics in the knowledge folders. Adds Business, whose lead is
+    # legal-compliance, as key 1, with no founder class (decision record
+    # D5.2). skills/** and examples/** join applies_to when they exist.
+    adds_teams: [business]
+    checklists: [legal-compliance]
+    applies_to: ["capability/**"]
+    patterns:
+      - "\\b(personal data|personally identifiable|pii)\\b"
+      - "\\bdatasets?\\b"
+      - "\\blicen[cs]es?\\b"
+      - "\\bmodel weights?\\b"
+      - "\\blegal advice\\b"
+      - "\\b(dpdp|gdpr|hipaa)\\b"
+      - "\\bthird[- ]party (scripts?|trackers?|cookies)\\b"
+    examples: ["trained on a public dataset", "Licence: CC BY 4.0", "model weights under a custom licence", "this is not legal advice", "consent under the DPDP Act", "GDPR erasure request", "loads a third-party script"]

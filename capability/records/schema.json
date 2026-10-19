@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "One line of capability/records/*.jsonl",
+  "description": "Each line of a records file is one JSON object of this shape. Files are append-only: a correction is a new line whose supersedes names the record it replaces. capability/tools/levels.mjs enforces this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["record_id", "event", "skill_id", "skill_sha", "commit", "result", "evidence", "written_by", "writer_session"],
+  "properties": {
+    "record_id": { "type": "string", "description": "Unique across all records files." },
+    "event": { "enum": ["check", "eval_run", "pr_use"] },
+    "skill_id": { "type": "string", "description": "The id of a skill file under skills/." },
+    "skill_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "The git blob SHA of the skill file the event is about." },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$", "description": "The repository commit the event ran against." },
+    "result": { "enum": ["pass", "fail", "revoked"], "description": "check and eval_run: pass or fail. pr_use: pass, or revoked when a later line takes the use back." },
+    "evidence": { "type": "string", "description": "A pointer to the evidence: a CI run, a review comment, a file. Evidence from client work stays private and is not linked." },
+    "written_by": { "enum": ["checker", "tool", "review"], "description": "check: checker; eval_run: tool; pr_use: review. Never the skill's writer." },
+    "writer_session": { "type": "string", "description": "The session or run that wrote the line." },
+    "supersedes": { "type": "string", "description": "The record_id of an earlier line this one replaces." },
+    "note": { "type": "string" },
+    "agent": { "type": "string", "description": "check: the checker role (the skill's owners.checker)." },
+    "judge": { "enum": ["tool", "rubric", "heuristic"], "description": "eval_run: only tool runs count toward Tested; rubric runs are shown apart; heuristic runs never count." },
+    "command": { "type": "string", "description": "eval_run: the command that was run." },
+    "exit_code": { "type": "integer" },
+    "n": { "type": "integer", "minimum": 1, "description": "eval_run: number of cases; Tested needs at least 3." },
+    "model": { "type": "string" },
+    "provider": { "type": "string" },
+    "pr": { "type": "integer", "minimum": 1 },
+    "key": { "const": 1, "description": "pr_use: only a key-1 verdict counts." },
+    "verdict": { "enum": ["pass", "fail"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "event": { "const": "check" } } }, "then": { "required": ["agent"], "properties": { "written_by": { "const": "checker" }, "result": { "enum": ["pass", "fail"] } } } },
+    { "if": { "properties": { "event": { "const": "eval_run" } } }, "then": { "required": ["judge", "command", "exit_code", "n", "model", "provider"], "properties": { "written_by": { "const": "tool" }, "result": { "enum": ["pass", "fail"] } } } },
+    { "if": { "properties": { "event": { "const": "pr_use" } } }, "then": { "required": ["pr", "key", "verdict"], "properties": { "written_by": { "const": "review" }, "result": { "enum": ["pass", "revoked"] } } } }
+  ]
+}
