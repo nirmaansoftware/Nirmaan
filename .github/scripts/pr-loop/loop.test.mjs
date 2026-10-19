@@ -664,7 +664,7 @@ test('one pass handles every PR with an action ready: a review, fix, update, CI 
     // PR 3 is in a fix round, so it goes first; the rest by number.
     mkdirSync(join(stateDir, 'loop'), { recursive: true });
     writeFileSync(join(stateDir, 'loop', `${CONFIG.repo.replace('/', '_')}-pr-3.json`), JSON.stringify({ pr: 3, rounds: 1, seen: {}, lastFixHead: 'abc', done: null, stopped: null }));
-    const outcome = { 1: 'auto-merge', 2: 'wait', 3: 'fixed', 4: 'busy', 5: 'updated', 6: 'stopped' };
+    const outcome = { 1: 'ready', 2: 'wait', 3: 'fixed', 4: 'busy', 5: 'updated', 6: 'stopped' };
     const seen = [];
     const results = await runTick({
       config: CONFIG, stateDir,
@@ -672,7 +672,22 @@ test('one pass handles every PR with an action ready: a review, fix, update, CI 
       stepPr: async (o, p) => { seen.push(p.number); return { outcome: outcome[p.number] }; },
     });
     assert.deepEqual(seen, [3, 1, 2, 4, 5, 6]);
-    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['3:fixed', '1:auto-merge', '2:wait', '4:busy', '5:updated', '6:stopped']);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['3:fixed', '1:ready', '2:wait', '4:busy', '5:updated', '6:stopped']);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
+});
+
+test('a step that arms auto-merge ends the pass, so no later PR is reviewed against a stale main', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    const outcome = { 1: 'wait', 2: 'auto-merge', 3: 'ready', 4: 'updated' };
+    const seen = [];
+    const results = await runTick({
+      config: CONFIG, stateDir,
+      github: { listOpenPulls: async () => [4, 3, 2, 1].map((number) => ({ number })) },
+      stepPr: async (o, p) => { seen.push(p.number); return { outcome: outcome[p.number] }; },
+    });
+    assert.deepEqual(seen, [1, 2]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['1:wait', '2:auto-merge']);
   } finally { rmSync(stateDir, { recursive: true, force: true }); }
 });
 

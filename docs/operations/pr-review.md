@@ -324,6 +324,9 @@ round count.
 step on every open PR, a PR the loop is fixing first, then by number, so a PR
 waiting for CI, or one that just ran a review or a fix, never holds up the
 others; the steps run one after another, so reviews still run one at a time.
+A step that arms auto-merge ends the pass: main can move once GitHub merges
+that PR, so the rest wait for the next pass, which refetches main and reruns
+the check that the loop's copy matches main before it reviews anything.
 
 **Records.** Every review call, fixer call and loop step (updated, review,
 reviewed, fixed, ready, auto-merge, founder-wait, stopped) is a line in

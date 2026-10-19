@@ -486,6 +486,10 @@ export async function runTick(o) {
   for (const p of pulls) {
     const r = await o.stepPr(o, p);
     results.push({ pr: p.number, ...r });
+    // Auto-merge armed: main can move at any moment, so a later PR in this
+    // pass would be reviewed against a stale main. End the pass; the next one
+    // refetches main and reruns the differs-from-main check first.
+    if (r && r.outcome === 'auto-merge') break;
   }
   return results;
 }
