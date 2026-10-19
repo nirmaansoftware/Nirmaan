@@ -137,7 +137,8 @@ approval.
   key 2 and the proxy pass; there is no third check, so the ruleset needs no
   change.
 - **What it may not decide** returns `needs-founder`: new spending (a paid
-  service, account, API key billing or runner); contracts and legal counsel;
+  service, account, API key billing, a runner, or a dependency or tool that
+  needs a paid licence); contracts and legal counsel;
   public names and renames; prices published to clients; turning on the OS
   worker or any sending; and anything that weakens the review system's own
   gates (removing a key, disabling CI, widening a reviewer's tools, or
