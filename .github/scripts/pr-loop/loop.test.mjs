@@ -88,7 +88,8 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   const apiCalls = [];
   const g = { autoMergeAllowed: gh.autoMergeAllowed ?? true, settingsError: gh.settingsError ?? null, labels: gh.labels ?? [], reviews: [], mergeError: gh.mergeError ?? null, body: 'Changes line two.', ci: gh.ci ?? (() => 'success'), draft: gh.draft ?? false, author: gh.author ?? 'patel-om', mergeable: gh.mergeable ?? true,
     // GitHub's mergeable_state "behind": main has commits the branch lacks and
-    // the ruleset requires branches to be up to date. behindWhen() can turn it
+    // the ruleset requires up-to-date branches (only then does GitHub report
+    // it; the setting is off today). behindWhen() can turn it
     // on mid-run; updateError makes the update fail the way gh does;
     // beforeUpdate() runs first (a person's push); updateAsync leaves the
     // branch as it was (GitHub has not made the merge commit yet).
