@@ -68,4 +68,9 @@ Every lead runs this before its team's own checklist (minutes of 2026-10-17, Age
 - **Citations:** every finding and every claim it passes cites `file:line` at the head commit.
 - **The comment:** role, "fresh read-only session", base and head commit, a claims table with verdict and citation, the CI run cited, what was not run, and findings with severity. A comment whose commit is not the head is void.
 - **Wording:** "agent review (role), head <sha7>". A pass means an agent role found no blocking finding on that commit. It is an agent review, not a sign-off, an approval or a release decision.
+- **PR shape** (decision R5.7 of [2026-10-18-review-loop-decisions.md](../docs/operations/2026-10-18-review-loop-decisions.md)). Authors shape PRs this way, and key 1 lists a missed rule as a minor finding:
+  1. one owning unit per PR where the change allows; more than two owning teams needs a reason stated in the PR body;
+  2. control-plane paths (founder class A: `.github/**`, `.claude/**`, `AGENTS.md`, `CLAUDE.md`, `agents/**`, `.gitignore`, the review and decision-meeting rules) are never mixed with other paths in one PR, unless the PR is mechanical (such as a rename or a dependency bump) and says so; key 2 fails a PR that mixes them;
+  3. size guidance: at most about 400 changed lines and 15 changed files, not counting generated files (`website/public/**`); this is guidance, never a fail, until the review log shows its effect;
+  4. the PR body states the owning teams and founder classes computed from `main`'s map, and the test commands run.
 - **Size changes the checklist, never the number of keys.** A typo or docs-only PR still gets both keys, with a short checklist: claims, links, status labels, founder classes, and SEO on titles.
