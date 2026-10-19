@@ -10,13 +10,25 @@ founder-class items wait for the founder (section 9). The founder may
 overrule any decision here, and this record will say so.
 
 Process: [docs/operations/decision-meetings.md](../../docs/operations/decision-meetings.md).
-27 seats gave independent positions (every agent role except the chair). The
-chair read every position and checked the disputed facts against the code at
+27 seats gave independent positions (every agent role on `main` at bac3965
+except the chair). The chair read every position and checked the disputed facts against the code at
 `main` bac3965 (the merge of #110 on 2026-10-18, an ancestor of today's
 `main`). Internal minutes, with every position, are kept outside this
 repository, as is "the plan": the internal capability build-out plan (v3)
 that this record amends. Every amendment is stated here in full, so the
-record reads on its own.
+record reads on its own. Code line citations are as of bac3965; some lines
+have moved since (for example `differsFromMain` is now at `review.mjs:432`).
+
+> **Note (2026-10-19): the Founder Proxy (agent).** `agents/founder-proxy/agent.md`
+> reached `main` after the meeting read bac3965 (#111 to #113, 2026-10-18), so
+> the meeting did not seat it, place it in the chart or map it in section 3.
+> Nothing in this record changes it: its reserved list, when it runs (after
+> key 1 and key 2 pass on a founder-class PR) and its part in
+> `review/executive` stay as the founder's record
+> [2026-10-18-founder-proxy-decisions.md](2026-10-18-founder-proxy-decisions.md)
+> sets them. D4 derives key 1 and key 2 only. How the chart records the
+> Founder Proxy is a founder item (section 9, item 10), answered before the
+> chart validator (G1) merges.
 
 How to read the chart: L0 is the founder (human); L1 is the agent apex; L2 a
 chief; L3 a VP; L4 a head of department; L5 a lead (only above 8 ICs); L6 an
@@ -328,7 +340,7 @@ exactly one owning unit and exactly one client-voice unit, both active
    - staff and ICs have no reports; staff hold no key; an active manager has
      3 to 8 reports, or a dated exception;
    - every `agents/<slug>/agent.md` holds exactly one position, and every
-     occupant has a spec;
+     occupant has a spec (for the Founder Proxy, see section 9, item 10);
    - planned positions own no path, skill or stage;
    - each active manager's deputy is an active IC in the same unit, is not
      the head, is not in `no_key_roles`, and deputises for one unit only;
@@ -715,7 +727,7 @@ exactly one owning unit and exactly one client-voice unit, both active
      holder has a new owner.
    - The Design hiring PR also adds the manager duties to creative-director
      and fixes `agents/creative-director/agent.md:83` (visual-direction.md
-     exists).
+     exists). *Note (2026-10-19):* already fixed on `main` by #102.
 
 ### D10. Coverage added for P2 (Appendix A)
 
@@ -749,6 +761,9 @@ technical program manager, developer relations, HR and recruiting, and
 bookkeeping.
 
 ## 3. Mapping of the 28 existing agents (none removed)
+
+The 28 are the specs on `main` at bac3965. The Founder Proxy (agent), added
+after, is not mapped here (see the note at the top).
 
 | Agent | Today | Target position | Unit | Layer, kind | Interim and notes |
 |---|---|---|---|---|---|
@@ -842,7 +857,7 @@ class A PRs.
 | qa-engineer | performance-engineer moved to Quality | performance-engineer stays in Platform | Moving it leaves both units below 3 (performance-engineer) |
 | creative-director, ai-ml-engineer, devops-engineer, qa-engineer | `org/chart.yml` at the root | `agents/org-chart.yml` | Already class A, in CODEOWNERS and in the image |
 | creative-director | A visual-designer hire | Deferred | Visual design and motion are skills of the existing designers; the bloat rule applies |
-| market-research | Systems and Emerging under one head, and a sources-based case for fewer managers | Adopted as Head of Systems and Frontier; the minimum stays 3 | The activation rule prevents empty managers; human span data does not transfer directly to agents |
+| market-research | Systems and Emerging under one head, and a sources-based case for fewer managers | Adopted as Head of Systems and Frontier; the minimum stays 3 | The activation rule prevents empty managers; human span data does not transfer directly to agents (an assumption, D1.1) |
 | ai-ml-engineer | A 48 KB prompt cap | 64 KiB, with K = 3 and 16 KB files | 48 KB cannot hold a role spec plus three files at the agreed file cap; the pilot may lower it |
 | technical-writer | `[NEEDS SOURCE]` blocks the Checked level | It blocks merge | One rule, enforced by the validator, is sharper |
 | brand-strategist | Levels named Written, Tested, Used | Checked, Tested, Used | The first level needs a checker's check record |
@@ -895,7 +910,10 @@ class A PRs.
 8. Whether a statutory data protection officer is required (with counsel).
 9. Any sandbox or third-party accounts that Integrations examples would need
    (no spending).
-10. Any overrule of the decisions above.
+10. How the chart records the Founder Proxy (agent), which the meeting did not
+    place (see the note at the top), answered before the chart validator (G1)
+    merges. Until then nothing here changes the proxy.
+11. Any overrule of the decisions above.
 
 ## 10. Not decided here
 
