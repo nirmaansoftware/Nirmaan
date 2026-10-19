@@ -1,5 +1,5 @@
-// Tests for review-teams.mjs (the review-teams coverage test and the
-// CODEOWNERS check). Run: node --test .github/scripts/review-teams.test.mjs
+// Tests for review-teams.mjs (the review-teams coverage test and the check
+// that CODEOWNERS stays absent). Run: node --test .github/scripts/review-teams.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   parseYaml, globToRegExp, globMatch, owners, contentHits, checkMap,
-  parseCodeowners, checkCodeowners, MAP_PATH, CODEOWNERS_PATH,
+  checkNoCodeowners, MAP_PATH, CODEOWNERS_PATH,
 } from './review-teams.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -238,13 +238,11 @@ test('generated: missing source, founder-class drift and direct rules fail', () 
   assert.match(run(direct).join('\n'), /site\/public\/page\.html: generated files follow their source/);
 });
 
-test('founder classes: all of A to F, no braces', () => {
+test('founder classes: all of A to F', () => {
   const map = fixture();
   map.founder_classes.pop();
-  map.founder_classes[0].paths.push('{agents,src}/**');
   const out = run(map).join('\n');
   assert.match(out, /founder class F is missing/);
-  assert.match(out, /uses braces/);
 });
 
 test('content rules: bad pattern, failing example, stale marker, unknown class', () => {
@@ -264,43 +262,24 @@ test('content rules: bad pattern, failing example, stale marker, unknown class',
 
 // ---------------------------------------------------------------- CODEOWNERS
 
-const OWNERS_OK = `# comment
-/agents/** @nirmaansoftware
-/site/src/static/s.css @nirmaansoftware
-/site/public/s.css @nirmaansoftware
-/docs/x.md @nirmaansoftware
-/site/src/page.njk @nirmaansoftware
-/site/public/page.html @nirmaansoftware
-/src/a.js @nirmaansoftware
-/secret/gate.ts @nirmaansoftware
-`;
-
-test('codeowners: exactly the founder globs, anchored, owned by the founder alone', () => {
-  const map = fixture();
-  assert.deepEqual(checkCodeowners(map, parseCodeowners(OWNERS_OK)), []);
-  const bad = OWNERS_OK
-    .replace('/src/a.js @nirmaansoftware', 'src/a.js @nirmaansoftware')
-    .replace('/docs/x.md @nirmaansoftware', '/docs/x.md @patel-om')
-    .replace('/secret/gate.ts @nirmaansoftware\n', '')
-    + '/os/** @nirmaansoftware\n/agents/** @nirmaansoftware\n';
-  const out = checkCodeowners(map, parseCodeowners(bad)).join('\n');
-  assert.match(out, /"src\/a\.js" must start with "\/"/);
-  assert.match(out, /owner must be exactly @nirmaansoftware/);
-  assert.match(out, /founder-class path "\/secret\/gate\.ts" is missing/);
-  assert.match(out, /"\/os\/\*\*" is not a founder-class path/);
-  assert.match(out, /"\/agents\/\*\*" is listed twice/);
+test('codeowners: none, at any of the places GitHub reads one', () => {
+  assert.deepEqual(checkNoCodeowners(['a.js', '.github/review-teams.yml']), []);
+  for (const p of ['CODEOWNERS', '.github/CODEOWNERS', 'docs/CODEOWNERS']) {
+    assert.match(checkNoCodeowners(['a.js', p]).join('\n'), new RegExp(`${p.replace(/\./g, '\\.')} exists: founder classes are reviewed by the Founder Proxy`));
+  }
 });
 
 // ---------------------------------------------------------------- the real files
 
-test('repository: review-teams.yml and CODEOWNERS pass against git ls-files', () => {
+test('repository: review-teams.yml passes against git ls-files, and there is no CODEOWNERS file', () => {
   const files = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean);
   const map = parseYaml(readFileSync(join(ROOT, MAP_PATH), 'utf8'));
   const problems = checkMap(map, files, {
     roleExists: (slug) => files.includes(`agents/${slug}/agent.md`),
     readFile: (p) => readFileSync(join(ROOT, p), 'utf8'),
   });
-  problems.push(...checkCodeowners(map, parseCodeowners(readFileSync(join(ROOT, CODEOWNERS_PATH), 'utf8'))));
+  problems.push(...checkNoCodeowners(files));
+  assert.ok(!files.includes(CODEOWNERS_PATH));
   assert.deepEqual(problems, []);
   assert.deepEqual(map.founder_classes.map((c) => c.id), ['A', 'B', 'C', 'D', 'E', 'F']);
   assert.equal(map.catch_all.team, 'engineering');

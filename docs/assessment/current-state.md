@@ -6,6 +6,11 @@ scope: Whole repository, before the Nirmaan OS transformation (Phase 0)
 
 # Current-state audit
 
+> **Dated snapshot of 2026-09-23, not the current state.** Paths, counts and
+> statuses here are as they were on that date (before the 2026-10-14 restructure
+> and the 2026-10-17 pause of the OS worker). For what is built and running today,
+> read the "Current status" section of the [README](../../README.md#current-status).
+
 Audited by direct inspection of every file under `/`, `/os`, `/agents`, `/docs`
 and `/projects`, and by running the existing test suite (107/107 passing,
 ~4.5 min), typecheck and lint. Nothing here is assumed.

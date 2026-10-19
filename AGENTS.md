@@ -15,10 +15,12 @@ Read [README.md](README.md) for the map. This file adds the rules and commands.
 - **Ignore and delete iCloud duplicates** such as `file 2.ts` or `node_modules 2`. They
   come from the synced folder and are not part of the project.
 - **Every PR gets two keys** (`docs/operations/pr-review.md`, IMPLEMENTED): the lead of
-  each owning team, then the orchestrator; founder classes A to F also need the founder's
-  approval. Reviews run through the `pr-review` skill and the automated loop. Never review
-  a PR your own session wrote. The ruleset on `main` requires both keys' checks before
-  merge.
+  each owning team, then the orchestrator; founder classes A to F also get the Founder
+  Proxy (agent, `agents/founder-proxy/agent.md`) after key 2, under the founder's
+  delegation of 2026-10-18, and what only the founder decides waits for the founder
+  (`needs-founder`). Reviews run through the `pr-review` skill and the automated loop.
+  Never review a PR your own session wrote. The ruleset on `main` requires both keys'
+  checks before merge.
 - **The OS must pass its checks before merge:** `typecheck`, `lint`, `test` and
   `next build`. Tests sit beside the code as `*.test.ts`.
 
@@ -35,7 +37,9 @@ Read [README.md](README.md) for the map. This file adds the rules and commands.
 ## Where to look
 
 - Product and company decisions: `docs/`, starting at `docs/README.md`.
-- What is built today: `docs/assessment/current-state.md`. The plan: `docs/strategy/roadmap.md`.
+- What is built today: the "Current status" section of `README.md`. The plan:
+  `docs/strategy/roadmap.md`. `docs/assessment/current-state.md` is a dated snapshot
+  (2026-09-23), not the current state.
 - Agent behaviour: `agents/<slug>/agent.md`. The OS loads these at runtime.
 - Finished records (may describe old paths): `docs/history/`.
 - Big decisions (pricing, launches, naming, legal, public pages): run a decision meeting,

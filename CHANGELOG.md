@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-18: The Founder Proxy replaces the founder's approval on founder classes
+
+- Founder's decision: founder classes A to F get the Founder Proxy (agent,
+  `agents/founder-proxy/agent.md`) as the third reviewer after both keys,
+  instead of the founder's GitHub approval. It acts under the founder's
+  delegation and is not the founder; spending, contracts and legal counsel,
+  public names, published prices, turning on sending, and weakening the
+  review gates return `needs-founder`.
+- `.github/CODEOWNERS` is removed; the ruleset's code owner setting has no
+  effect without it.
+
 ## 2026-10-18: Two-key PR review is live
 
 - The ruleset "main: two keys" is active on `main`. It requires the CI jobs
