@@ -353,14 +353,39 @@ export async function runReview(o) {
       }
       const user = userPrompt({ ...promptCtx, key: 1, team: teamId });
       out(`pr-review: key 1 for ${base.teamName} (${base.role})...`);
-      key1.push({ ...base, ...(await review({ key: 1, team: teamId, role: base.role, model: o.models.key1, system, user })) });
+      let res = { ...base, ...(await review({ key: 1, team: teamId, role: base.role, model: o.models.key1, system, user })) };
+      // Deputy try (decision D4.4): when the lead's call timed out or the
+      // process failed (after its retry), the unit's deputy from main's org
+      // chart gets one try, marked "deputy" on the comment and the check.
+      // Not for a rate limit (same plan), invalid output or failed validation
+      // (PR text can induce those), a missing spec, or the legal team (no
+      // deputy). If the deputy does not answer either, the key defers as
+      // before and the loop stops.
+      const dep = derived.ok ? derived.key1.find((k) => k.team === teamId)?.deputy?.occupant : null;
+      if (res.status === 'deferred' && ['timeout', 'call-failed'].includes(res.deferralKind) && dep && !cfg.legal_teams.includes(teamId)) {
+        try {
+          const leadSection = markdownSection(roleSpec(team.lead), cfg.lead_section);
+          const dsys = key1SystemPrompt({
+            ...promptCtx, team, lead: `${dep}, deputy for ${team.lead}`, leadSpec: roleSpec(dep),
+            checklists: [baseChecklist(), ...(leadSection ? [{ name: `${team.lead} Key 1 review`, text: leadSection, source: 'spec' }] : teamChecklists(teamId, team.lead))],
+            memberSpecs: classification.checklists.filter((c) => new Set([team.lead, ...(team.members ?? [])]).has(c) && c !== team.lead).map((role) => ({ role, text: memberText(role) })),
+          });
+          out(`pr-review: key 1 for ${base.teamName}: ${base.role} did not answer (${res.deferralKind}); deputy ${dep}...`);
+          const first = res.reason;
+          res = { ...base, role: `${dep} (deputy for ${team.lead})`, deputy: dep, ...(await review({ key: 1, team: teamId, role: dep, model: o.models.key1, system: dsys, user })) };
+          res.notes = [...(res.notes ?? []), `Deputy: ${team.lead} did not answer (${first}); ${dep}, the unit's deputy in main's org chart, reviewed instead (one try).`];
+        } catch (e) {
+          res.notes = [...(res.notes ?? []), `No deputy try: ${e.message}.`];
+        }
+      }
+      key1.push(res);
     }
 
     // Post key 1.
     for (const r of key1) r.url = await comment(renderComment(r, ctx));
     const k1fail = key1.filter((r) => r.status === 'fail'), k1def = key1.filter((r) => r.status === 'deferred');
     const sha7 = headSha.slice(0, 7);
-    const who = key1.length === 1 ? key1[0].role : `${key1.length} team leads`;
+    const who = key1.length === 1 ? key1[0].role : `${key1.length} team leads${key1.some((r) => r.deputy) ? ', with a deputy' : ''}`;
     const k1url = (k1fail[0] ?? k1def[0] ?? key1[0])?.url;
     if (key1.length === 0) await check('key1', 'pending', `review deferred: no owning team computed for ${sha7}`);
     else if (k1fail.length) await check('key1', 'failure', `agent review (${who}), head ${sha7}: fail (${k1fail.map((r) => r.teamName).join(', ')})`, k1url);
