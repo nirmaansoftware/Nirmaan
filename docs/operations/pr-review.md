@@ -324,9 +324,14 @@ round count.
 step on every open PR, a PR the loop is fixing first, then by number, so a PR
 waiting for CI, or one that just ran a review or a fix, never holds up the
 others; the steps run one after another, so reviews still run one at a time.
-A step that arms auto-merge ends the pass: main can move once GitHub merges
-that PR, so the rest wait for the next pass, which refetches main and reruns
-the check that the loop's copy matches main before it reviews anything.
+Before each step the loop reads main's tip again (`git ls-remote`); if any
+merge has moved it since the pass began (the loop's own, the founder's, the
+ip-nirmaan loop's), or main cannot be read, the pass ends there. A step that
+arms auto-merge also ends the pass. The next pass refetches main and reruns
+the check that the loop's copy matches main before it steps any PR. The check
+runs between steps, not during one: a merge while a review runs is caught by
+the next step's check, and the merge path updates a branch that has fallen
+behind main instead of merging it.
 
 **Records.** Every review call, fixer call and loop step (updated, review,
 reviewed, fixed, ready, auto-merge, founder-wait, stopped) is a line in

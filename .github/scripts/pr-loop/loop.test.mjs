@@ -676,7 +676,7 @@ test('one pass handles every PR with an action ready: a review, fix, update, CI 
   } finally { rmSync(stateDir, { recursive: true, force: true }); }
 });
 
-test('a step that arms auto-merge ends the pass, so no later PR is reviewed against a stale main', async () => {
+test('a step that arms auto-merge ends the pass; later PRs wait for the next pass', async () => {
   const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
   try {
     const outcome = { 1: 'wait', 2: 'auto-merge', 3: 'ready', 4: 'updated' };
@@ -688,6 +688,26 @@ test('a step that arms auto-merge ends the pass, so no later PR is reviewed agai
     });
     assert.deepEqual(seen, [1, 2]);
     assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['1:wait', '2:auto-merge']);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
+});
+
+test('main moved by an outside merge mid-pass ends the pass before the next step; an unreadable main does too', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    let main = 'm1';
+    const seen = [];
+    const run = (mainSha) => runTick({
+      config: CONFIG, stateDir, mainStart: 'm1', mainSha,
+      github: { listOpenPulls: async () => [1, 2, 3, 4].map((number) => ({ number })) },
+      // The founder merges another PR while PR 2 is being reviewed.
+      stepPr: async (o, p) => { seen.push(p.number); if (p.number === 2) main = 'm2'; return { outcome: 'wait' }; },
+    });
+    const results = await run(async () => main);
+    assert.deepEqual(seen, [1, 2]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['1:wait', '2:wait']);
+    seen.length = 0;
+    assert.deepEqual(await run(async () => { throw new Error('ls-remote failed'); }), []);
+    assert.deepEqual(seen, []);
   } finally { rmSync(stateDir, { recursive: true, force: true }); }
 });
 

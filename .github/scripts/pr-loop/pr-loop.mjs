@@ -483,7 +483,18 @@ export async function runTick(o) {
   const inFlight = (p) => { const s = loadState(o.stateDir, cfg.repo, p.number); return s.lastFixHead && !s.done && !s.stopped ? 0 : 1; };
   pulls.sort((a, b) => inFlight(a) - inFlight(b) || a.number - b.number);
   const results = [];
+  // main's SHA when the pass began (the copy fetched and checked in main()).
+  // Before each step main is read again; if any merge moved it (this loop's,
+  // the founder's, the ip-nirmaan loop's), the pass ends, so no later step
+  // runs against a stale main or a script copy that no longer matches it.
+  // An unreadable main ends the pass too (fails safe).
+  const start = o.mainStart ?? null;
   for (const p of pulls) {
+    if (start && o.mainSha) {
+      let now = null;
+      try { now = await o.mainSha(); } catch { /* unreadable: end the pass */ }
+      if (now !== start) break;
+    }
     const r = await o.stepPr(o, p);
     results.push({ pr: p.number, ...r });
     // Auto-merge armed: main can move at any moment, so a later PR in this
@@ -521,6 +532,7 @@ async function main(argv) {
   const base = {
     repoRoot, config, loop, ...loopDefaults(), onlyPr, stepPr,
     callerBranch, inClaudeSession: !!process.env.CLAUDECODE,
+    mainSha: () => git(repoRoot, ['ls-remote', 'origin', `refs/heads/${config.base_branch}`]).split(/\s/)[0] || null,
     runGh: (args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
   };
   for (;;) {
@@ -539,7 +551,8 @@ async function main(argv) {
         return 4;
       }
     }
-    const results = await runTick({ ...base, github, post });
+    const mainStart = git(repoRoot, ['rev-parse', 'refs/pr-review/main']).trim();
+    const results = await runTick({ ...base, github, post, mainStart });
     console.log(`pr-loop: ${new Date().toISOString()} ${post}: ${results.map((r) => `#${r.pr} ${r.outcome}`).join(', ') || 'no open PRs'}`);
     if (once) return 0;
     await new Promise((r) => setTimeout(r, intervalMs));
