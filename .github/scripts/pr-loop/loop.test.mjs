@@ -66,7 +66,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   sh(work, 'remote', 'add', 'origin', origin);
   write(work, '.github/review-teams.yml', MAP);
   write(work, 'AGENTS.md', '# Agent guide\nRULES-MARKER-FROM-MAIN\n');
-  for (const r of ['orchestrator', 'principal-architect', 'security-engineer']) write(work, `agents/${r}/agent.md`, `# ${r}\nSPEC-MARKER-${r}\n`);
+  for (const r of ['orchestrator', 'principal-architect', 'security-engineer', 'founder-proxy']) write(work, `agents/${r}/agent.md`, `# ${r}\nSPEC-MARKER-${r}\n`);
   for (const c of ['key1-base', 'key2', 'engineering', 'platform-quality']) write(work, `${CONFIG.checklist_dir}/${c}.md`, `# ${c}\n`);
   write(work, 'os/app.js', 'line one\nline two\nline three\n');
   sh(work, 'add', '-A'); sh(work, 'commit', '-qm', 'main'); sh(work, 'push', '-q', 'origin', 'main');
@@ -138,7 +138,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   const stateDir = join(tmp, 'state');
   const o = (extra = {}) => ({
     repoRoot: work, config: CONFIG, loop: LOOP, github, post: 'app', claudeBin: bin, stateDir,
-    models: { key1: 'k1', key2: 'k2' }, fixerModel: 'fixer-model', timeoutMs: 20000, fixerTimeoutMs: 20000, checkTimeoutMs: 20000,
+    models: { key1: 'k1', key2: 'k2', proxy: 'proxy-model' }, fixerModel: 'fixer-model', timeoutMs: 20000, fixerTimeoutMs: 20000, checkTimeoutMs: 20000,
     backoffMs: 0, sleep: async () => {}, out: () => {}, stepPr, ...extra,
     // gh with the gh login. `gh api repos/<repo>` answers the repository's
     // allow_auto_merge field (or fails the way gh does when the test sets
@@ -296,43 +296,32 @@ test('GitHub has not made the merge commit yet: the next pass waits instead of a
   } finally { t.cleanup(); }
 });
 
-test('founder class behind main: the branch is updated before the founder is asked, so the founder approves once', async () => {
+test('founder class behind main: the branch is updated first, then both keys and the Founder Proxy review the new head', async () => {
   const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
   try {
     t.advanceMain();
     assert.deepEqual(outcomes(await t.tick()), ['updated']);
-    assert.ok(!t.comments().some((b) => /this PR waits for the founder's GitHub approval/.test(b)), 'no founder request on the stale head');
+    assert.equal(t.calls().length, 0, 'no review of the stale head');
     const newHead = t.originHead();
-    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
-    const asks = t.comments().filter((b) => /waits for the founder's GitHub approval/.test(b));
-    assert.equal(asks.length, 1);
-    assert.match(asks[0], new RegExp(`head \`${newHead.slice(0, 7)}\``));
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.merges[0].at(-1), newHead);
+    const reviews = t.calls().filter((x) => x.kind === 'reviews');
+    assert.equal(reviews.length, 3, 'key 1, key 2 and the proxy, all on the new head');
+    assert.ok(reviews.every((x) => x.stdin.includes(`Head SHA: ${newHead}`)));
   } finally { t.cleanup(); }
 });
 
-test('founder class: main moves during the review, so the loop updates the branch instead of posting the founder wait', async () => {
+test('founder class: main moves during the review, so the loop updates the branch instead of merging, and reviews the new head', async () => {
   const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
   try {
     let moved = false;
-    t.g.behindWhen = () => { if (!moved && t.calls().length >= 2) { moved = true; t.advanceMain(); } return false; };
+    t.g.behindWhen = () => { if (!moved && t.calls().length >= 3) { moved = true; t.advanceMain(); } return false; };
     assert.deepEqual(outcomes(await t.tick()), ['updated']);
-    assert.equal(t.calls().length, 2, 'both keys ran on the old head');
-    assert.ok(!t.comments().some((b) => /this PR waits for the founder's GitHub approval/.test(b)), 'the founder is not asked about a head that cannot merge');
+    assert.equal(t.calls().length, 3, 'both keys and the proxy ran on the old head');
+    assert.equal(t.merges.length, 0);
     t.g.behindWhen = null;
-    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
-    assert.equal(t.comments().filter((b) => /waits for the founder's GitHub approval/.test(b)).length, 1);
-  } finally { t.cleanup(); }
-});
-
-test('founder class waiting for the founder, then main moves: the loop updates the branch and asks again on the new head', async () => {
-  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
-  try {
-    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
-    assert.deepEqual(outcomes(await t.tick()), ['skip']);
-    t.advanceMain();
-    assert.deepEqual(outcomes(await t.tick()), ['updated']);
-    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
-    assert.match(t.comments().pop(), new RegExp(`head \`${t.originHead().slice(0, 7)}\``));
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.merges[0].at(-1), t.originHead());
   } finally { t.cleanup(); }
 });
 
@@ -387,6 +376,7 @@ test('the launchd plist reads its settings from ~/.nirmaan/pr-loop/env, so re-co
   const cmd = plist.match(/<string>(mkdir[^<]*)<\/string>/)[1];
   assert.ok(cmd.indexOf('pr-loop/env') < cmd.indexOf('pr-loop.mjs'), 'sourced before the loop starts');
   assert.match(cmd, /loop\.log/, 'a missing env file is logged, not silent');
+  assert.match(plist, /<key>StartInterval<\/key>\s*<integer>60<\/integer>/, 'a pass every minute');
 });
 
 // ---------------------------------------------------------------- fix loop
@@ -544,24 +534,93 @@ test('CI failing after a fix stops the loop; CI failing on an author head only w
 
 // ---------------------------------------------------------------- founder, hold, skips
 
-test('founder class: both keys pass, the loop waits for the founder and never merges, even after the approval', async () => {
+const NEEDS = { verdict: 'needs-founder', extra: { founder_reasons: ['adds a paid runner'] } };
+
+test('founder class: both keys and the Founder Proxy pass, the loop takes the merge path; no waiting for a GitHub approval', async () => {
   const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
   try {
-    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
-    assert.equal(t.merges.length, 0, 'gh pr merge is never called for a founder-class PR');
-    assert.match(t.g.body, /^<!-- review:founder-class -->Founder class: A \(Control plane\); waits for the founder's approval\.<!-- \/review:founder-class -->\n\nChanges line two\.$/, 'the driver declared the class in the PR body');
-    assert.equal(t.calls().filter((x) => x.kind === 'reviews').every((x) => x.stdin.includes('review:founder-class')), true, 'the reviewers saw the declaration');
-    assert.match(t.comments().pop(), /Founder class A: this PR waits for the founder's GitHub approval/);
-    assert.equal(t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive').pop().state, 'pending');
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.deepEqual(t.merges, [['pr', 'merge', '1', '--repo', CONFIG.repo, '--auto', '--merge', '--match-head-commit', t.firstHead]]);
+    assert.match(t.g.body, /^<!-- review:founder-class -->Founder class: A \(Control plane\); the Founder Proxy \(agent\) reviews it after key 2\.<!-- \/review:founder-class -->\n\nChanges line two\.$/, 'the driver declared the class in the PR body');
+    const reviews = t.calls().filter((x) => x.kind === 'reviews');
+    assert.equal(reviews.length, 3, 'key 1, key 2, then the Founder Proxy');
+    const sys = (c) => c.argv[c.argv.indexOf('--system-prompt') + 1];
+    assert.match(sys(reviews[2]), /SPEC-MARKER-founder-proxy/);
+    assert.equal(reviews[2].argv[reviews[2].argv.indexOf('--model') + 1], 'proxy-model');
+    assert.equal(t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive').pop().state, 'success');
+    assert.match(t.comments().pop(), /both keys and the Founder Proxy \(agent\) passed/);
+    assert.ok(!t.comments().some((b) => /waits for the founder's GitHub approval/.test(b)));
+    assert.deepEqual(t.log().filter((l) => l.kind === 'loop').map((l) => l.event), ['review', 'reviewed', 'auto-merge']);
+    assert.equal(t.log().find((l) => l.event === 'reviewed').proxy, 'pass');
     assert.deepEqual(outcomes(await t.tick()), ['skip']);
-    t.g.reviews.push({ login: 'nirmaansoftware', state: 'APPROVED', commitId: t.firstHead });
+  } finally { t.cleanup(); }
+});
+
+test('a PR in no founder class never calls the Founder Proxy', async () => {
+  const t = setup();
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    const sys = (c) => c.argv[c.argv.indexOf('--system-prompt') + 1];
+    assert.equal(t.calls().length, 2);
+    assert.ok(!t.calls().some((c) => /SPEC-MARKER-founder-proxy/.test(sys(c))));
+    assert.equal(t.log().find((l) => l.event === 'reviewed').proxy, 'not run');
+  } finally { t.cleanup(); }
+});
+
+test('Founder Proxy fail: its findings go to the fixer like any key\'s, and the new head is reviewed again from scratch', async () => {
+  const t = setup({
+    change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n'),
+    reviews: [{ verdict: 'pass' }, { verdict: 'pass' }, fail('Attribution names a person, not Nirmaan', 1, 'os/app.js'), { verdict: 'pass' }],
+    fixes: [{ edits: { 'os/app.js': 'line one by Nirmaan\n' } }],
+  });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    const fixer = t.calls().find((x) => x.kind === 'fixes');
+    assert.match(fixer.stdin, /"key": "proxy"/);
+    assert.match(fixer.stdin, /"team": "founder-proxy"/);
+    assert.match(fixer.stdin, /Attribution names a person/);
+    assert.match(t.comments().pop(), /\| F1 \| proxy \(founder-proxy\) \| critical \| `os\/app\.js:1` \|/);
+    assert.ok(!t.labeled());
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    const reviews = t.calls().filter((x) => x.kind === 'reviews');
+    assert.equal(reviews.length, 7, 'key 1, key 2 and the proxy on the first head; the fix also touched os/, so two key 1 teams, key 2 and the proxy on the new head');
+    assert.match(reviews[6].argv[reviews[6].argv.indexOf('--system-prompt') + 1], /SPEC-MARKER-founder-proxy/);
+  } finally { t.cleanup(); }
+});
+
+test('Founder Proxy needs-founder: the loop labels needs-founder and stops, no fixer, no merge; the founder approves the head and removes the label, and the loop merges with no new model call', async () => {
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n'), reviews: [{ verdict: 'pass' }, { verdict: 'pass' }, NEEDS] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.ok(t.labeled());
+    assert.equal(t.merges.length, 0);
+    assert.equal(t.calls().filter((x) => x.kind === 'fixes').length, 0, 'what the founder keeps never goes to the fixer');
+    assert.match(t.comments().pop(), /Automated loop stopped[\s\S]*the Founder Proxy \(agent\) returned needs-founder: adds a paid runner/);
+    assert.equal(t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive').pop().state, 'pending');
     const n = t.calls().length;
-    assert.deepEqual(outcomes(await t.tick()), ['founder-wait']);
+    assert.deepEqual(outcomes(await t.tick()), ['skip'], 'the label stops further work');
+    // The founder removes the label without approving: the loop stops again on this head.
+    t.g.labels = [];
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.equal(t.merges.length, 0);
+    // The founder approves this head on GitHub and removes the label.
+    t.g.labels = [];
+    t.g.reviews.push({ login: 'nirmaansoftware', state: 'APPROVED', commitId: t.firstHead });
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
     assert.equal(t.calls().length, n, 'cached verdicts: no new model call');
     assert.equal(t.posts.filter((p) => p.type === 'check' && p.name === 'review/executive').pop().state, 'success');
-    assert.match(t.comments().pop(), /the founder merges it/);
-    assert.deepEqual(outcomes(await t.tick()), ['skip']);
-    assert.equal(t.merges.length, 0, 'the loop never merges a founder-class PR');
+    assert.match(t.comments().pop(), /the founder's own GitHub review approves the changes the Founder Proxy \(agent\) sent to the founder/);
+  } finally { t.cleanup(); }
+});
+
+test('Founder Proxy deferred (no spec on main): the loop stops with needs-founder, never merges', async () => {
+  const t = setup({ change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
+  try {
+    sh(t.work, 'rm', '-q', 'agents/founder-proxy/agent.md'); sh(t.work, 'commit', '-qm', 'drop proxy spec'); sh(t.work, 'push', '-q', 'origin', 'main');
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.ok(t.labeled());
+    assert.match(t.comments().pop(), /review deferred \(Founder Proxy: spec missing on main/);
+    assert.equal(t.merges.length, 0);
   } finally { t.cleanup(); }
 });
 
@@ -599,6 +658,59 @@ test('one PR at a time: while the shared lock is held the loop does nothing', as
   } finally { t.cleanup(); }
 });
 
+test('one pass handles every PR with an action ready: a review, fix, update, CI wait or busy lock on one PR never ends the pass', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    // PR 3 is in a fix round, so it goes first; the rest by number.
+    mkdirSync(join(stateDir, 'loop'), { recursive: true });
+    writeFileSync(join(stateDir, 'loop', `${CONFIG.repo.replace('/', '_')}-pr-3.json`), JSON.stringify({ pr: 3, rounds: 1, seen: {}, lastFixHead: 'abc', done: null, stopped: null }));
+    const outcome = { 1: 'ready', 2: 'wait', 3: 'fixed', 4: 'busy', 5: 'updated', 6: 'stopped' };
+    const seen = [];
+    const results = await runTick({
+      config: CONFIG, stateDir,
+      github: { listOpenPulls: async () => [6, 5, 4, 3, 2, 1].map((number) => ({ number })) },
+      stepPr: async (o, p) => { seen.push(p.number); return { outcome: outcome[p.number] }; },
+    });
+    assert.deepEqual(seen, [3, 1, 2, 4, 5, 6]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['3:fixed', '1:ready', '2:wait', '4:busy', '5:updated', '6:stopped']);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
+});
+
+test('a step that arms auto-merge ends the pass; later PRs wait for the next pass', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    const outcome = { 1: 'wait', 2: 'auto-merge', 3: 'ready', 4: 'updated' };
+    const seen = [];
+    const results = await runTick({
+      config: CONFIG, stateDir,
+      github: { listOpenPulls: async () => [4, 3, 2, 1].map((number) => ({ number })) },
+      stepPr: async (o, p) => { seen.push(p.number); return { outcome: outcome[p.number] }; },
+    });
+    assert.deepEqual(seen, [1, 2]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['1:wait', '2:auto-merge']);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
+});
+
+test('main moved by an outside merge mid-pass ends the pass before the next step; an unreadable main does too', async () => {
+  const stateDir = mkdtempSync(join(tmpdir(), 'pr-loop-tick-'));
+  try {
+    let main = 'm1';
+    const seen = [];
+    const run = (mainSha) => runTick({
+      config: CONFIG, stateDir, mainStart: 'm1', mainSha,
+      github: { listOpenPulls: async () => [1, 2, 3, 4].map((number) => ({ number })) },
+      // The founder merges another PR while PR 2 is being reviewed.
+      stepPr: async (o, p) => { seen.push(p.number); if (p.number === 2) main = 'm2'; return { outcome: 'wait' }; },
+    });
+    const results = await run(async () => main);
+    assert.deepEqual(seen, [1, 2]);
+    assert.deepEqual(results.map((r) => `${r.pr}:${r.outcome}`), ['1:wait', '2:wait']);
+    seen.length = 0;
+    assert.deepEqual(await run(async () => { throw new Error('ls-remote failed'); }), []);
+    assert.deepEqual(seen, []);
+  } finally { rmSync(stateDir, { recursive: true, force: true }); }
+});
+
 test('--no-post: the fix is committed locally and never pushed', async () => {
   const t = setup({ reviews: [fail('bad')] });
   try {
@@ -609,6 +721,11 @@ test('--no-post: the fix is committed locally and never pushed', async () => {
 });
 
 // ---------------------------------------------------------------- units
+
+test('findingsToFix takes a failed Founder Proxy\'s findings too', () => {
+  const f = findingsToFix({ key1: [{ key: 1, team: 'eng', status: 'pass', verdict: { findings: [] } }], key2: { key: 2, team: null, status: 'pass', verdict: { findings: [] } }, proxy: { key: 'proxy', team: null, role: 'founder-proxy', status: 'fail', verdict: { findings: [{ file: 'a', line: 3, severity: 'blocker', text: 'p' }] } } });
+  assert.deepEqual(f.map((x) => [x.id, x.key, x.team, x.text]), [['F1', 'proxy', 'founder-proxy', 'p']]);
+});
 
 test('fingerprint ignores line, case and spacing; findingsToFix takes blocking findings of failed keys', () => {
   assert.equal(fingerprint({ key: 1, team: 'x', file: 'a', text: 'Foo  bar' }), fingerprint({ key: 1, team: 'x', file: 'a', text: 'foo bar', line: 9 }));
@@ -627,7 +744,7 @@ test('validateFixerOutput and forbiddenChanges', () => {
   const rules = { forbidden: REAL_LOOP.fixer_forbidden, sections: REAL_LOOP.review_sections };
   assert.deepEqual(forbiddenChanges(['agents/sre/agent.md', 'os/a.ts'], rules, io), [], 'a non-review section of a spec may change');
   assert.equal(forbiddenChanges(['agents/sre/agent.md'], rules, { ...io, readAfter: () => '# x\n\n## Key 1 review\nnew\n' }).length, 1);
-  for (const p of ['.github/workflows/os.yml', '.github/CODEOWNERS', '.github/review-teams.yml', '.github/scripts/pr-loop/pr-loop.mjs', '.claude/skills/pr-review/SKILL.md', '.claude/settings.json', 'AGENTS.md', 'package.json', 'os/package-lock.json', 'docs/operations/pr-loop.plist']) {
+  for (const p of ['.github/workflows/os.yml', '.github/review-teams.yml', 'agents/founder-proxy/agent.md', '.github/scripts/pr-loop/pr-loop.mjs', '.claude/skills/pr-review/SKILL.md', '.claude/settings.json', 'AGENTS.md', 'package.json', 'os/package-lock.json', 'docs/operations/pr-loop.plist']) {
     assert.equal(forbiddenChanges([p], rules, io).length, 1, p);
   }
   const a = fixerArgs({ model: 'm', systemPrompt: 's', forbidden: ['.github/**'] });

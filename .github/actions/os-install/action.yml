@@ -1,0 +1,35 @@
+# Node 22 and os/node_modules for the Nirmaan OS jobs (.github/workflows/os.yml).
+# node_modules is restored from a cache keyed by the runner OS, the exact Node
+# version, and os/package.json with os/package-lock.json, so a cached tree is
+# what `npm ci` would install from the same lockfile. On a miss `npm ci` runs
+# as before (it also fails when package.json and the lockfile disagree, and a
+# change to either is a miss). On a hit only `prisma generate` runs, because
+# the generated client follows prisma/schema.prisma, not the lockfile.
+# The cache is saved only when the job succeeds. Actions are pinned by commit
+# SHA, with the release in a comment.
+name: OS install
+description: Node 22 and os/node_modules (cached by lockfile, else npm ci), with the Prisma client generated.
+runs:
+  using: composite
+  steps:
+    - id: node
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: 22
+        cache: npm
+        cache-dependency-path: os/package-lock.json
+    - id: modules
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: os/node_modules
+        key: os-node-modules-${{ runner.os }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('os/package.json', 'os/package-lock.json') }}
+    - name: Install (npm ci)
+      if: steps.modules.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: os
+      run: npm ci
+    - name: Generate the Prisma client (node_modules from cache)
+      if: steps.modules.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: os
+      run: npx prisma generate

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The automated review loop ("driver"): for each open PR by the agents'
-// account it waits for CI, runs the two-key review (review.mjs), and then
+// account it waits for CI, runs the two-key review (review.mjs, which adds
+// the Founder Proxy (agent) on a founder-class PR), and then
 // either takes the merge path or, when a key failed with findings, starts a
 // separate fixer process, checks and pushes its fix, and lets the new head
 // be reviewed again from scratch. How it runs: docs/operations/pr-review.md
@@ -9,28 +10,29 @@
 // One step per PR per call, as a state machine, so the loop survives restarts
 // and a step never waits on CI:
 //   skip     draft, fork, other author, `hold` or `needs-founder` label, or
-//            this head already finished (ready, auto-merge, founder wait);
+//            this head already finished (ready, auto-merge);
 //   update   GitHub reports the branch behind main (the ruleset requires
 //            branches to be up to date): merge main into it with the gh
 //            login (update-branch, pinned to the head the loop saw) before
-//            any review, and again before a founder-class PR is put to the
-//            founder, so the founder approves a head that can merge; a
-//            failed update stops, a person's push in between drops the step;
+//            any review, and again after the review when main moved during
+//            it; a failed update stops, a person's push in between drops the
+//            step;
 //   wait     required CI not finished on the head, or GitHub still making
 //            the update's merge commit;
-//   stop     CI failed on a head the loop pushed, a merge conflict, a key
-//            deferred (rate limit, bad output, missing spec), a repeated
-//            finding, the round limit, a forbidden path, a failed local
-//            check, or any error: label `needs-founder` and say why;
-//   review   both keys (fresh read-only processes, review.mjs);
-//   merge    both keys passed: `gh pr merge --auto --merge` with the gh login
-//            when the review App posts the checks and the repository's
-//            allow_auto_merge field (read with gh) is true; a "ready" comment
-//            in a dry run or when it is false; the field unreadable or any
-//            merge error stops. Founder-class PRs are never merged
-//            by the loop: it waits for the founder's GitHub approval and the
-//            founder merges;
-//   fix      a key failed: a fresh fixer `claude -p` in a clean worktree of
+//   stop     CI failed on a head the loop pushed, a merge conflict, a key or
+//            the proxy deferred (rate limit, bad output, missing spec), the
+//            Founder Proxy returned needs-founder (until the founder's own
+//            GitHub review approves the head), a repeated finding, the round
+//            limit, a forbidden path, a failed local check, or any error:
+//            label `needs-founder` and say why;
+//   review   both keys, and the Founder Proxy for a founder-class PR (fresh
+//            read-only processes, review.mjs);
+//   merge    both keys (and the proxy, for a founder-class PR) passed:
+//            `gh pr merge --auto --merge` with the gh login when the review
+//            App posts the checks and the repository's allow_auto_merge
+//            field (read with gh) is true; a "ready" comment in a dry run or
+//            when it is false; the field unreadable or any merge error stops;
+//   fix      a key or the proxy failed: a fresh fixer `claude -p` in a clean worktree of
 //            the head, write tools only there; the loop (never the model)
 //            regenerates, commits, runs the checks and pushes.
 //
@@ -43,7 +45,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globMatch } from '../review-teams.mjs';
-import { acquireLock, logCall, nonce, parseNameStatusZ, parseVerdictText, redact, requiredCi } from '../pr-review/lib.mjs';
+import { acquireLock, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText, redact, requiredCi } from '../pr-review/lib.mjs';
 import { reviewerEnv, runOnce } from '../pr-review/claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from '../pr-review/github.mjs';
 import { defaults, differsFromMain, EXIT, runReview } from '../pr-review/review.mjs';
@@ -191,22 +193,13 @@ export async function stepPr(o, listed) {
   try {
     const pull = await o.github.getPull(n);
     const head = pull.headSha;
-    const founderApproval = async () => {
-      const mine = (await o.github.listReviews(n)).filter((r) => r.login === cfg.founder_login && ['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(r.state));
-      const last = mine[mine.length - 1];
-      return !!last && last.state === 'APPROVED' && last.commitId === head;
-    };
     // Behind main: update first, also for a head that already finished (it
-    // cannot merge while behind, and a founder-class PR must not be approved
-    // on a head that needs another push).
+    // cannot merge while behind).
     if (pull.mergeableState === 'behind' && st.done?.outcome !== 'refused') {
       const u = await updateBehind(o, { n, head, st, say, stop, log, out });
       if (u) return u;
     }
-    if (st.done?.head === head) {
-      if (st.done.outcome !== 'founder-wait' || st.done.founderRerun) return skip(`${st.done.outcome} on this head`);
-      if (!(await founderApproval())) return skip("waiting for the founder's approval on this head");
-    }
+    if (st.done?.head === head) return skip(`${st.done.outcome} on this head`);
     if (pull.mergeable === false || pull.mergeableState === 'dirty') return await stop(head, 'the branch has a merge conflict with main; a person resolves it');
 
     const ci = ciState(cfg.required_ci, await o.github.listCheckRuns(head));
@@ -234,13 +227,23 @@ export async function stepPr(o, listed) {
       if (r.ciFailed) return st.lastFixHead === head ? await stop(head, `CI failed after fix round ${st.rounds} (${r.ciFailed})`) : skip(`${r.ciFailed}; the author fixes it`);
       if (r.deferred) return await stop(head, `review deferred: ${r.deferred}`);
       const k1 = r.key1 ?? [];
-      const deferred = [...k1, ...(r.key2 ? [r.key2] : [])].filter((k) => k.status === 'deferred');
+      // The Founder Proxy (agent) is a reviewer like the keys: deferred
+      // stops, fail goes to the fixer.
+      const all = [...k1, ...(r.key2 ? [r.key2] : []), ...(r.proxy ? [r.proxy] : [])];
+      const deferred = all.filter((k) => k.status === 'deferred');
       if (k1.length === 0) return await stop(head, 'review deferred: no owning team');
       if (deferred.length) return await stop(head, `review deferred (${deferred.map((k) => `${k.teamName}: ${k.reason}`).join('; ')})`);
-      const failed = [...k1, ...(r.key2 ? [r.key2] : [])].filter((k) => k.status === 'fail');
-      log('reviewed', { key1: k1.map((k) => `${k.team}:${k.status}`).join(','), key2: r.key2?.status ?? 'not run' });
+      const failed = all.filter((k) => k.status === 'fail');
+      log('reviewed', { key1: k1.map((k) => `${k.team}:${k.status}`).join(','), key2: r.key2?.status ?? 'not run', proxy: r.proxy?.status ?? 'not run' });
+      // What the founder keeps: the loop stops and the founder decides on
+      // GitHub. Their own review approving this head lets the review pass
+      // review/executive; removing the label lets the loop resume.
+      if (r.proxy?.status === NEEDS_FOUNDER && !r.founderApproved) {
+        const why = (r.proxy.verdict?.founder_reasons ?? []).join('; ');
+        return await stop(head, `the Founder Proxy (agent) returned needs-founder: ${why}. The founder decides: approve head ${head.slice(0, 7)} on GitHub (or not), then remove the label`);
+      }
 
-      if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, out, founderApproval });
+      if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, out });
       return await fixRound(o, { n, head, pull, st, r, say, stop, log, out });
     } finally { lock.release(); }
   } catch (e) {
@@ -275,35 +278,14 @@ async function updateBehind(o, { n, head, st, say, stop, log, out }) {
   return { outcome: 'updated' };
 }
 
-async function mergePath(o, { n, head, st, r, say, stop, log, out, founderApproval }) {
+async function mergePath(o, { n, head, st, r, say, stop, log, out }) {
   const cfg = o.config;
   const sha7 = head.slice(0, 7);
-  const classes = Object.keys(r.classification?.founder ?? {});
   const now = await o.github.getPull(n);
   if (now.labels.includes(cfg.hold_label)) { log('held'); return { outcome: 'skip', reason: 'hold label set during the review' }; }
   // main moved during the review: this head cannot merge, so update it rather
-  // than ask the founder (or GitHub) to merge it.
+  // than ask GitHub to merge it.
   if (now.mergeableState === 'behind' && o.post !== 'none') return await updateBehind(o, { n, head, st, say, stop, log, out });
-  if (classes.length) {
-    const approved = await founderApproval();
-    const first = st.done?.head !== head;
-    st.done = { head, outcome: 'founder-wait', founderRerun: approved };
-    saveState(o.stateDir, cfg.repo, st);
-    log('founder-wait', { classes: classes.join(','), founder_approved: approved });
-    if (first || approved) {
-      await say([
-        `<!-- ${MARK} ready head=${head} founder=${classes.join(',')} -->`,
-        `### Automated loop: both keys passed on \`${sha7}\``,
-        '',
-        approved
-          ? `Founder class ${classes.join(', ')}: the founder's approval of this head is on GitHub, so \`review/executive\` was posted again. The loop never merges a founder-class PR; the founder merges it.`
-          : `Founder class ${classes.join(', ')}: this PR waits for the founder's GitHub approval of head \`${sha7}\`. The loop never merges a founder-class PR, and an agent review never stands in for the founder.`,
-        '',
-        '_Agent review, not a sign-off._',
-      ].join('\n'));
-    }
-    return { outcome: 'founder-wait', reason: approved ? 'founder approved; the founder merges' : 'waiting for the founder' };
-  }
   // The repository's "Allow auto-merge" setting decides between auto-merge
   // and "ready": read with the gh login (`allow_auto_merge`, a field, never
   // the wording of an error). Off: ready. On: `gh pr merge --auto`, and any
@@ -329,15 +311,23 @@ async function mergePath(o, { n, head, st, r, say, stop, log, out, founderApprov
   }
   if (!why) {
     log('auto-merge');
-    await say(`<!-- ${MARK} auto-merge head=${head} -->\n### Automated loop: both keys passed on \`${sha7}\`\n\nAuto-merge is on for this PR: GitHub merges it with a merge commit once every required check passes on this head.\n\n_Agent review, not a sign-off._`);
+    await say(`<!-- ${MARK} auto-merge head=${head} -->\n### Automated loop: ${passedWhat(r)} on \`${sha7}\`\n\nAuto-merge is on for this PR: GitHub merges it with a merge commit once every required check passes on this head.\n\n_Agent review, not a sign-off._`);
     st.done = { head, outcome: 'auto-merge' };
   } else {
     log('ready', { why });
-    await say(`<!-- ${MARK} ready head=${head} -->\n### Automated loop: ready\n\nBoth keys passed on \`${sha7}\`, waiting for the founder's merge settings: ${why}. The founder merges this PR.\n\n_Agent review, not a sign-off._`);
+    await say(`<!-- ${MARK} ready head=${head} -->\n### Automated loop: ready\n\n${passedWhat(r, true)} on \`${sha7}\`, waiting for the founder's merge settings: ${why}. The founder merges this PR.\n\n_Agent review, not a sign-off._`);
     st.done = { head, outcome: 'ready' };
   }
   saveState(o.stateDir, cfg.repo, st);
   return { outcome: st.done.outcome };
+}
+
+// What passed, for the merge-path comments.
+function passedWhat(r, capital = false) {
+  const what = !r.proxy ? 'both keys passed'
+    : r.proxy.status === NEEDS_FOUNDER ? "both keys passed, and the founder's own GitHub review approves the changes the Founder Proxy (agent) sent to the founder"
+      : 'both keys and the Founder Proxy (agent) passed';
+  return capital ? what[0].toUpperCase() + what.slice(1) : what;
 }
 
 async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
@@ -481,20 +471,36 @@ function commitIdentity(o, head) {
 
 // ---------------------------------------------------------------- a tick
 
-// One pass over the open PRs. A PR the loop is fixing goes first; the pass
-// ends after the first PR that ran a review or a fix, so one PR at a time
-// moves through the expensive steps.
+// One pass over the open PRs: one step for every PR, so a PR waiting on CI,
+// or one that just ran a review or a fix, never holds up the others. A PR
+// the loop is fixing goes first, then by number. The steps run one after
+// another, and each review or fix round holds the shared lock, so reviews
+// still run one at a time (a lock held elsewhere makes that PR "busy" and
+// the pass goes on to the next).
 export async function runTick(o) {
   const cfg = o.config;
   const pulls = (await o.github.listOpenPulls()).filter((p) => !o.onlyPr || p.number === o.onlyPr);
   const inFlight = (p) => { const s = loadState(o.stateDir, cfg.repo, p.number); return s.lastFixHead && !s.done && !s.stopped ? 0 : 1; };
   pulls.sort((a, b) => inFlight(a) - inFlight(b) || a.number - b.number);
   const results = [];
+  // main's SHA when the pass began (the copy fetched and checked in main()).
+  // Before each step main is read again; if any merge moved it (this loop's,
+  // the founder's, the ip-nirmaan loop's), the pass ends, so no later step
+  // runs against a stale main or a script copy that no longer matches it.
+  // An unreadable main ends the pass too (fails safe).
+  const start = o.mainStart ?? null;
   for (const p of pulls) {
+    if (start && o.mainSha) {
+      let now = null;
+      try { now = await o.mainSha(); } catch { /* unreadable: end the pass */ }
+      if (now !== start) break;
+    }
     const r = await o.stepPr(o, p);
     results.push({ pr: p.number, ...r });
-    if (r.outcome === 'busy') break;
-    if (!['skip', 'wait', 'updated'].includes(r.outcome)) break;
+    // Auto-merge armed: main can move at any moment, so a later PR in this
+    // pass would be reviewed against a stale main. End the pass; the next one
+    // refetches main and reruns the differs-from-main check first.
+    if (r && r.outcome === 'auto-merge') break;
   }
   return results;
 }
@@ -526,6 +532,7 @@ async function main(argv) {
   const base = {
     repoRoot, config, loop, ...loopDefaults(), onlyPr, stepPr,
     callerBranch, inClaudeSession: !!process.env.CLAUDECODE,
+    mainSha: () => git(repoRoot, ['ls-remote', 'origin', `refs/heads/${config.base_branch}`]).split(/\s/)[0] || null,
     runGh: (args) => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
   };
   for (;;) {
@@ -544,7 +551,8 @@ async function main(argv) {
         return 4;
       }
     }
-    const results = await runTick({ ...base, github, post });
+    const mainStart = git(repoRoot, ['rev-parse', 'refs/pr-review/main']).trim();
+    const results = await runTick({ ...base, github, post, mainStart });
     console.log(`pr-loop: ${new Date().toISOString()} ${post}: ${results.map((r) => `#${r.pr} ${r.outcome}`).join(', ') || 'no open PRs'}`);
     if (once) return 0;
     await new Promise((r) => setTimeout(r, intervalMs));
