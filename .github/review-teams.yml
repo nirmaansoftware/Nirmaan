@@ -162,9 +162,29 @@ rules:
     teams: [business]
     checklists: [finance-estimation]
 
-  # OS.
+  # OS. Split by area (capability P1 item 5) so that each hiring PR only
+  # re-points a rule to the new unit. Until then every area keeps the interim
+  # Engineering team; os-app adds Design. Target owners: os-app Web and
+  # Design, os-ai AI and ML, os-lib Web, os the catch-all owner (Platform).
+  - id: os-app
+    # Screens: pages, layouts, _components, styles and fonts. API route
+    # handlers are server code and stay with `os`.
+    globs: ["os/src/app/**"]
+    exclude: ["os/src/app/api/**"]
+    teams: [engineering, design]
+    checklists: [ux-designer, frontend-engineer]
+  - id: os-ai
+    globs: ["os/src/lib/{ai,agents,evaluation}/**"]
+    teams: [engineering]
+  - id: os-lib
+    globs: ["os/src/lib/**"]
+    exclude: ["os/src/lib/{ai,agents,evaluation}/**"]
+    teams: [engineering]
   - id: os
-    globs: ["os/**"]
+    # The rest of os/: top-level config and docs, API route handlers,
+    # scripts, public files and the request proxy. A new top-level folder
+    # under os/ needs a rule.
+    globs: ["os/*", "os/src/*", "os/src/app/api/**", "os/scripts/**", "os/public/**"]
     teams: [engineering]
   - id: os-database
     globs: ["os/prisma/**"]
@@ -207,6 +227,17 @@ rules:
   - id: production-config
     globs: ["fly.toml", "Dockerfile.os"]
     teams: [platform-quality]
+
+  # Website front end: the frontend-engineer checklist runs on every source
+  # file of the site (its markup, scripts and styles), inside Engineering's
+  # key 1. Excluded: the pages that already have three owning teams (price,
+  # legal, client and product pages), so that no single file needs four keys
+  # (a PR with more than three teams is split, and one file cannot be).
+  - id: website-frontend
+    globs: ["website/src/**"]
+    exclude: ["website/src/{pricing,plan,care,privacy,terms,projects,products,outreach}.njk", "website/src/_includes/estimator.njk"]
+    teams: [engineering]
+    checklists: [frontend-engineer]
 
   # Website build.
   - id: website-build
