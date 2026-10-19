@@ -518,3 +518,44 @@ content_rules:
     markers:
       - file: "os/src/lib/auth/permissions.ts"
       - file: "os/src/lib/prospecting/outreach.ts"
+  - id: licence-and-export
+    # Licence terms and export control are the founder's (Founder Proxy
+    # reserved list; founder record 2026-10-18-founder-proxy-decisions.md).
+    # A change to licence text, a licence identifier or header, a dependency
+    # under restrictive licence terms, or an export-control statement makes the
+    # PR founder class D, so the Founder Proxy reviews it.
+    adds_teams: [business]
+    founder_class: D
+    checklists: [legal-compliance]
+    patterns:
+      - "\\b(MIT|Apache|BSD|ISC|GNU (Affero |Lesser )?General Public|Mozilla Public|Creative Commons|SIL Open Font)\\s+licen[cs]e\\b"
+      - "\\bpermission is hereby granted\\b"
+      - "\\blicensed under\\b"
+      - "SPDX-License-Identifier"
+      - "\\blicen[cs]e terms\\b|\\bterms of (the|this) licen[cs]e\\b"
+      - "\"license\"\\s*:\\s*\"[^\"]*\\b(A?GPL|LGPL|SSPL|BUSL|CC-BY-NC|Commons-Clause|UNLICENSED)"
+      - "\\bexport[- ]control(s|led)?\\b"
+      - "\\b(ECCN|EAR99|ITAR)\\b"
+      - "\\bdual[- ]use\\b"
+    examples:
+      - "MIT License"
+      - "Permission is hereby granted, free of charge"
+      - "Licensed under the Apache License, Version 2.0"
+      - "// SPDX-License-Identifier: Apache-2.0"
+      - "the licence terms for skills/"
+      - "\"license\": \"AGPL-3.0-only\","
+      - "export-controlled technology"
+      - "classified EAR99"
+    markers:
+      - file: "os/src/app/fonts/OFL-archivo.txt"
+      - file: "docs/operations/2026-10-18-founder-proxy-decisions.md"
+  - id: own-licence-field
+    # The licence field of Nirmaan's own package manifests: the outbound
+    # licence is a founder item (G4 of capability-hierarchy-decisions.md).
+    adds_teams: [business]
+    founder_class: D
+    checklists: [legal-compliance]
+    applies_to: ["os/package.json", "website/package.json"]
+    patterns:
+      - "\"licen[cs]e\"\\s*:"
+    examples: ["\"license\": \"MIT\","]
