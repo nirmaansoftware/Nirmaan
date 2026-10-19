@@ -1,6 +1,7 @@
 {
   "authors": ["patel-om"],
   "max_fix_rounds": 3,
+  "rate_limit_pause_minutes": 30,
   "needs_founder_label": "needs-founder",
   "co_author": "Claude Opus 5.5 <noreply@anthropic.com>",
   "rules_files": ["AGENTS.md", "CLAUDE.md"],
