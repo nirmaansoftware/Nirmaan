@@ -31,6 +31,8 @@ export interface RunAgentResult {
   usage?: TokenUsage;
   /** Real provider-reported USD cost when available (claude-code-cli reports it directly). */
   costUsd?: number;
+  /** Wall-clock time of the model call alone, in milliseconds. Excludes loading the agent and writing the artifact, so it measures model latency. */
+  durationMs: number;
 }
 
 export { projectsRoot };
@@ -116,12 +118,14 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   const modelConfig = resolveModel(input.taskType, input.modelOverrides);
   const provider = input.provider ?? providerFor(modelConfig);
 
+  const started = performance.now();
   const completion = await provider.complete({
     systemPrompt: buildSystemPrompt(agent.role, agent.body),
     userPrompt: buildUserPrompt(input),
     model: modelConfig.model,
     maxTokens: modelConfig.maxTokens,
   });
+  const durationMs = Math.round(performance.now() - started);
 
   const { metadata, body } = parseAgentResponse(completion.text, input, agent.slug);
   const filePath = writeVersionedArtifact(input.projectId, input.outputRelativePath, stripUndefined(metadata), body);
@@ -134,5 +138,6 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     provider: completion.provider,
     usage: completion.usage,
     costUsd: completion.costUsd,
+    durationMs,
   };
 }
