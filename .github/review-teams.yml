@@ -162,6 +162,14 @@ rules:
     teams: [business]
     checklists: [finance-estimation]
 
+  # Skills (skills/README.md). The style rules and the template are Brand and
+  # Content's. Each unit's skills, skills/<unit>/**, get a rule naming that
+  # unit, added with the unit's first skill (the skill validator checks it).
+  - id: skills-style
+    globs: ["skills/README.md", "skills/_template.md"]
+    teams: [brand-content]
+    checklists: [content-strategist, technical-writer]
+
   # OS. Split by area, so that moving one area to another team later changes
   # one rule. Every area keeps the Engineering team; os-app adds Design.
   - id: os-app
