@@ -486,22 +486,24 @@ model ChangeRequest {
 
 // One row per model call. The basis for AI cost governance.
 model AiUsage {
-  id           String   @id @default(cuid())
-  task         String // e.g. "discovery"
-  agentSlug    String?
-  provider     String
-  model        String
-  inputTokens  Int?
-  outputTokens Int?
-  costUsd      Float? // real when the provider reports it, else estimated, else null
-  costSource   String // REPORTED|ESTIMATED|UNKNOWN
-  latencyMs    Int
-  success      Boolean
-  error        String?
-  leadId       String?
-  projectId    String?
-  prospectId   String?
-  createdAt    DateTime @default(now())
+  id                       String   @id @default(cuid())
+  task                     String // e.g. "discovery"
+  agentSlug                String?
+  provider                 String
+  model                    String
+  inputTokens              Int? // uncached input only; total input adds the two cache columns
+  outputTokens             Int?
+  cacheReadInputTokens     Int? // null when the provider did not report it
+  cacheCreationInputTokens Int? // null when the provider did not report it
+  costUsd                  Float? // real when the provider reports it, else estimated, else null
+  costSource               String // REPORTED|ESTIMATED|UNKNOWN
+  latencyMs                Int
+  success                  Boolean
+  error                    String?
+  leadId                   String?
+  projectId                String?
+  prospectId               String?
+  createdAt                DateTime @default(now())
 
   @@index([createdAt])
 }

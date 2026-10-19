@@ -1,5 +1,5 @@
 import { runCommand, type RunCommandResult } from "@/lib/process/commandRunner";
-import type { CompletionRequest, CompletionResult, ModelProvider } from "@/lib/ai/providers/types";
+import type { CompletionRequest, CompletionResult, ModelProvider, TokenUsage } from "@/lib/ai/providers/types";
 
 /**
  * Runs a completion through the `claude` CLI itself rather than the
@@ -38,7 +38,32 @@ interface ClaudeCliJsonResult {
   usage?: {
     input_tokens: number;
     output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
   };
+}
+
+/** A token count is kept only when it is a real non-negative integer; anything else is dropped, not coerced. */
+function tokenCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * Maps the CLI's usage block to TokenUsage. The cache fields matter: a call
+ * that reads a large cached prompt reports only a few uncached input_tokens,
+ * so dropping cache_read_input_tokens undercounts what the call consumed.
+ */
+export function cliUsage(usage: ClaudeCliJsonResult["usage"]): TokenUsage | undefined {
+  if (!usage) return undefined;
+  const inputTokens = tokenCount(usage.input_tokens);
+  const outputTokens = tokenCount(usage.output_tokens);
+  if (inputTokens === undefined || outputTokens === undefined) return undefined;
+  const result: TokenUsage = { inputTokens, outputTokens };
+  const cacheRead = tokenCount(usage.cache_read_input_tokens);
+  const cacheCreation = tokenCount(usage.cache_creation_input_tokens);
+  if (cacheRead !== undefined) result.cacheReadInputTokens = cacheRead;
+  if (cacheCreation !== undefined) result.cacheCreationInputTokens = cacheCreation;
+  return result;
 }
 
 export class ClaudeCodeCliProvider implements ModelProvider {
@@ -98,9 +123,7 @@ export class ClaudeCodeCliProvider implements ModelProvider {
       text: parsed.result,
       provider: "claude-code-cli",
       model: req.model,
-      usage: parsed.usage
-        ? { inputTokens: parsed.usage.input_tokens, outputTokens: parsed.usage.output_tokens }
-        : undefined,
+      usage: cliUsage(parsed.usage),
       costUsd: parsed.total_cost_usd,
     };
   }
