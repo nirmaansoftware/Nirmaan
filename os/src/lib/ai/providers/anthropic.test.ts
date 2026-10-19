@@ -50,3 +50,10 @@ test("complete() leaves the cache fields undefined, not 0, when the API reports 
   const result = await provider.complete(REQUEST);
   assert.deepEqual(result.usage, { inputTokens: 21, outputTokens: 340 });
 });
+
+test("complete() drops a negative or non-integer cache field instead of keeping it", async () => {
+  const message = messageFixture({ cache_read_input_tokens: -5, cache_creation_input_tokens: 2.5 });
+  const provider = new AnthropicProvider(undefined, { client: fakeClient(message) });
+  const result = await provider.complete(REQUEST);
+  assert.deepEqual(result.usage, { inputTokens: 21, outputTokens: 340 });
+});

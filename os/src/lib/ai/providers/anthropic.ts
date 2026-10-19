@@ -1,14 +1,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CompletionRequest, CompletionResult, ModelProvider, TokenUsage } from "@/lib/ai/providers/types";
 
+/** A cache count is kept only when it is a non-negative integer, as in cliUsage; anything else is dropped, not coerced. */
+function cacheCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
 /**
  * Maps the API's usage block to TokenUsage. The API reports the cache fields
  * as null when they do not apply; null stays undefined rather than becoming 0.
  */
 export function apiUsage(usage: Anthropic.Usage): TokenUsage {
   const result: TokenUsage = { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens };
-  if (typeof usage.cache_read_input_tokens === "number") result.cacheReadInputTokens = usage.cache_read_input_tokens;
-  if (typeof usage.cache_creation_input_tokens === "number") result.cacheCreationInputTokens = usage.cache_creation_input_tokens;
+  const cacheRead = cacheCount(usage.cache_read_input_tokens);
+  const cacheCreation = cacheCount(usage.cache_creation_input_tokens);
+  if (cacheRead !== undefined) result.cacheReadInputTokens = cacheRead;
+  if (cacheCreation !== undefined) result.cacheCreationInputTokens = cacheCreation;
   return result;
 }
 
