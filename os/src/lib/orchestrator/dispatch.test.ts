@@ -123,6 +123,28 @@ test("dispatchTask computes a real cost estimate and logs it when the provider r
   }
 });
 
+test("dispatchTask records cache-read and cache-creation tokens in the AiUsage row", async () => {
+  const tmpProjectsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agency-os-dispatch-test-"));
+  const prevRoot = process.env.PROJECTS_ROOT;
+  process.env.PROJECTS_ROOT = tmpProjectsRoot;
+
+  const { project, task } = await seedTestProject("business-analyst");
+  try {
+    const usage = { inputTokens: 4, outputTokens: 812, cacheReadInputTokens: 218_769, cacheCreationInputTokens: 12_480 };
+    await dispatchTask(task.id, { provider: new MockProvider(READY_RESPONSE, usage, "claude-sonnet-5") });
+
+    const row = await prisma.aiUsage.findFirstOrThrow({ where: { projectId: project.id, success: true } });
+    assert.equal(row.inputTokens, 4);
+    assert.equal(row.cacheReadInputTokens, 218_769);
+    assert.equal(row.cacheCreationInputTokens, 12_480);
+  } finally {
+    await cleanupTestProject(project.id);
+    fs.rmSync(tmpProjectsRoot, { recursive: true, force: true });
+    if (prevRoot === undefined) delete process.env.PROJECTS_ROOT;
+    else process.env.PROJECTS_ROOT = prevRoot;
+  }
+});
+
 test("dispatchTask reports costUsd null and logs 'unknown model' when usage exists but the model has no pricing entry", async () => {
   const tmpProjectsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agency-os-dispatch-test-"));
   const prevRoot = process.env.PROJECTS_ROOT;

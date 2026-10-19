@@ -32,6 +32,51 @@ test("complete() parses a successful CLI response into a CompletionResult", asyn
   assert.equal(result.costUsd, 0.0197);
 });
 
+// Shaped like real `claude -p --output-format json` output: a call that reuses
+// a cached system prompt reports few uncached input_tokens and many cache reads.
+const CACHED_JSON = JSON.stringify({
+  type: "result",
+  subtype: "success",
+  is_error: false,
+  duration_ms: 4210,
+  duration_api_ms: 3980,
+  num_turns: 1,
+  result: "answer from a cached prompt",
+  session_id: "fixture-session",
+  total_cost_usd: 0.1342,
+  usage: {
+    input_tokens: 4,
+    cache_creation_input_tokens: 12_480,
+    cache_read_input_tokens: 218_769,
+    output_tokens: 812,
+    server_tool_use: { web_search_requests: 0 },
+    service_tier: "standard",
+  },
+});
+
+test("complete() keeps cache_read_input_tokens and cache_creation_input_tokens from the CLI usage block", async () => {
+  const provider = new ClaudeCodeCliProvider("claude", 60_000, fakeRunner({ stdout: CACHED_JSON }));
+  const result = await provider.complete({ systemPrompt: "s", userPrompt: "u", model: "claude-sonnet-5", maxTokens: 100 });
+  assert.deepEqual(result.usage, {
+    inputTokens: 4,
+    outputTokens: 812,
+    cacheReadInputTokens: 218_769,
+    cacheCreationInputTokens: 12_480,
+  });
+});
+
+test("complete() drops a cache field that is not a non-negative integer instead of coercing it", async () => {
+  const badJson = JSON.stringify({
+    result: "ok",
+    is_error: false,
+    subtype: "success",
+    usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: "lots", cache_creation_input_tokens: -1 },
+  });
+  const provider = new ClaudeCodeCliProvider("claude", 60_000, fakeRunner({ stdout: badJson }));
+  const result = await provider.complete({ systemPrompt: "s", userPrompt: "u", model: "claude-sonnet-5", maxTokens: 100 });
+  assert.deepEqual(result.usage, { inputTokens: 10, outputTokens: 5 });
+});
+
 test("complete() passes --allowedTools '' so the underlying call never has ambient tool access", async () => {
   let capturedArgs: string[] = [];
   const runner = async (cmd: string, args: string[]): Promise<RunCommandResult> => {
