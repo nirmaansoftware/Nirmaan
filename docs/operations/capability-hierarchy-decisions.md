@@ -147,7 +147,7 @@ L0 Founder (human)
    │  │  ├─ L6 product-manager (deputy; PRDs, delivery planner until D2.4 moves it)
    │  │  ├─ L6 business-analyst
    │  │  ├─ L6 market-research
-   │  │  └─ L6 product-owner · hire (Nirmaan's own products, pricing and packaging)
+   │  │  └─ L6 product-owner · hire (Nirmaan's own products; drafts pricing and packaging, and the founder sets published prices, founder class C)
    │  ├─ L4 Head of Design · creative-director · manager · 4
    │  │  ├─ L6 ui-designer (deputy)
    │  │  ├─ L6 ux-designer
@@ -277,7 +277,7 @@ exactly one owning unit and exactly one client-voice unit, both active
 | Lead NEW, DISCOVERY, QUALIFIED, PROPOSAL, WON, LOST, SPAM | Commercial | Commercial | business-analyst works pre-sale discovery when staffed by Commercial |
 | Project LEAD | Commercial | Commercial | |
 | DISCOVERY, REQUIREMENTS | Product | Commercial | Product supplies the scope facts |
-| ESTIMATION, PROPOSAL | Commercial | Commercial | finance-estimation prices. pre-sales-solutions-architect never prices. Before a proposal is SENT, a feasibility check is recorded by the engineering head who would staff the project, under the Principal Architect's architecture authority (sales-partnerships) |
+| ESTIMATION, PROPOSAL | Commercial | Commercial | finance-estimation drafts the estimate and the founder sets the client price (founder class C). pre-sales-solutions-architect never prices. Before a proposal is SENT, a feasibility check is recorded by the engineering head who would staff the project, under the Principal Architect's architecture authority (sales-partnerships) |
 | APPROVED to DEPLOYMENT | Delivery | Delivery (the project's delivery-manager) | Work by Design, the engineering heads, Quality (QA stage), Security (SECURITY_REVIEW) and Platform (DEPLOYMENT) |
 | MONITORING | Platform | Commercial (customer-support) | |
 | MAINTENANCE | Delivery (service-delivery-manager) | Commercial (customer-support) | |
@@ -409,7 +409,10 @@ exactly one owning unit and exactly one client-voice unit, both active
    - a missing spec or Key 2 section on `main` is a deferral, never a hand-off
      to a lower role;
    - only the founder overrides a Security fail;
-   - a timeout moves a question up a rung and never turns a block into a pass.
+   - a timeout never turns a block into a pass. Moving a timed-out question up
+     a rung is part of the D4.4 proposal and not in effect: until the founder
+     approves it, a timed-out key is deferred and stays pending, as `main`'s
+     rules in `docs/operations/pr-review.md` say.
 4. **Deputies and rate limits (rule 2.3.6): PROPOSAL, not in effect.** These
    rules change when a key may pause and who may take a key, which is a
    review-gate change the founder keeps. The meeting proposes them; they take
@@ -603,7 +606,7 @@ exactly one owning unit and exactly one client-voice unit, both active
    |---|---|---|
    | Legal positions (privacy and terms already cover both sites) | One answer | legal-compliance. IP Nirmaan keeps export control, RTL licensing and its Apache-2.0 notices |
    | Tax positions | One answer, with a specialist split: tax on IP licensing stays with IP Nirmaan | tax-accounts; open questions for a chartered accountant are kept privately |
-   | Estimation and licence pricing | Per organisation | finance-estimation |
+   | Estimation and licence pricing | Per organisation; agents draft, the founder sets prices (founder class C) | finance-estimation |
    | Shared site layer and design tokens | Shared, one owner; IP Nirmaan is a pinned consumer; `/os` consumes the tokens | Head of Design |
    | Brand names | Founder class E | founder |
    | Positioning, voice, copy | Per organisation | brand-strategist |
@@ -615,7 +618,9 @@ exactly one owning unit and exactly one client-voice unit, both active
    (section 7). Both IP Nirmaan seats map to their own org roles, which the IP
    Nirmaan meeting decides.
 2. **One legal entity or two is a founder question** (section 9, item 5).
-   It goes to a qualified lawyer and a chartered accountant. Until the founder answers:
+   Whether to take it to a qualified lawyer and a chartered accountant is the
+   founder's choice: engaging or paying counsel stays with the founder. Until
+   the founder answers:
    - the chart records `legal_entity: undetermined`;
    - treatments between the two organisations stay low confidence;
    - drafts take party names only from that field, never from unit names.
@@ -900,14 +905,15 @@ class A PRs.
 4. Nirmaan's outbound licence for the repository, or for `skills/` and
    `examples/`, recorded before the first knowledge PR merges (G4).
    Choosing "unlicensed" explicitly is a valid answer.
-5. Whether Nirmaan and IP Nirmaan are one legal entity or two, with a
-   qualified lawyer and a chartered accountant. Public wording follows the
-   answer.
+5. Whether Nirmaan and IP Nirmaan are one legal entity or two, and whether to
+   take that to a qualified lawyer and a chartered accountant (engaging or
+   paying counsel is the founder's). Public wording follows the answer.
 6. Switching key 2 from the Orchestrator to the derived rule, after G7. The
    switch adds a dated "Superseded by" note to
    `docs/operations/pr-review-decisions.md`.
 7. The weekly pace at the usage review (T28).
-8. Whether a statutory data protection officer is required (with counsel).
+8. Whether a statutory data protection officer is required (and whether to
+   ask counsel; engaging or paying counsel is the founder's).
 9. Any sandbox or third-party accounts that Integrations examples would need
    (no spending).
 10. How the chart records the Founder Proxy (agent), which the meeting did not
