@@ -388,6 +388,25 @@ GitHub's merge time. Nothing is written under the repository. Per-PR loop
 state (rounds, findings seen, the last head it pushed, lock wait) is in
 `~/.nirmaan/pr-review/loop/`.
 
+**Author-side usage.** Author pipelines that run `claude -p` steps (a
+writer, a checker, an eval) can run each step through
+`.github/scripts/author/run.mjs`, so the plan's use by authors is logged beside
+the review loop's:
+
+```sh
+node .github/scripts/author/run.mjs --role content-strategist --step writer \
+  [--pr <n>] [--repo <owner/name>] -- -p --model sonnet < prompt.txt
+```
+
+Everything after `--` goes to `claude` unchanged (with `--output-format json`
+added when not given; another output format is refused, since the usage is
+read from the JSON result). Input, output and exit code pass through. Each run
+appends one line (`kind` `author`: role, step, model, outcome, exit code,
+duration, input, output and cache tokens; never the prompt or the answer) to
+`calls.jsonl` in the state directory (`NIRMAAN_REVIEW_STATE_DIR`, default
+`~/.nirmaan/pr-review`), outside the repository. Bad arguments exit 2 and run
+nothing.
+
 **Running it.** It runs on the founder's Mac with the Mac's own `claude` login
 (the plan) and `gh` login, so it adds no spend and no secret in GitHub
 Actions. Like the review script, it refuses to post unless it is `main`'s
