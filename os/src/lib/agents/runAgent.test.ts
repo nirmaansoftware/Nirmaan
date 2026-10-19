@@ -14,6 +14,7 @@ import matter from "gray-matter";
 import { loadAgent, listAgentSlugs } from "./loadAgent";
 import { runAgent } from "./runAgent";
 import { MockProvider } from "@/lib/ai/providers/mock";
+import type { ModelProvider } from "@/lib/ai/providers/types";
 import type { HandoffMetadata } from "./types";
 
 test("loadAgent parses orchestrator/agent.md frontmatter and body", () => {
@@ -142,6 +143,42 @@ test("runAgent never overwrites an existing artifact — writes a versioned file
     assert.notEqual(first.filePath, second.filePath);
     assert.ok(fs.existsSync(first.filePath), "original artifact must still exist");
     assert.match(second.filePath, /prd-v2\.md$/);
+  } finally {
+    if (prevRoot === undefined) delete process.env.PROJECTS_ROOT;
+    else process.env.PROJECTS_ROOT = prevRoot;
+    fs.rmSync(tmpProjectsRoot, { recursive: true, force: true });
+  }
+});
+
+test("runAgent reports durationMs for the model call and passes cache-token usage through", async () => {
+  const tmpProjectsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agency-os-test-"));
+  const prevRoot = process.env.PROJECTS_ROOT;
+  process.env.PROJECTS_ROOT = tmpProjectsRoot;
+
+  const usage = { inputTokens: 4, outputTokens: 812, cacheReadInputTokens: 218_769, cacheCreationInputTokens: 12_480 };
+  const mock = new MockProvider(undefined, usage, "claude-sonnet-5");
+  // A provider that takes a known minimum time, so durationMs must cover it.
+  const slow: ModelProvider = {
+    async complete(req) {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return mock.complete(req);
+    },
+  };
+
+  try {
+    const result = await runAgent({
+      agentSlug: "product-manager",
+      taskType: "requirements",
+      projectId: "demo-project",
+      userInput: "brief",
+      outputRelativePath: "requirements/prd.md",
+      provider: slow,
+    });
+
+    assert.equal(typeof result.durationMs, "number");
+    assert.ok(Number.isInteger(result.durationMs));
+    assert.ok(result.durationMs >= 25, `durationMs ${result.durationMs} should cover the 30ms call`);
+    assert.deepEqual(result.usage, usage);
   } finally {
     if (prevRoot === undefined) delete process.env.PROJECTS_ROOT;
     else process.env.PROJECTS_ROOT = prevRoot;
