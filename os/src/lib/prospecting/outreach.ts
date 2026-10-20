@@ -296,9 +296,12 @@ async function deliver(messageId: string, allowed: string[], actor: Actor, deps:
   const mailer = deps.mailer === undefined ? mailerFromEnv() : deps.mailer;
   if (!mailer) throw new Error("Email sending isn't set up yet (OUTREACH_FROM and SMTP_URL). Copy the message, send it from our mailbox, then press “I sent it myself”.");
 
+  // The cap counts the sends of `now`'s day only, not anything dated later.
   const startOfDay = new Date(now);
   startOfDay.setHours(0, 0, 0, 0);
-  const today = await prisma.outreachMessage.count({ where: { status: "SENT", sentVia: "EMAIL", sentAt: { gte: startOfDay } } });
+  const startOfNextDay = new Date(startOfDay);
+  startOfNextDay.setDate(startOfNextDay.getDate() + 1);
+  const today = await prisma.outreachMessage.count({ where: { status: "SENT", sentVia: "EMAIL", sentAt: { gte: startOfDay, lt: startOfNextDay } } });
   if (today >= dailyLimit()) throw new Error(`Today's limit of ${dailyLimit()} emails is reached (OUTREACH_DAILY_LIMIT). The rest go tomorrow.`);
 
   try {

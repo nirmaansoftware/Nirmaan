@@ -64,6 +64,10 @@ npm run lint
 npx next build
 ```
 
+`npm test` runs the test files one at a time (`--test-concurrency=1`): they share
+one SQLite database, and a file that waited behind another file's writes for
+more than SQLite's 5-second lock timeout failed with "Socket timeout".
+
 ## Environment
 
 Local values go in `.env.local`, which git ignores. `.env` holds only the local
