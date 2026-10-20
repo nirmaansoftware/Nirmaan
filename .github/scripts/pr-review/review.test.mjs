@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runReview, EXIT } from './review.mjs';
-import { acquireLock, classify, founderClassBlock, withFounderClassBlock, FOUNDER_BLOCK_OPEN, FOUNDER_BLOCK_CLOSE, parseNameStatusZ, parseVerdictText, prTextBlock, PROXY_DELEGATION, renderComment, validateVerdict, PR_TEXT_FILE } from './lib.mjs';
+import { acquireLock, classify, findingsBySeverity, founderClassBlock, verdictCacheName, withFounderClassBlock, FOUNDER_BLOCK_OPEN, FOUNDER_BLOCK_CLOSE, parseNameStatusZ, parseVerdictText, prTextBlock, PROXY_DELEGATION, renderComment, validateVerdict, PR_TEXT_FILE } from './lib.mjs';
 import { claudeArgs, interpret, reviewerEnv } from './claude.mjs';
 import { appJwt, appConfigFromEnv } from './github.mjs';
 import { parseYaml } from '../review-teams.mjs';
@@ -235,7 +235,7 @@ test('checklists come from the specs on main when they carry them (agents/README
     const k2 = sys(t.calls()[1]);
     assert.match(k2, /K2-SECTION-MARKER/);
     assert.match(k2, /LEAD-SECTION-MARKER/);
-    assert.doesNotMatch(k2, /CHECKLIST-MARKER-key2/);
+    assert.match(k2, /CHECKLIST-MARKER-key2/, 'the generic Key 2 checklist loads even when the key-2 role has its own section');
   } finally { t.cleanup(); }
 });
 
@@ -857,6 +857,38 @@ test('a rerun on the same head reuses the validated verdicts without a new call'
   } finally { t.cleanup(); }
 });
 
+test('the verdict cache is keyed on the role too: the same key and team under another role is reviewed again', async () => {
+  const k = { headSha: SHA, mainSha: 'b'.repeat(40), textDigest: 'd', key: 2, team: null };
+  assert.notEqual(verdictCacheName({ ...k, role: 'orchestrator' }), verdictCacheName({ ...k, role: 'chief-technology' }));
+  assert.notEqual(verdictCacheName({ ...k, key: 1, team: 'engineering', role: 'principal-architect' }), verdictCacheName({ ...k, key: 1, team: 'engineering', role: 'head-of-web' }));
+  assert.equal(verdictCacheName({ ...k, role: 'orchestrator' }), verdictCacheName({ ...k, role: 'orchestrator' }));
+  const t = setup();
+  try {
+    await t.run();
+    assert.equal(t.calls().length, 2);
+    await t.run({ config: { ...CONFIG, key2_role: 'security-engineer' } });
+    assert.equal(t.calls().length, 3, 'key 1 reused (same role), key 2 reviewed again (new role)');
+    assert.deepEqual(t.log().slice(2).map((l) => [l.key, l.role, l.outcome]), [[1, 'principal-architect', 'reused'], [2, 'security-engineer', 'ok']]);
+  } finally { t.cleanup(); }
+});
+
+test('each key result carries when it started and ended, and the validator\'s error when the verdict failed validation', async () => {
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/app.js', line: 999, severity: 'minor', text: 'x' }] }] });
+  try {
+    const r = await t.run();
+    const k = r.key1[0];
+    assert.equal(k.status, 'deferred');
+    assert.match(k.validationError, /os\/app\.js:999 does not exist at the head/);
+    assert.match(k.startedAt, /^\d{4}-\d\d-\d\dT/);
+    assert.ok(k.endedAt >= k.startedAt);
+  } finally { t.cleanup(); }
+});
+
+test('findingsBySeverity counts every severity', () => {
+  assert.deepEqual(findingsBySeverity({ findings: [{ severity: 'major' }, { severity: 'major' }, { severity: 'blocker' }, { severity: 'bogus' }] }), { blocker: 1, critical: 0, major: 2, minor: 0, info: 0 });
+  assert.deepEqual(findingsBySeverity(undefined), { blocker: 0, critical: 0, major: 0, minor: 0, info: 0 });
+});
+
 test('the verdict cache is keyed on the PR title and body too: the reviewers read them, so a text change is reviewed again', async () => {
   const gh = { title: 'Change app' };
   const t = setup({ gh });
@@ -924,6 +956,10 @@ test('interpret: success, error and rate-limit results', () => {
   assert.equal(interpret({ code: 0, stdout: JSON.stringify({ subtype: 'success', is_error: false, result: '{}' }), stderr: '' }).kind, 'ok');
   assert.equal(interpret({ code: 1, stdout: JSON.stringify({ subtype: 'error_during_execution', is_error: true, result: 'usage limit reached' }), stderr: '' }).kind, 'rate_limit');
   assert.equal(interpret({ code: 1, stdout: '', stderr: 'boom' }).kind, 'error');
+  // The plan's session limit, as claude reported it to the loop (subtype
+  // "success" with is_error), and as plain text without JSON.
+  assert.equal(interpret({ code: 1, stdout: JSON.stringify({ subtype: 'success', is_error: true, result: "You've hit your session limit · resets 3:10am (Asia/Calcutta)" }), stderr: '' }).kind, 'rate_limit');
+  assert.equal(interpret({ code: 1, stdout: '', stderr: "You've hit your session limit · resets 3:10am" }).kind, 'rate_limit');
 });
 
 test('reviewerEnv drops every token-bearing variable', () => {
