@@ -427,16 +427,21 @@ founder_classes:
 
 # Content rules: what a path cannot show. The review script runs each rule's
 # patterns (JavaScript regular expressions, case-insensitive) over the diff's
-# changed lines in files matching `applies_to` (every file when absent). A hit
-# adds `adds_teams` and, when set, makes the PR `founder_class`.
+# changed lines in files matching `applies_to` (every file when absent) and
+# not matching `exclude`. A hit adds `adds_teams` and, when set, makes the PR
+# `founder_class`.
 # `trigger: added_files` fires on a new file matching `applies_to` instead.
 # `examples` must each match a pattern (a test of the pattern itself);
 # `markers` name tracked files where a pattern must match today, so a rule
 # whose words drift away from the repository fails the coverage test.
 content_rules:
   - id: money
+    # Not in the knowledge folders (decision record D5.2, founder item 3): a
+    # skill teaches the work, and the skill validator fails currency amounts
+    # there instead.
     adds_teams: [business]
     founder_class: C
+    exclude: ["skills/**", "examples/**", "capability/**"]
     checklists: [finance-estimation, tax-accounts]
     patterns:
       - "₹\\s?\\d"
@@ -470,7 +475,10 @@ content_rules:
     markers:
       - file: "website/src/projects.njk"
   - id: market-claims
+    # Not in the knowledge folders (D5.2, founder item 3); the skill validator
+    # fails company-claim voice there instead.
     adds_teams: [product]
+    exclude: ["skills/**", "examples/**", "capability/**"]
     checklists: [market-research]
     founder_class: E
     patterns:
