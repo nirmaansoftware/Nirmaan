@@ -271,7 +271,7 @@ export function checkChart(chart, ctx) {
   for (const pos of positions.values()) if (pos.occupant) held.set(pos.occupant, [...(held.get(pos.occupant) ?? []), pos.id]);
   const unplaced = new Map(list(chart.unplaced).map((u) => [u.slug, u]));
   for (const u of list(chart.unplaced)) {
-    if (typeof u.reason !== 'string' || !u.reason.trim()) p('unplaced', `${u.slug}: an unplaced spec needs a reason (the founder decision it waits for)`);
+    if (typeof u.reason !== 'string' || !u.reason.trim()) p('unplaced', `${u.slug}: an unplaced spec needs a reason (why it is not placed)`);
     if (!specs.has(u.slug)) p('unplaced', `${u.slug}: has no agents/${u.slug}/agent.md`);
     if (held.has(u.slug)) p('unplaced', `${u.slug}: is unplaced but holds ${held.get(u.slug).join(', ')}`);
   }

@@ -49,11 +49,11 @@ version: 1
 # only from this field, never from unit names.
 legal_entity: undetermined
 
-# Specs the chart does not place yet, each waiting for a founder decision. An
-# unplaced spec holds no position, and nothing here decides it.
+# Specs the chart does not place, each with the reason. An unplaced spec holds
+# no position, and nothing here decides where it would sit.
 unplaced:
   - slug: founder-proxy
-    reason: "How the chart records the Founder Proxy (agent) is the founder's decision (decision record, section 9, item 10)."
+    reason: "The decision meeting did not place the Founder Proxy (agent) in the chart (decision record, note at the top, and section 9, item 10); this chart leaves it outside the agent line."
 
 positions:
   # ------------------------------------------------------------ apex
