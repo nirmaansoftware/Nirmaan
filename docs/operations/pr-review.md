@@ -138,12 +138,15 @@ approval.
   change.
 - **What it may not decide** returns `needs-founder`: new spending (a paid
   service, account, API key billing, a runner, or a dependency or tool that
-  needs a paid licence); contracts and legal counsel;
-  public names and renames; prices published to clients; turning on the OS
-  worker or any sending; and anything that weakens the review system's own
-  gates (removing a key, disabling CI, widening a reviewer's tools, or
-  changing the proxy itself). It also fails attribution other than the
-  company "Nirmaan" (never a person's name or personal email address).
+  needs a paid licence); contracts and legal counsel; and turning on the OS
+  worker or any sending. Since the founder's commit fed573a (2026-10-20) the
+  proxy decides everything else itself, including the open founder items it
+  names. A change that weakens a review gate (removes or skips a key, a
+  required CI job or a required check; lets a check pass by default, on a
+  timeout or on a deferred review; reads rules from the pull request instead
+  of `main`; or lets the loop merge without both keys and the proxy) is a
+  fail, not `needs-founder`. It also fails attribution other than the company
+  "Nirmaan" (never a person's name or personal email address).
 - **Needs the founder.** `review/executive` stays pending and the loop labels
   the PR `needs-founder`. The founder decides on GitHub: their own review
   approving the current head commit lets the script pass `review/executive`
