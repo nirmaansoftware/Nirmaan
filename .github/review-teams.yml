@@ -519,11 +519,12 @@ content_rules:
       - file: "os/src/lib/auth/permissions.ts"
       - file: "os/src/lib/prospecting/outreach.ts"
   - id: licence-and-export
-    # Licence terms and export control are the founder's (Founder Proxy
-    # reserved list; founder record 2026-10-18-founder-proxy-decisions.md).
-    # A change to licence text, a licence identifier or header, a dependency
-    # under restrictive licence terms, or an export-control statement makes the
-    # PR founder class D, so the Founder Proxy reviews it.
+    # Licence terms and export control get Legal's key 1 and the Founder
+    # Proxy's review (the founder record 2026-10-18-founder-proxy-decisions.md
+    # lists them; since fed573a the proxy decides them). A change to licence
+    # text, a licence identifier or header, a dependency under restrictive
+    # licence terms, or an export-control statement makes the PR founder
+    # class D, so the Founder Proxy reviews it.
     adds_teams: [business]
     founder_class: D
     checklists: [legal-compliance]
