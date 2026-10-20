@@ -10,9 +10,9 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ciState, loadState, runTick, stepPr } from './pr-loop.mjs';
+import { ciState, loadState, phaseRecord, runTick, STOP_CLASSES, stepPr } from './pr-loop.mjs';
 import { fingerprint, findingsToFix, fixerArgs, forbiddenChanges, validateFixerOutput } from './fixer.mjs';
-import { acquireLock } from '../pr-review/lib.mjs';
+import { acquireLock, PR_TEXT_FILE } from '../pr-review/lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CONFIG = JSON.parse(readFileSync(join(HERE, '..', 'pr-review', 'config.json'), 'utf8'));
@@ -57,7 +57,7 @@ content_rules: []
 function sh(cwd, ...args) { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
 function write(root, rel, text) { mkdirSync(dirname(join(root, rel)), { recursive: true }); writeFileSync(join(root, rel), text); }
 
-function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js': 'fixed\n' } }], change, gh = {} } = {}) {
+function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js': 'fixed\n' } }], change, gh = {}, loop = LOOP } = {}) {
   const tmp = mkdtempSync(join(tmpdir(), 'pr-loop-test-'));
   const origin = join(tmp, 'origin.git'), work = join(tmp, 'work');
   sh(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
@@ -93,7 +93,9 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     // on mid-run; updateError makes the update fail the way gh does;
     // beforeUpdate() runs first (a person's push); updateAsync leaves the
     // branch as it was (GitHub has not made the merge commit yet).
-    behind: gh.behind ?? false, behindWhen: null, updateError: null, beforeUpdate: null, updateAsync: false };
+    failGetPull: 0, behind: gh.behind ?? false, behindWhen: null, updateError: null, beforeUpdate: null, updateAsync: false,
+    // GitHub merged (or closed) the PR: it leaves the open list.
+    closed: false, merged: false };
   const originHead = () => sh(origin, 'rev-parse', 'refs/heads/feature');
   // A new commit on main in origin, so the PR branch is really behind.
   const advanceMain = (rel = 'os/other.js') => {
@@ -121,14 +123,16 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
     return '{"message":"Updating pull request branch."}';
   };
   const github = {
-    async getPull() {
+    async getPull(n, { listing = false } = {}) {
+      if (!listing && g.failGetPull > 0) { g.failGetPull--; throw new Error('GitHub GET /pulls/1: 502 Bad Gateway'); }
       const head = originHead();
       sh(origin, 'update-ref', 'refs/pull/1/head', head); // GitHub keeps this in step with the branch
-      return { number: 1, state: 'open', draft: g.draft, title: 'Change app', body: g.body, author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : g.behind || g.behindWhen?.() ? 'behind' : 'clean' };
+      return { number: 1, state: g.closed ? 'closed' : 'open', merged: g.merged, mergedAt: g.merged ? '2026-10-17T01:00:00Z' : null, mergeSha: g.merged ? 'c'.repeat(40) : null, draft: g.draft, title: 'Change app', body: g.body, author: g.author, labels: [...g.labels], headSha: head, headRef: 'feature', headRepo: CONFIG.repo, baseRef: 'main', baseRepo: CONFIG.repo, mergeable: g.mergeable, mergeableState: g.mergeable === false ? 'dirty' : g.behind || g.behindWhen?.() ? 'behind' : 'clean' };
     },
-    async listOpenPulls() { return [await this.getPull()]; },
+    async listOpenPulls() { return g.closed ? [] : [await this.getPull(1, { listing: true })]; },
     async updatePullBody(n, body) { posts.push({ type: 'body', body }); g.body = body; },
     async addLabels(n, labels) { posts.push({ type: 'label', labels }); g.labels.push(...labels); },
+    async removeLabel(n, label) { posts.push({ type: 'unlabel', label }); g.labels = g.labels.filter((l) => l !== label); },
     async listReviews() { return g.reviews; },
     async listCheckRuns(sha) { const c = g.ci(sha); return CONFIG.required_ci.map((name) => ({ name, status: c === 'pending' ? 'in_progress' : 'completed', conclusion: c === 'pending' ? null : c, completedAt: '2026-10-17T00:00:00Z' })); },
     async listComments() { return []; },
@@ -138,7 +142,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   };
   const stateDir = join(tmp, 'state');
   const o = (extra = {}) => ({
-    repoRoot: work, config: CONFIG, loop: LOOP, github, post: 'app', claudeBin: bin, stateDir,
+    repoRoot: work, config: CONFIG, loop, github, post: 'app', claudeBin: bin, stateDir,
     models: { key1: 'k1', key2: 'k2', proxy: 'proxy-model' }, fixerModel: 'fixer-model', timeoutMs: 20000, fixerTimeoutMs: 20000, checkTimeoutMs: 20000,
     backoffMs: 0, sleep: async () => {}, out: () => {}, stepPr, ...extra,
     // gh with the gh login. `gh api repos/<repo>` answers the repository's
@@ -162,7 +166,7 @@ function setup({ reviews = [{ verdict: 'pass' }], fixes = [{ edits: { 'os/app.js
   const log = () => (existsSync(join(stateDir, 'calls.jsonl')) ? readFileSync(join(stateDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
   const comments = () => posts.filter((p) => p.type === 'comment').map((p) => p.body);
   const labeled = () => posts.some((p) => p.type === 'label' && p.labels.includes('needs-founder'));
-  return { tmp, work, origin, firstHead, originHead, posts, merges, apiCalls, updates, advanceMain, g, tick, calls, log, comments, labeled, scenario, stateDir, state: () => loadState(stateDir, CONFIG.repo, 1), cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
+  return { o, github, tmp, work, origin, firstHead, originHead, posts, merges, apiCalls, updates, advanceMain, g, tick, calls, log, comments, labeled, scenario, stateDir, state: () => loadState(stateDir, CONFIG.repo, 1), cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
 }
 
 const fail = (text, line = 1, file = 'os/app.js') => ({ verdict: 'fail', findings: [{ file, line, severity: 'critical', text }] });
@@ -723,6 +727,236 @@ test('--no-post: the fix is committed locally and never pushed', async () => {
 
 // ---------------------------------------------------------------- units
 
+// ---------------------------------------------------------------- per-phase log
+
+const phases = (t) => t.log().filter((l) => l.kind === 'phase');
+
+test('per-phase log: a review step appends one line with CI green time, lock wait, each key\'s start and end, verdicts, findings by severity and the outcome; then one "merged" line; nothing under the repository', async () => {
+  const t = setup();
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    const p = phases(t);
+    assert.equal(p.length, 1, 'one line per review step');
+    const l = p[0];
+    assert.equal(l.pr, 1);
+    assert.equal(l.head, t.firstHead);
+    assert.equal(l.ci_green_at, '2026-10-17T00:00:00Z', 'the latest completed_at of the required CI runs');
+    assert.equal(l.lock_wait_ms, 0);
+    for (const k of ['step_started_at', 'step_ended_at']) assert.match(l[k], /^\d{4}-\d\d-\d\dT/);
+    assert.match(l.key1.started_at, /^\d{4}-/);
+    assert.ok(l.key1.ended_at >= l.key1.started_at);
+    assert.deepEqual(l.key1.teams.map((k) => [k.team, k.role, k.status]), [['engineering', 'principal-architect', 'pass']]);
+    assert.deepEqual(l.key1.teams[0].findings, { blocker: 0, critical: 0, major: 0, minor: 0, info: 0 });
+    assert.equal(l.key1.teams[0].validation_error, null);
+    assert.equal(l.key2.status, 'pass');
+    assert.equal(l.key2.role, CONFIG.key2_role);
+    assert.ok(l.key2.started_at >= l.key1.ended_at, 'key 2 runs after key 1');
+    assert.equal(l.proxy, null, 'no founder class, no proxy');
+    assert.equal(l.outcome, 'auto-merge');
+    assert.equal(l.stop_reason, null);
+    assert.equal(l.stop_class, null);
+    assert.equal(l.merged, false, 'the step arms auto-merge; the merge comes later');
+    // GitHub merges it: the next pass logs one "merged" line, once.
+    t.g.closed = true; t.g.merged = true;
+    await t.tick();
+    await t.tick();
+    const m = t.log().filter((x) => x.event === 'merged');
+    assert.equal(m.length, 1);
+    assert.equal(m[0].merged_at, '2026-10-17T01:00:00Z');
+    assert.equal(m[0].head, t.firstHead);
+    assert.equal(m[0].merge_sha, 'c'.repeat(40));
+    // The log is in the state directory, outside the repository.
+    assert.ok(existsSync(join(t.stateDir, 'calls.jsonl')));
+    assert.ok(!t.stateDir.startsWith(t.work));
+    assert.equal(sh(t.work, 'status', '--porcelain', '--untracked-files=all'), '', 'nothing written under the repository');
+  } finally { t.cleanup(); }
+});
+
+test('per-phase log: lock wait is measured from the first pass the lock was busy for this head', async () => {
+  const t = setup();
+  try {
+    const held = acquireLock(t.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    assert.deepEqual(outcomes(await t.tick()), ['busy']);
+    assert.equal(phases(t).length, 0, 'no review ran, no phase line');
+    await new Promise((r) => setTimeout(r, 30));
+    held.release();
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.ok(phases(t)[0].lock_wait_ms >= 30, `lock wait ${phases(t)[0].lock_wait_ms}`);
+    assert.equal(t.state().lockWait, undefined, 'cleared once taken');
+  } finally { t.cleanup(); }
+});
+
+test('per-phase log: a stop records its reason and class, in the stop line and the phase line; a validation deferral records the validator\'s error', async () => {
+  const cases = [
+    [{ reviews: [{ verdict: 'fail', findings: [{ file: 'os/app.js', line: 999, severity: 'critical', text: 'x' }] }] }, 'validation', /does not exist at the head/],
+    [{ reviews: [{ type: 'rate_limit' }] }, 'rate-limit', null],
+    [{ reviews: [fail('bad')], fixes: [{ edits: { '.github/review-teams.yml': 'teams: []\n' } }] }, 'fixer-forbidden-path', null],
+    [{ reviews: [fail('bad')], fixes: [{ status: 'needs_founder', notAddressed: [{ id: 'F1', reason: 'PR text' }] }] }, 'loop-may-not-fix', null],
+  ];
+  for (const [s, cls, verr] of cases) {
+    const t = setup(s);
+    try {
+      assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+      assert.ok(STOP_CLASSES.includes(cls));
+      const stopLine = t.log().filter((l) => l.event === 'stopped').pop();
+      assert.equal(stopLine.class, cls);
+      const p = phases(t).pop();
+      assert.equal(p.outcome, 'stopped');
+      assert.equal(p.stop_class, cls);
+      assert.equal(p.stop_reason, stopLine.reason);
+      assert.equal(t.state().stopped.class, cls);
+      if (verr) assert.match(p.key1.teams[0].validation_error, verr);
+      if (cls === 'rate-limit') assert.equal(p.key1.teams[0].call_outcome, 'rate_limit');
+      if (cls === 'fixer-forbidden-path') assert.deepEqual(p.key1.teams[0].findings, { blocker: 0, critical: 1, major: 0, minor: 0, info: 0 });
+      assert.ok(t.labeled(), 'stops still label needs-founder (unchanged here)');
+    } finally { t.cleanup(); }
+  }
+});
+
+// ---------------------------------------------------------------- stops and locks (L4)
+
+test('a fail with a finding only the author can fix (a forbidden path, or the PR text): author-fix label and the proposed change, no fixer run, no needs-founder; a new head clears it', async () => {
+  for (const finding of [{ file: '.github/review-teams.yml', line: 1 }, { file: PR_TEXT_FILE, line: 1 }, { file: 'agents/orchestrator/agent.md', line: 1 }]) {
+    const t = setup({ reviews: [{ verdict: 'fail', findings: [{ ...finding, severity: 'critical', text: 'say what the change does' }] }, { verdict: 'pass' }] });
+    try {
+      assert.deepEqual(outcomes(await t.tick()), ['author-fix'], finding.file);
+      assert.equal(t.calls().filter((c) => c.kind === 'fixes').length, 0, 'no fixer process');
+      assert.ok(t.g.labels.includes('author-fix'));
+      assert.ok(!t.labeled(), 'no needs-founder');
+      assert.match(t.comments().pop(), /the author fixes this[\s\S]*\| author \| say what the change does/i);
+      const p = t.log().filter((l) => l.kind === 'phase').pop();
+      assert.equal(p.stop_class, 'author-fix');
+      assert.deepEqual(outcomes(await t.tick()), ['skip'], 'nothing more on this head');
+      // The author pushes a fix.
+      sh(t.work, 'checkout', '-q', 'feature'); write(t.work, 'os/app.js', 'author fix\n'); sh(t.work, 'commit', '-qam', 'fix'); sh(t.work, 'push', '-q', 'origin', 'feature'); sh(t.work, 'checkout', '-q', 'main');
+      assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+      assert.ok(!t.g.labels.includes('author-fix'), 'the label comes off');
+    } finally { t.cleanup(); }
+  }
+});
+
+test('a fail mixing loop-fixable and author-only findings goes to the author; all loop-fixable goes to the fixer', async () => {
+  const t = setup({ reviews: [{ verdict: 'fail', findings: [{ file: 'os/app.js', line: 1, severity: 'critical', text: 'a' }, { file: '.github/review-teams.yml', line: 1, severity: 'blocker', text: 'b' }] }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['author-fix']);
+    assert.match(t.comments().pop(), /\| loop \| a[\s\S]*\| author \| b/);
+  } finally { t.cleanup(); }
+});
+
+test('a transient error retries on later passes up to transient_retries, then stops with class transient; one passing blip just retries', async () => {
+  const t = setup();
+  try {
+    t.g.failGetPull = 99;
+    for (let i = 0; i < LOOP.transient_retries; i++) {
+      assert.deepEqual(outcomes(await t.tick()), ['retry']);
+      assert.ok(!t.labeled());
+    }
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.ok(t.labeled());
+    assert.equal(t.log().filter((l) => l.event === 'stopped').pop().class, 'transient');
+    assert.match(t.comments().pop(), /still failing after 3 retries/);
+  } finally { t.cleanup(); }
+  const b = setup();
+  try {
+    b.g.failGetPull = 1;
+    assert.deepEqual(outcomes(await b.tick()), ['retry']);
+    assert.deepEqual(outcomes(await b.tick()), ['auto-merge']);
+    assert.ok(!b.labeled());
+  } finally { b.cleanup(); }
+});
+
+test('a fixer process that fails retries the round on later passes, never stopping as a repeated finding; then the round runs and merges, and three failures stop as transient', async () => {
+  const t = setup({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ type: 'crash' }, { edits: { 'os/app.js': 'fixed\n' } }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['retry']);
+    assert.deepEqual(t.state().seen, {}, 'not a fix attempt');
+    assert.deepEqual(outcomes(await t.tick()), ['fixed'], 'the round runs again on the cached verdicts');
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.ok(!t.labeled());
+  } finally { t.cleanup(); }
+  const b = setup({ reviews: [fail('bad')], fixes: [{ type: 'crash' }] });
+  try {
+    for (let i = 0; i < LOOP.transient_retries; i++) assert.deepEqual(outcomes(await b.tick()), ['retry']);
+    assert.deepEqual(outcomes(await b.tick()), ['stopped']);
+    assert.equal(b.log().filter((l) => l.event === 'stopped').pop().class, 'transient');
+    assert.doesNotMatch(b.comments().pop(), /same finding failed again/);
+  } finally { b.cleanup(); }
+});
+
+test('a failed push retries the round on a later pass, not a repeated finding', async () => {
+  const t = setup({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ edits: { 'os/app.js': 'fixed\n' } }] });
+  try {
+    // The origin refuses the first push (a hook that fails once).
+    const hook = join(t.origin, 'hooks', 'pre-receive');
+    writeFileSync(hook, `#!/bin/sh\nif [ -f "${join(t.tmp, 'pushed-once')}" ]; then exit 0; fi\ntouch "${join(t.tmp, 'pushed-once')}"\necho refused >&2\nexit 1\n`); chmodSync(hook, 0o755);
+    assert.deepEqual(outcomes(await t.tick()), ['retry']);
+    assert.equal(t.originHead(), t.firstHead, 'nothing pushed');
+    assert.deepEqual(t.state().seen, {});
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    assert.notEqual(t.originHead(), t.firstHead);
+  } finally { t.cleanup(); }
+});
+
+test('a PR stacked on another open PR waits for it; one on an unknown branch is skipped as before', async () => {
+  const t = setup();
+  try {
+    const listed = { ...(await t.github.getPull()), baseRef: 'feature-a' };
+    const r = await stepPr({ ...t.o(), openPulls: [{ number: 7, headRef: 'feature-a' }] }, listed);
+    assert.deepEqual([r.outcome, r.reason], ['wait', 'stacked on #7; waits for it to merge']);
+    const s = await stepPr({ ...t.o(), openPulls: [] }, listed);
+    assert.equal(s.outcome, 'skip');
+    assert.equal(t.calls().length, 0);
+  } finally { t.cleanup(); }
+});
+
+// A local check that fails when any review lock or model slot is held.
+const lockFreeCheck = (stateDir) => ({ name: 'repo-checks', when: ['**'], cwd: '.', run: [['node', '-e', `const fs=require('fs');const d=${JSON.stringify(stateDir)};process.exit(fs.readdirSync(d).some((f)=>/\\.lock$/.test(f))?1:0)`]] });
+
+test('lock_mode "calls": the review lock is released before the fixer and the local checks; "step" (today) holds it through the fix round', async () => {
+  const stateFor = (t) => t.stateDir;
+  const calls = setup({ reviews: [fail('bad'), { verdict: 'pass' }] });
+  try {
+    const loop = { ...LOOP, lock_mode: 'calls', checks: [lockFreeCheck(stateFor(calls))] };
+    assert.deepEqual(outcomes(await calls.tick({ loop })), ['fixed'], 'the local check found no lock held');
+  } finally { calls.cleanup(); }
+  const step = setup({ reviews: [fail('bad'), { verdict: 'pass' }] });
+  try {
+    const loop = { ...LOOP, lock_mode: 'step', checks: [lockFreeCheck(stateFor(step))] };
+    assert.deepEqual(outcomes(await step.tick({ loop })), ['stopped'], 'today: the lock is held during the local checks');
+    assert.match(step.comments().pop(), /the local check repo-checks failed/);
+  } finally { step.cleanup(); }
+});
+
+test('lock_mode "calls": with model_cap 2 the two repositories review at once, never more; with cap 1, or with the switch off, one at a time', async () => {
+  for (const [loopExtra, want] of [[{ lock_mode: 'calls', model_cap: 2 }, 'auto-merge'], [{ lock_mode: 'calls', model_cap: 1 }, 'busy'], [{ lock_mode: 'step' }, 'busy']]) {
+    const t = setup();
+    try {
+      // ip-nirmaan's loop is reviewing: it holds the shared lock (slot 0).
+      const ip = acquireLock(t.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+      assert.deepEqual(outcomes(await t.tick({ loop: { ...LOOP, ...loopExtra } })), [want], JSON.stringify(loopExtra));
+      ip.release();
+    } finally { t.cleanup(); }
+  }
+  const t = setup();
+  try {
+    const ip = acquireLock(t.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    const other = acquireLock(t.stateDir, { repo: 'x', pr: 1 }, { name: 'model-slot-1.lock' });
+    assert.deepEqual(outcomes(await t.tick({ loop: { ...LOOP, lock_mode: 'calls', model_cap: 2 } })), ['busy'], 'both slots taken: never more than the cap');
+    ip.release(); other.release();
+  } finally { t.cleanup(); }
+});
+
+test('phaseRecord: key 1 span over teams; null keys when not run', () => {
+  const k = (team, s, e) => ({ team, role: `${team}-lead`, status: 'pass', startedAt: s, endedAt: e, verdict: { findings: [{ severity: 'minor' }, { severity: 'minor' }, { severity: 'info' }] } });
+  const r = phaseRecord({ ciGreenAt: 'g', lockWaitMs: 5, startedAt: 'a', endedAt: 'b', review: { key1: [k('x', '2026-01-01T00:00:02Z', '2026-01-01T00:00:03Z'), k('y', '2026-01-01T00:00:01Z', '2026-01-01T00:00:09Z')], key2: null, proxy: null }, result: { outcome: 'fixed' } });
+  assert.equal(r.key1.started_at, '2026-01-01T00:00:01Z');
+  assert.equal(r.key1.ended_at, '2026-01-01T00:00:09Z');
+  assert.deepEqual(r.key1.teams[0].findings, { blocker: 0, critical: 0, major: 0, minor: 2, info: 1 });
+  assert.equal(r.key2, null);
+  assert.equal(r.stop_class, null);
+  assert.equal(r.outcome, 'fixed');
+});
+
 test('findingsToFix takes a failed Founder Proxy\'s findings too', () => {
   const f = findingsToFix({ key1: [{ key: 1, team: 'eng', status: 'pass', verdict: { findings: [] } }], key2: { key: 2, team: null, status: 'pass', verdict: { findings: [] } }, proxy: { key: 'proxy', team: null, role: 'founder-proxy', status: 'fail', verdict: { findings: [{ file: 'a', line: 3, severity: 'blocker', text: 'p' }] } } });
   assert.deepEqual(f.map((x) => [x.id, x.key, x.team, x.text]), [['F1', 'proxy', 'founder-proxy', 'p']]);
@@ -743,9 +977,12 @@ test('validateFixerOutput and forbiddenChanges', () => {
   assert.match(validateFixerOutput({ status: 'merged', addressed: [], not_addressed: [], summary: '' }, fs).error, /status/);
   const io = { readBefore: () => '# x\n\n## Key 1 review\nold\n\n## Other\na\n', readAfter: () => '# x\n\n## Key 1 review\nold\n\n## Other\nb\n' };
   const rules = { forbidden: REAL_LOOP.fixer_forbidden, sections: REAL_LOOP.review_sections };
-  assert.deepEqual(forbiddenChanges(['agents/sre/agent.md', 'os/a.ts'], rules, io), [], 'a non-review section of a spec may change');
+  assert.deepEqual(forbiddenChanges(['os/a.ts'], rules, io), []);
+  // agents/** is forbidden whole: the specs, the org chart to come and the
+  // review sections in them are founder class A.
+  assert.deepEqual(forbiddenChanges(['agents/sre/agent.md', 'os/a.ts'], rules, io).map((b) => b.path), ['agents/sre/agent.md'], 'even a non-review section of a spec');
   assert.equal(forbiddenChanges(['agents/sre/agent.md'], rules, { ...io, readAfter: () => '# x\n\n## Key 1 review\nnew\n' }).length, 1);
-  for (const p of ['.github/workflows/os.yml', '.github/review-teams.yml', 'agents/founder-proxy/agent.md', '.github/scripts/pr-loop/pr-loop.mjs', '.claude/skills/pr-review/SKILL.md', '.claude/settings.json', 'AGENTS.md', 'package.json', 'os/package-lock.json', 'docs/operations/pr-loop.plist']) {
+  for (const p of ['.github/workflows/os.yml', '.github/review-teams.yml', 'agents/founder-proxy/agent.md', 'agents/README.md', 'agents/org-chart.yml', 'agents/new-role/agent.md', '.github/scripts/pr-loop/pr-loop.mjs', '.claude/skills/pr-review/SKILL.md', '.claude/settings.json', 'AGENTS.md', 'package.json', 'os/package-lock.json', 'docs/operations/pr-loop.plist']) {
     assert.equal(forbiddenChanges([p], rules, io).length, 1, p);
   }
   const a = fixerArgs({ model: 'm', systemPrompt: 's', forbidden: ['.github/**'] });

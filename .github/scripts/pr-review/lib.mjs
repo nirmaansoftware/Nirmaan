@@ -128,14 +128,17 @@ export function requiredCi(required, runs) {
   const jobs = required.map((name) => {
     const mine = runs.filter((r) => r.name === name).sort(newestFirst);
     const r = mine.find((x) => x.status !== 'completed') ?? mine[0];
-    return { name, conclusion: !r ? 'missing' : r.status !== 'completed' ? r.status : r.conclusion, url: r?.url ?? null };
+    return { name, conclusion: !r ? 'missing' : r.status !== 'completed' ? r.status : r.conclusion, url: r?.url ?? null, completedAt: r?.completedAt ?? null };
   });
   const failed = jobs.filter((j) => j.conclusion !== 'success' && !CI_WAITING.has(j.conclusion));
   const pending = jobs.filter((j) => j.conclusion !== 'success' && CI_WAITING.has(j.conclusion));
   const text = (list) => list.map((j) => `${j.name} ${j.conclusion}`).join(', ');
   if (failed.length) return { state: 'failed', jobs, failed, text: text(failed) };
   if (pending.length) return { state: 'pending', jobs, failed, text: text(pending) };
-  return { state: 'green', jobs, failed, text: 'all required CI green' };
+  // When CI went green: the latest completion among the required jobs' runs
+  // that count (null when GitHub gave no time).
+  const times = jobs.map((j) => j.completedAt).filter(Boolean).sort();
+  return { state: 'green', jobs, failed, text: 'all required CI green', greenAt: times.length === jobs.length ? times[times.length - 1] : null };
 }
 
 // ---------------------------------------------------------------- verdict
@@ -542,9 +545,9 @@ export const OWNERLESS_LOCK_STALE_MS = 30 * 60 * 1000;
 // whole (a temporary file renamed inside the lock folder), so a reader never
 // sees half of it. A lock whose pid is gone is stale and removed once; so is
 // one with no readable owner file that is older than OWNERLESS_LOCK_STALE_MS.
-export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS, now = Date.now } = {}) {
+export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS, now = Date.now, name = 'review.lock' } = {}) {
   mkdirSync(stateDir, { recursive: true });
-  const dir = join(stateDir, 'review.lock');
+  const dir = join(stateDir, name);
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       mkdirSync(dir);
@@ -571,11 +574,38 @@ export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS
   return { ok: false, holder: null };
 }
 
+// One of `cap` model slots shared by both repositories' loops. Slot 0 is the
+// shared review lock itself, so a loop that only knows that lock (the
+// ip-nirmaan loop, or this one with lock_mode "step") holds one slot.
+export function acquireSlot(stateDir, owner, cap = 1) {
+  let last = { ok: false, holder: null };
+  for (let i = 0; i < Math.max(1, cap); i++) {
+    last = acquireLock(stateDir, owner, { name: i === 0 ? 'review.lock' : `model-slot-${i}.lock` });
+    if (last.ok) return last;
+  }
+  return last;
+}
+
 function pidAlive(pid) {
   try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
 }
 
 // ---------------------------------------------------------------- call log
+
+// The verdict cache file name for one reviewer call: head, main, PR text
+// digest, key, team and role. The role is part of it, so the same key and
+// team reviewed by another role (a new key holder) is a new review.
+export function verdictCacheName({ headSha, mainSha, textDigest, key, team, role }) {
+  return `${headSha}-${mainSha}-${textDigest}-k${key}-${team ?? 'none'}-${role}.json`;
+}
+
+// Findings of one verdict counted by severity, every severity present (0 when
+// none), for the loop's per-phase log line.
+export function findingsBySeverity(verdict) {
+  const out = Object.fromEntries(SEVERITIES.map((s) => [s, 0]));
+  for (const f of list(verdict?.findings)) if (SEVERITIES.includes(f?.severity)) out[f.severity]++;
+  return out;
+}
 
 export function logCall(stateDir, record) {
   mkdirSync(stateDir, { recursive: true });
