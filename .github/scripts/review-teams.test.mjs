@@ -350,10 +350,3 @@ test('repository: no tracked file is owned by more than three teams (a PR with m
   const over = files.map((f) => [f, owners(map, f, tracked).teams]).filter(([, t]) => t.length > 3).map(([f, t]) => `${f}: ${t.join(', ')}`);
   assert.deepEqual(over, []);
 });
-
-test('classification: examples/README.md is Platform and Quality with the devops-engineer checklist', () => {
-  const { map, tracked } = realMap();
-  const o = owners(map, 'examples/README.md', tracked);
-  assert.deepEqual(o.teams, ['platform-quality']);
-  assert.deepEqual(o.checklists, ['devops-engineer']);
-});

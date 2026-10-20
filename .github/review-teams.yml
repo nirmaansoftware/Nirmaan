@@ -99,6 +99,11 @@ rules:
     # Loaded at runtime by os/src/lib/agents/loadAgent.ts.
     globs: ["agents/**"]
     teams: [engineering]
+  - id: examples-docs
+    # Worked examples run by the Examples workflow (examples/README.md).
+    globs: ["examples/README.md"]
+    teams: [platform-quality]
+    checklists: [devops-engineer]
 
   # Docs.
   - id: governance-docs
@@ -161,12 +166,6 @@ rules:
     globs: ["docs/engineering/procurement.md", "docs/ai/ai-cost-governance.md"]
     teams: [business]
     checklists: [finance-estimation]
-
-  - id: examples-docs
-    # Worked examples run by the Examples workflow (examples/README.md).
-    globs: ["examples/README.md"]
-    teams: [platform-quality]
-    checklists: [devops-engineer]
 
   # OS. Split by area, so that moving one area to another team later changes
   # one rule. Every area keeps the Engineering team; os-app adds Design.

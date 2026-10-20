@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exampleIds, plan, select, runExample, cleanEnv } from './examples.mjs';
-import { parseYaml, contentHits } from './review-teams.mjs';
+import { parseYaml, contentHits, owners } from './review-teams.mjs';
+import { execFileSync } from 'node:child_process';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HASH = `--hash=sha256:${'a'.repeat(64)}`;
@@ -71,4 +72,12 @@ test('workflow: always reports, free runner only, no secrets, pinned actions, re
   for (const m of text.matchAll(/uses:\s*(\S+)/g)) assert.match(m[1], /@[0-9a-f]{40}$/, `${m[1]} is pinned by SHA`);
   assert.match(text, /runs-on: ubuntu-latest/);
   assert.match(text, /timeout-minutes: \d+/);
+});
+
+test('review map: examples/README.md is Platform and Quality with the devops-engineer checklist', () => {
+  const map = parseYaml(readFileSync(join(ROOT, '.github/review-teams.yml'), 'utf8'));
+  const tracked = new Set(execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n'));
+  const o = owners(map, 'examples/README.md', tracked);
+  assert.deepEqual(o.teams, ['platform-quality']);
+  assert.deepEqual(o.checklists, ['devops-engineer']);
 });
