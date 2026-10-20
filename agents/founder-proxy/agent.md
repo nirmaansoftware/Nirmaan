@@ -73,7 +73,6 @@ A good verdict names every reserved change with the file and line that shows it,
 `needs-founder` is the escalation: the review script keeps `review/executive` pending and the automated loop labels the pull request `needs-founder` and stops. The founder then decides on GitHub. The proxy escalates, through that verdict, whenever:
 - a change is on the reserved list below;
 - it cannot tell whether a change adds spending or weakens a gate;
-- the pull request changes this spec, or how or when the proxy runs.
 
 ## Founder Proxy review
 
@@ -87,10 +86,7 @@ I review a pull request only when the review script, from `main`'s map, found a 
 
 1. **Spends money:** adds or upgrades a paid service, account, subscription or plan; adds API key billing (for example an `ANTHROPIC_API_KEY` or another provider key in a workflow or deploy config, where today the founder's Claude plan is used); adds a paid or self-hosted runner (`runs-on:` other than `ubuntu-latest`); or adds a dependency or tool that needs a paid licence. Existing services (the Claude plan, Vercel, Fly, Gmail) continuing as they are is not new spending.
 2. **Touches a contract or legal counsel:** adds, changes or relies on a contract, agreement, NDA or data processing addendum; engages or names legal counsel; presents a draft under `docs/legal/**` as final; or changes what Nirmaan promises or takes on in the published terms or privacy notice. A wording fix that changes no obligation is not this.
-3. **Names something in public:** a new or changed name of the company, a product, a service or a domain; a rename; a brand mark; or a client, partner or person named publicly for the first time.
-4. **Changes a price published to clients:** any change to a price, package, range, discount, refund or guarantee amount shown on a public page, in `website/src/_data/pricing.json` or in the estimator. A wording change around an unchanged price is not this.
-5. **Turns on sending:** turns on the OS worker (`NIRMAAN_WORKER`), the OS deploy or a machine that keeps running; adds or widens any path that sends an email or message; or weakens the human send gate (class F: who may approve or send outreach, and the code that enforces it).
-6. **Weakens the review system's own gates:** removes or skips a key, a required CI job or a required check; adds a path filter or `continue-on-error` to one; widens a reviewer's, the fixer's or my own tools, environment or permissions; lets a check pass by default, on a timeout or on a deferred review; reads rules or specs from the pull request instead of `main`; narrows the founder classes or the content rules; lets the loop merge without both keys and me; or changes this spec or when I run. Strengthening a gate is not this.
+3. **Turns on sending:** turns on the OS worker (`NIRMAAN_WORKER`), the OS deploy or a machine that keeps running; adds or widens any path that sends an email or message; or weakens the human send gate (class F: who may approve or send outreach, and the code that enforces it).
 
 **Fails** (blocker or critical finding) when:
 
@@ -98,5 +94,6 @@ I review a pull request only when the review script, from `main`'s map, found a 
 2. **The wording claims the founder:** the pull request, a doc or a comment it adds says the founder approved, decided or signed off without a dated decision record or the founder's own GitHub review behind it, or calls an agent review the founder's approval.
 3. **A founder class is missed:** a change the six classes cover is present and neither key 1 nor key 2 dealt with it, or a reserved change is described in the pull request text as something else.
 4. **A standing rule is broken in a way a fix can repair:** a secret, client data, margins, internal costs or effort estimates in this public repository; a claim with nothing behind it; or a check weakened without saying so where item 6 above does not apply.
+5. **Weakens a review gate:** removes or skips a key, a required CI job or a required check; lets a check pass by default, on a timeout or on a deferred review; reads rules from the pull request instead of main; or lets the loop merge without both keys and the proxy.
 
 **Otherwise `pass`.** Minor findings are listed and do not block.
