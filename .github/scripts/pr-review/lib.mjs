@@ -132,14 +132,17 @@ export function requiredCi(required, runs) {
   const jobs = required.map((name) => {
     const mine = runs.filter((r) => r.name === name).sort(newestFirst);
     const r = mine.find((x) => x.status !== 'completed') ?? mine[0];
-    return { name, conclusion: !r ? 'missing' : r.status !== 'completed' ? r.status : r.conclusion, url: r?.url ?? null };
+    return { name, conclusion: !r ? 'missing' : r.status !== 'completed' ? r.status : r.conclusion, url: r?.url ?? null, completedAt: r?.completedAt ?? null };
   });
   const failed = jobs.filter((j) => j.conclusion !== 'success' && !CI_WAITING.has(j.conclusion));
   const pending = jobs.filter((j) => j.conclusion !== 'success' && CI_WAITING.has(j.conclusion));
   const text = (list) => list.map((j) => `${j.name} ${j.conclusion}`).join(', ');
   if (failed.length) return { state: 'failed', jobs, failed, text: text(failed) };
   if (pending.length) return { state: 'pending', jobs, failed, text: text(pending) };
-  return { state: 'green', jobs, failed, text: 'all required CI green' };
+  // When CI went green: the latest completion among the required jobs' runs
+  // that count (null when GitHub gave no time).
+  const times = jobs.map((j) => j.completedAt).filter(Boolean).sort();
+  return { state: 'green', jobs, failed, text: 'all required CI green', greenAt: times.length === jobs.length ? times[times.length - 1] : null };
 }
 
 // ---------------------------------------------------------------- verdict
@@ -580,6 +583,21 @@ function pidAlive(pid) {
 }
 
 // ---------------------------------------------------------------- call log
+
+// The verdict cache file name for one reviewer call: head, main, PR text
+// digest, key, team and role. The role is part of it, so the same key and
+// team reviewed by another role (a new key holder) is a new review.
+export function verdictCacheName({ headSha, mainSha, textDigest, key, team, role }) {
+  return `${headSha}-${mainSha}-${textDigest}-k${key}-${team ?? 'none'}-${role}.json`;
+}
+
+// Findings of one verdict counted by severity, every severity present (0 when
+// none), for the loop's per-phase log line.
+export function findingsBySeverity(verdict) {
+  const out = Object.fromEntries(SEVERITIES.map((s) => [s, 0]));
+  for (const f of list(verdict?.findings)) if (SEVERITIES.includes(f?.severity)) out[f.severity]++;
+  return out;
+}
 
 export function logCall(stateDir, record) {
   mkdirSync(stateDir, { recursive: true });

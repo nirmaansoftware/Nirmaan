@@ -76,7 +76,9 @@ A `hold` label keeps it pending.
   orchestrator's "Key 2 review" section, and the "Checklist for my team lead"
   section of each member the map's `checklists:` names. Where a spec does not
   carry its section yet, the fallback is `checklists/<name>.md` beside this
-  file; with neither, the key is deferred. Design key 1 is deferred (no model
+  file; with neither, the key is deferred. Key 2 always also gets
+  `checklists/key2.md`, the generic floor for any key-2 holder, even when the
+  key-2 role's spec has its own section. Design key 1 is deferred (no model
   call) until `docs/design/visual-direction.md` exists on `main`.
 - Env: `NIRMAAN_CLAUDE_CODE` (claude path), `NIRMAAN_REVIEW_MODEL_KEY1`
   (default `sonnet`), `NIRMAAN_REVIEW_MODEL_KEY2` (default `opus`, the

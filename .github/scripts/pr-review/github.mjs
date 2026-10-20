@@ -99,6 +99,8 @@ export function createClient({ repo, token, fetchImpl = fetch }) {
     baseRef: p.base.ref, baseRepo: p.base.repo.full_name,
     // Only on a single-PR read; null while GitHub is still computing it.
     mergeable: p.mergeable ?? null, mergeableState: p.mergeable_state ?? null,
+    // For the loop's "merged" log line.
+    merged: p.merged ?? null, mergedAt: p.merged_at ?? null, mergeSha: p.merge_commit_sha ?? null,
   });
   return {
     async getPull(n) {
