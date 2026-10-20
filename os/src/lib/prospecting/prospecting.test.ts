@@ -253,19 +253,30 @@ test("outreach: the daily cap and the do-not-contact list stop sending", async (
   await search([
     biz("Cap One", { placeId: `c1-${run}`, email: `one@cap-${run}.in`, emailSource: "site" }),
     biz("Cap Two", { placeId: `c2-${run}`, email: `two@captwo-${run}.in`, emailSource: "site" }),
+    biz("Cap Elsewhere", { placeId: `c3-${run}` }),
   ]);
   const [one, two] = await Promise.all([`c1-${run}`, `c2-${run}`].map((id) => prisma.prospect.findUniqueOrThrow({ where: { dedupeKey: `place:${id}` } })));
   for (const p of [one, two]) await auditProspect(FOUNDER, p.id, { fetcher: async () => site("<html></html>"), provider: new MockProvider(AUDIT_REPLY) });
   const d1 = await draftOutreach(FOUNDER, one.id, "EMAIL", { provider: new MockProvider(DRAFT_REPLY) });
   const d2 = await draftOutreach(FOUNDER, two.id, "EMAIL", { provider: new MockProvider(DRAFT_REPLY) });
 
-  const sentToday = await prisma.outreachMessage.count({ where: { status: "SENT", sentVia: "EMAIL", sentAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) } } });
-  process.env.OUTREACH_DAILY_LIMIT = String(sentToday + 1);
+  // The cap counts one day's sends. This test sends on a pinned day of its own,
+  // so emails other test files send at the same time (on the real clock, or on
+  // a date this week, as campaigns.test.ts does) cannot fill its cap.
+  const capDay = new Date(2020, 0, 15, 11, 0); // local time, so the day is the same in any timezone
+  const dayStart = new Date(2020, 0, 15), dayEnd = new Date(2020, 0, 16);
+  const sentThatDay = await prisma.outreachMessage.count({ where: { status: "SENT", sentVia: "EMAIL", sentAt: { gte: dayStart, lt: dayEnd } } });
+  // An email another test file sends meanwhile, on the real clock: it must not count.
+  const elsewhere = await prisma.outreachMessage.create({
+    data: { prospectId: (await prisma.prospect.findUniqueOrThrow({ where: { dedupeKey: `place:c3-${run}` } })).id, channel: "EMAIL", toAddress: `elsewhere-${run}@example.test`, body: "sent by another test", draftedBy: "AGENT", status: "SENT", sentVia: "EMAIL", sentAt: new Date() },
+  });
+  process.env.OUTREACH_DAILY_LIMIT = String(sentThatDay + 1);
   try {
-    await approveAndSendEmail(FOUNDER, d1.id, { mailer: new FakeMailer() });
-    await assert.rejects(() => approveAndSendEmail(FOUNDER, d2.id, { mailer: new FakeMailer() }), /limit/);
+    await approveAndSendEmail(FOUNDER, d1.id, { mailer: new FakeMailer(), now: capDay });
+    await assert.rejects(() => approveAndSendEmail(FOUNDER, d2.id, { mailer: new FakeMailer(), now: capDay }), /limit/);
   } finally {
     delete process.env.OUTREACH_DAILY_LIMIT;
+    await prisma.outreachMessage.delete({ where: { id: elsewhere.id } });
   }
 
   await doNotContact(FOUNDER, two.id, "Replied stop");
