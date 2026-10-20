@@ -459,8 +459,19 @@ async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
     slot = acquireSlot(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop fixer' }, lc.model_cap ?? 1);
     if (!slot.ok) return { outcome: 'busy', reason: 'no model slot free for the fixer' };
   }
+  // A round that ends in a retry on a later pass (the fixer's process
+  // failed, a git or GitHub error, a failed push) or throws was not a fix
+  // attempt: its findings are not counted as seen, so the next pass runs the
+  // round again instead of stopping as "the same finding failed again".
+  const seenBefore = JSON.stringify(st.seen);
+  const unsee = () => { st.seen = JSON.parse(seenBefore); saveState(o.stateDir, cfg.repo, st); };
   try {
-    return await fixRoundWith(o, { n, head, pull, st, r, say, stop, log, out, findings, releaseSlot: () => { if (slot) { slot.release(); slot = null; } } });
+    const res = await fixRoundWith(o, { n, head, pull, st, r, say, stop, log, out, findings, releaseSlot: () => { if (slot) { slot.release(); slot = null; } } });
+    if (res?.outcome === 'retry') unsee();
+    return res;
+  } catch (e) {
+    unsee();
+    throw e;
   } finally { if (slot) slot.release(); }
 }
 

@@ -865,6 +865,38 @@ test('a transient error retries on later passes up to transient_retries, then st
   } finally { b.cleanup(); }
 });
 
+test('a fixer process that fails retries the round on later passes, never stopping as a repeated finding; then the round runs and merges, and three failures stop as transient', async () => {
+  const t = setup({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ type: 'crash' }, { edits: { 'os/app.js': 'fixed\n' } }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['retry']);
+    assert.deepEqual(t.state().seen, {}, 'not a fix attempt');
+    assert.deepEqual(outcomes(await t.tick()), ['fixed'], 'the round runs again on the cached verdicts');
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.ok(!t.labeled());
+  } finally { t.cleanup(); }
+  const b = setup({ reviews: [fail('bad')], fixes: [{ type: 'crash' }] });
+  try {
+    for (let i = 0; i < LOOP.transient_retries; i++) assert.deepEqual(outcomes(await b.tick()), ['retry']);
+    assert.deepEqual(outcomes(await b.tick()), ['stopped']);
+    assert.equal(b.log().filter((l) => l.event === 'stopped').pop().class, 'transient');
+    assert.doesNotMatch(b.comments().pop(), /same finding failed again/);
+  } finally { b.cleanup(); }
+});
+
+test('a failed push retries the round on a later pass, not a repeated finding', async () => {
+  const t = setup({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ edits: { 'os/app.js': 'fixed\n' } }] });
+  try {
+    // The origin refuses the first push (a hook that fails once).
+    const hook = join(t.origin, 'hooks', 'pre-receive');
+    writeFileSync(hook, `#!/bin/sh\nif [ -f "${join(t.tmp, 'pushed-once')}" ]; then exit 0; fi\ntouch "${join(t.tmp, 'pushed-once')}"\necho refused >&2\nexit 1\n`); chmodSync(hook, 0o755);
+    assert.deepEqual(outcomes(await t.tick()), ['retry']);
+    assert.equal(t.originHead(), t.firstHead, 'nothing pushed');
+    assert.deepEqual(t.state().seen, {});
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    assert.notEqual(t.originHead(), t.firstHead);
+  } finally { t.cleanup(); }
+});
+
 test('a PR stacked on another open PR waits for it; one on an unknown branch is skipped as before', async () => {
   const t = setup();
   try {
