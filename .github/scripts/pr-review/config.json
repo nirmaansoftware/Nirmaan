@@ -15,7 +15,7 @@
   "proxy_role": "founder-proxy",
   "proxy_name": "Founder Proxy",
   "required_ci": ["os-test", "website-build", "repo-checks"],
-  "allowed_authors": ["patel-om", "nirmaansoftware"],
+  "allowed_authors": ["patel-om", "nirmaansoftware", "dependabot[bot]"],
   "founder_login": "nirmaansoftware",
   "hold_label": "hold",
   "include_pr_body": true,

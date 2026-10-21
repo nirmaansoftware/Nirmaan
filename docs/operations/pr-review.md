@@ -178,8 +178,9 @@ What the script does, in order:
    inside it). A lock whose process is gone is cleared, and so is one with no
    readable owner file that is older than 30 minutes.
 2. **Eligibility.** The PR must be open, target `main`, come from a branch in
-   this repository (never a fork) and be authored by `patel-om` or
-   `nirmaansoftware`. Otherwise it refuses and posts nothing.
+   this repository (never a fork) and be authored by `patel-om`,
+   `nirmaansoftware` or `dependabot[bot]`. Otherwise it refuses and posts
+   nothing.
 3. **Clean checkouts.** It fetches `main` and the PR head, checks the fetched
    head is the PR's head, and makes clean worktrees of both outside the
    repository.
@@ -293,7 +294,14 @@ pass. It never replaces a key or the Founder Proxy, and never decides what the
 proxy sends to the founder: a `needs-founder` verdict stops it.
 
 **Which PRs.** Open PRs to `main` from a branch in this repository, authored by
-the agents' account (`patel-om`, in `.github/scripts/pr-loop/config.json`).
+the agents' account (`patel-om`) or Dependabot (`dependabot[bot]`): the list
+`authors` in `.github/scripts/pr-loop/config.json`, kept explicit and
+tested. A Dependabot PR gets the same review (CI first, both keys, the
+Founder Proxy on a founder class), but the loop never pushes to its branch
+(`no_fixer_authors`): a failing Dependabot PR gets `author-fix`, and an agent
+recreates or closes it. Behind `main`, such a PR is not updated by
+update-branch either: the loop comments Dependabot's own rebase command
+(`rebase_commands`) once per head and waits for the new head.
 Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
 
 **Each step, per PR:**
