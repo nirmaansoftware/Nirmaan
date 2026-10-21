@@ -11,6 +11,9 @@
 #     classes are reviewed by the Founder Proxy agent, not a code owner).
 #   - Capability levels: capability/records/*.jsonl are well formed and
 #     append-only, and capability/levels.json is regenerated and diffed.
+#   - Skill files: every skills/<unit>/<id>.md follows skills/README.md
+#     (front matter, headings, limits, sources, voice, roles and units from
+#     the review teams), and skills/_template.md keeps its structure and voice.
 #
 # Both compare the change against its base: on a pull request, the target
 # branch (origin/<base>...HEAD); on a push to main, the previous tip. The logic
@@ -49,7 +52,7 @@ jobs:
         with:
           node-version: 22
       - name: Script tests
-        run: node --test .github/scripts/repo-checks.test.mjs .github/scripts/review-teams.test.mjs capability/tools/levels.test.mjs .github/scripts/pr-review/review.test.mjs .github/scripts/pr-loop/loop.test.mjs .github/scripts/review-calibration/run.test.mjs
+        run: node --test .github/scripts/repo-checks.test.mjs .github/scripts/review-teams.test.mjs capability/tools/levels.test.mjs .github/scripts/pr-review/review.test.mjs .github/scripts/pr-loop/loop.test.mjs .github/scripts/review-calibration/run.test.mjs .github/scripts/skills.test.mjs
       # Event data goes through env, never straight into the script.
       - name: Pick the base to compare against
         id: base
@@ -96,3 +99,5 @@ jobs:
           else
             node capability/tools/levels.mjs
           fi
+      - name: Skill files
+        run: node .github/scripts/skills.mjs
