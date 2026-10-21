@@ -80,7 +80,9 @@ no_key_roles: [legal-counsel]
 # the catch-all stays a safety net and not a hiding place.
 catch_all:
   team: engineering
-  allowlist: []
+  # skills/README.md and skills/_template.md: decision record D6.4 (lines 548
+  # to 550) gives their wording to Brand and Content but no key on skills/**.
+  allowlist: ["skills/README.md", "skills/_template.md"]
 
 # Path rules. `checklists` names member checklists that key 1 must run and
 # cite for files the rule matches. `exclude` removes files from one rule only.
@@ -166,6 +168,12 @@ rules:
     globs: ["docs/engineering/procurement.md", "docs/ai/ai-cost-governance.md"]
     teams: [business]
     checklists: [finance-estimation]
+
+  # Skills (skills/README.md). Each unit's skills, skills/<unit>/**, get a
+  # rule naming that unit, added with the unit's first skill (the skill
+  # validator checks it). The style rules and the template rely on the
+  # catch-all (allowlist above): Brand and Content owns their wording but
+  # holds no key on skills/** (decision record D6.4).
 
   # OS. Split by area, so that moving one area to another team later changes
   # one rule. Every area keeps the Engineering team; os-app adds Design.
