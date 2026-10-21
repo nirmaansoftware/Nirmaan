@@ -4,8 +4,8 @@
   "needs_founder_label": "needs-founder",
   "author_fix_label": "author-fix",
   "transient_retries": 3,
-  "lock_mode": "step",
-  "model_cap": 1,
+  "lock_mode": "calls",
+  "model_cap": 2,
   "co_author": "Claude Opus 5.5 <noreply@anthropic.com>",
   "rules_files": ["AGENTS.md", "CLAUDE.md"],
   "fixer_forbidden": [

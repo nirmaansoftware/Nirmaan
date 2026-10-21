@@ -652,13 +652,14 @@ test('a merge conflict stops the loop; removing the needs-founder label resumes 
   } finally { t.cleanup(); }
 });
 
-test('one PR at a time: while the shared lock is held the loop does nothing', async () => {
+test('while every model slot is held (the shared lock and, with cap 2, slot 1) the loop does nothing', async () => {
   const t = setup();
   try {
     const held = acquireLock(t.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    const slot1 = acquireLock(t.stateDir, { repo: 'x', pr: 1 }, { name: 'model-slot-1.lock' });
     assert.deepEqual(outcomes(await t.tick()), ['busy']);
     assert.equal(t.calls().length, 0);
-    held.release();
+    held.release(); slot1.release();
     assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
   } finally { t.cleanup(); }
 });
@@ -776,10 +777,11 @@ test('per-phase log: lock wait is measured from the first pass the lock was busy
   const t = setup();
   try {
     const held = acquireLock(t.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    const slot1 = acquireLock(t.stateDir, { repo: 'x', pr: 1 }, { name: 'model-slot-1.lock' });
     assert.deepEqual(outcomes(await t.tick()), ['busy']);
     assert.equal(phases(t).length, 0, 'no review ran, no phase line');
     await new Promise((r) => setTimeout(r, 30));
-    held.release();
+    slot1.release(); held.release();
     assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
     assert.ok(phases(t)[0].lock_wait_ms >= 30, `lock wait ${phases(t)[0].lock_wait_ms}`);
     assert.equal(t.state().lockWait, undefined, 'cleared once taken');
@@ -944,6 +946,50 @@ test('lock_mode "calls": with model_cap 2 the two repositories review at once, n
     assert.deepEqual(outcomes(await t.tick({ loop: { ...LOOP, lock_mode: 'calls', model_cap: 2 } })), ['busy'], 'both slots taken: never more than the cap');
     ip.release(); other.release();
   } finally { t.cleanup(); }
+});
+
+// The model slots held while each model call ran: the shared review lock (an
+// old-protocol loop's lock and slot 0) plus model-slot-<n>.
+const modelSlots = (locks) => (locks ?? []).filter((f) => f === 'review.lock' || /^model-slot-\d+\.lock$/.test(f));
+
+test('the cap holds across both repositories with the real config (calls, cap 2): with ip-nirmaan\'s old-protocol loop reviewing, this loop takes the other slot and never a third; alone, it leaves the shared lock free for ip-nirmaan', async () => {
+  assert.equal(REAL_LOOP.lock_mode, 'calls');
+  assert.equal(REAL_LOOP.model_cap, 2);
+  const loop = { ...LOOP, lock_mode: REAL_LOOP.lock_mode, model_cap: REAL_LOOP.model_cap };
+  // ip-nirmaan reviewing (it knows only review.lock): this loop runs beside it.
+  const a = setup({ reviews: [fail('bad'), { verdict: 'pass' }] });
+  try {
+    a.scenario({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ edits: { 'os/app.js': 'fixed\n' } }], probeLocks: a.stateDir });
+    const ip = acquireLock(a.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    assert.deepEqual(outcomes(await a.tick({ loop })), ['fixed']);
+    assert.deepEqual(outcomes(await a.tick({ loop })), ['auto-merge']);
+    for (const c of a.calls()) {
+      assert.ok(modelSlots(c.locks).length <= REAL_LOOP.model_cap, `${c.kind}: ${c.locks}`);
+      assert.deepEqual(modelSlots(c.locks), ['model-slot-1.lock', 'review.lock'], 'ip-nirmaan holds review.lock, this loop slot 1');
+    }
+    ip.release();
+  } finally { a.cleanup(); }
+  // Alone: it uses slot 1, so ip-nirmaan's old loop could take review.lock at
+  // any moment and the total stays at 2.
+  const b = setup();
+  try {
+    b.scenario({ reviews: [{ verdict: 'pass' }], fixes: [], probeLocks: b.stateDir });
+    assert.deepEqual(outcomes(await b.tick({ loop })), ['auto-merge']);
+    for (const c of b.calls()) assert.deepEqual(modelSlots(c.locks), ['model-slot-1.lock']);
+  } finally { b.cleanup(); }
+  // Both slots taken (ip-nirmaan, and a hand-run review): busy, nothing waits,
+  // and the next pass after one is freed goes ahead.
+  const d = setup();
+  try {
+    const ip = acquireLock(d.stateDir, { repo: 'nirmaansoftware/ip-nirmaan', pr: 9 });
+    const other = acquireLock(d.stateDir, { repo: 'x', pr: 1 }, { name: 'model-slot-1.lock' });
+    assert.deepEqual(outcomes(await d.tick({ loop })), ['busy']);
+    assert.equal(d.calls().length, 0);
+    assert.ok(!existsSync(join(d.stateDir, `review-${CONFIG.repo.replace('/', '_')}.lock`)), 'the repository lock is let go when no slot is free');
+    other.release();
+    assert.deepEqual(outcomes(await d.tick({ loop })), ['auto-merge']);
+    ip.release();
+  } finally { d.cleanup(); }
 });
 
 test('phaseRecord: key 1 span over teams; null keys when not run', () => {
