@@ -252,13 +252,15 @@ test('repository: the Never list is read from positioning.md', () => {
   assert.ok(ctx.neverPhrases.includes('cutting-edge'));
 });
 
-test('review map: skills/README.md and the template are Brand and Content, with the content-strategist and technical-writer checklists', () => {
+test('review map: skills/README.md and the template have no Brand and Content key (record D6.4); they rely on the catch-all', () => {
   const { files, read } = real();
   const map = parseYaml(read('.github/review-teams.yml'));
   const tracked = new Set(files);
   for (const f of ['skills/README.md', TEMPLATE_PATH]) {
     const o = owners(map, f, tracked);
-    assert.deepEqual(o.teams, ['brand-content'], f);
-    assert.deepEqual(o.checklists.sort(), ['content-strategist', 'technical-writer'], f);
+    assert.ok(!o.teams.includes('brand-content'), f);
+    assert.equal(o.viaCatchAll, true, f);
+    assert.deepEqual(o.teams, [map.catch_all.team], f);
+    assert.ok(map.catch_all.allowlist.includes(f), f);
   }
 });

@@ -27,8 +27,9 @@ shown for any skill until the records generator exists.
   renames it.
 - **Review:** `.github/review-teams.yml` has a rule `skills/<unit>/**` whose
   team is that unit **(checked)**. The first skill in a unit adds the rule in
-  the same PR. These two files (`README.md`, `_template.md`) are Brand and
-  Content's.
+  the same PR. Brand and Content owns the wording of these two files
+  (`README.md`, `_template.md`) but holds no key on `skills/**` (decision
+  record D6.4); they are reviewed through the catch-all (Engineering).
 
 ## Front matter **(checked)**
 
