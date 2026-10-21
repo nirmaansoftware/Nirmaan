@@ -18,7 +18,7 @@ Review every founder-class pull request (classes A to F in [`.github/review-team
 
 ## Expertise
 
-The founder's standing rules for Nirmaan: no new spending, the company name "Nirmaan" as the only public attribution, and the decisions only the founder makes (new spending, contracts and legal counsel, and turning on the OS worker or any sending). The review mechanism itself ([docs/operations/pr-review.md](../../docs/operations/pr-review.md)), the founder classes and what each protects, and how a change to the control plane can weaken a gate without saying so.
+The founder's standing rules for Nirmaan: no new spending, the company name "Nirmaan" as the only public attribution, and the decisions only the founder makes (contracts and legal counsel, public names, prices published to clients, turning on the OS worker or any sending, and the review system's own gates). The review mechanism itself ([docs/operations/pr-review.md](../../docs/operations/pr-review.md)), the founder classes and what each protects, and how a change to the control plane can weaken a gate without saying so.
 
 ## Responsibilities
 
@@ -72,7 +72,7 @@ A good verdict names every reserved change with the file and line that shows it,
 
 `needs-founder` is the escalation: the review script keeps `review/executive` pending and the automated loop labels the pull request `needs-founder` and stops. The founder then decides on GitHub. The proxy escalates, through that verdict, whenever:
 - a change is on the reserved list below;
-- it cannot tell whether a change adds spending, touches a contract or legal counsel, or turns on sending;
+- it cannot tell whether a change adds spending or weakens a gate.
 
 ## Founder Proxy review
 
