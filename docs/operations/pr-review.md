@@ -139,9 +139,10 @@ approval.
 - **What it may not decide** returns `needs-founder`: new spending (a paid
   service, account, API key billing, a runner, or a dependency or tool that
   needs a paid licence); contracts and legal counsel; and turning on the OS
-  worker or any sending. Since the founder's commit fed573a (2026-10-20) the
-  proxy decides everything else itself, including the open founder items it
-  names. A change that weakens a review gate (removes or skips a key, a
+  worker or any sending. Since the founder's record of 2026-10-20
+  ([2026-10-20-founder-proxy-widened.md](2026-10-20-founder-proxy-widened.md))
+  the proxy decides everything else itself, including the open founder items
+  it names. A change that weakens a review gate (removes or skips a key, a
   required CI job or a required check; lets a check pass by default, on a
   timeout or on a deferred review; reads rules from the pull request instead
   of `main`; or lets the loop merge without both keys and the proxy) is a
