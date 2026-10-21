@@ -9,7 +9,7 @@
 //   review response: { verdict, findings?, sha?, extra? } or { type: 'rate_limit' }
 //     (extra adds keys, such as the Founder Proxy's founder_reasons)
 //   fix: { status?, edits?: {path: text}, notAddressed?: [{id, reason}],
-//          humanMove?: {gitDir, ref, sha}, type?: 'rate_limit' | 'garbage' }
+//          humanMove?: {gitDir, ref, sha}, type?: 'rate_limit' | 'garbage' | 'crash' }
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -39,6 +39,7 @@ process.stdin.on('end', () => {
     ok({ verdict: r.verdict ?? 'pass', sha: r.sha ?? head, findings: r.findings ?? [], checks_run: ['read the diff'], not_run: ['tests (no command tools)'], ...(r.extra ?? {}) });
     return;
   }
+  if (r.type === 'crash') { out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'the process failed' }); process.exitCode = 1; return; }
   if (r.type === 'garbage') { out({ type: 'result', subtype: 'success', is_error: false, result: 'I fixed it!' }); return; }
   const findings = JSON.parse(/# Findings to fix[^\n]*\n\n([\s\S]*?)\n\n# PR text/.exec(stdin)[1]);
   for (const [p, text] of Object.entries(r.edits ?? {})) {

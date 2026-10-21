@@ -41,7 +41,9 @@ export function claudeArgs({ model, systemPrompt, addDirs = [], schema }) {
   return args;
 }
 
-const RATE_LIMIT = /rate.?limit|usage limit|too many requests|\b429\b|overloaded|limit reached|try again later/i;
+// A plan's session limit ("You've hit your session limit · resets 3:10am")
+// is a rate limit too, even when claude reports it as subtype "success".
+const RATE_LIMIT = /rate.?limit|usage limit|session limit|too many requests|\b429\b|overloaded|limit reached|try again later/i;
 
 // Classify one finished process. Returns {kind: ok|rate_limit|error, ...}.
 export function interpret({ code, stdout, stderr }) {
