@@ -311,14 +311,15 @@ export async function stepPr(o, listed) {
       return skip(`CI failed on ${head.slice(0, 7)} (${ci.text}); the author fixes it`);
     }
 
-    // One PR at a time across both repositories: the review's lock, held
-    // for the review and the fix round together. Lock wait: from the first
-    // pass that found this head ready but the lock held, to the pass that
-    // takes it (kept in the PR's state between passes).
-    // lock_mode "step" (today): the one shared review lock for the review and
-    // the fix round together. "calls": this repository's own lock plus one of
+    // Lock wait: from the first pass that found this head ready but no lock
+    // free, to the pass that takes one (kept in the PR's state between passes).
+    // lock_mode "calls" (config.json): this repository's own lock plus one of
     // model_cap model slots, held for the review only; the fixer takes a slot
-    // just for its call, and local checks hold nothing.
+    // just for its call, and local checks hold nothing. At most model_cap
+    // reviews run across both repositories, one at a time per repository.
+    // "step" (the earlier setting): the one shared review lock, held for the
+    // review and the fix round together, so one PR at a time across both
+    // repositories.
     const callsMode = lc.lock_mode === 'calls';
     let lock = callsMode ? acquireLock(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop' }, { name: `review-${cfg.repo.replace('/', '_')}.lock` }) : acquireLock(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop' });
     if (lock.ok && callsMode) {

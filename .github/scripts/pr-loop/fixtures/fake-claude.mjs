@@ -10,7 +10,7 @@
 //     (extra adds keys, such as the Founder Proxy's founder_reasons)
 //   fix: { status?, edits?: {path: text}, notAddressed?: [{id, reason}],
 //          humanMove?: {gitDir, ref, sha}, type?: 'rate_limit' | 'garbage' | 'crash' }
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +30,10 @@ let stdin = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', (d) => { stdin += d; });
 process.stdin.on('end', () => {
-  appendFileSync(join(here, 'calls.jsonl'), `${JSON.stringify({ kind, argv, cwd: process.cwd(), env: Object.keys(process.env), stdin })}\n`);
+  // scenario.probeLocks: the state directory whose lock folders are recorded
+  // at the moment of each call (to check how many model slots are held).
+  const locks = scenario.probeLocks ? readdirSync(scenario.probeLocks).filter((f) => f.endsWith('.lock')).sort() : undefined;
+  appendFileSync(join(here, 'calls.jsonl'), `${JSON.stringify({ kind, argv, cwd: process.cwd(), env: Object.keys(process.env), stdin, locks })}\n`);
   const out = (o) => process.stdout.write(JSON.stringify(o));
   const ok = (structured) => out({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(structured), structured_output: structured, usage: { input_tokens: 100, output_tokens: 20 }, modelUsage: { 'fake-model': {} } });
   if (r.type === 'rate_limit') { out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'API Error: 429 rate limit exceeded' }); return; }
