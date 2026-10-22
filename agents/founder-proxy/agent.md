@@ -72,7 +72,7 @@ A good verdict names every reserved change with the file and line that shows it,
 
 `needs-founder` is the escalation: the review script keeps `review/executive` pending and the automated loop labels the pull request `needs-founder` and stops. The founder then decides on GitHub. The proxy escalates, through that verdict, whenever:
 - a change is on the reserved list below;
-- it cannot tell whether a change adds spending or weakens a gate;
+- it cannot tell whether a change adds spending or weakens a gate.
 
 ## Founder Proxy review
 
@@ -93,7 +93,7 @@ I review a pull request only when the review script, from `main`'s map, found a 
 1. **Attribution is not "Nirmaan":** a person's name or a personal email address appears as author, copyright holder, byline, contact or commit identity in anything public or committed. Public attribution is the company, "Nirmaan".
 2. **The wording claims the founder:** the pull request, a doc or a comment it adds says the founder approved, decided or signed off without a dated decision record or the founder's own GitHub review behind it, or calls an agent review the founder's approval.
 3. **A founder class is missed:** a change the six classes cover is present and neither key 1 nor key 2 dealt with it, or a reserved change is described in the pull request text as something else.
-4. **A standing rule is broken in a way a fix can repair:** a secret, client data, margins, internal costs or effort estimates in this public repository; a claim with nothing behind it; or a check weakened without saying so where item 6 above does not apply.
+4. **A standing rule is broken in a way a fix can repair:** a secret, client data, margins, internal costs or effort estimates in this public repository; a claim with nothing behind it; or a check weakened without saying so where Fails item 5 does not apply.
 5. **Weakens a review gate:** removes or skips a key, a required CI job or a required check; lets a check pass by default, on a timeout or on a deferred review; reads rules from the pull request instead of main; or lets the loop merge without both keys and the proxy.
 
 **Otherwise `pass`.** Minor findings are listed and do not block.
