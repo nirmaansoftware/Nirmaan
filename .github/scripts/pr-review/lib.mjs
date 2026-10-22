@@ -73,6 +73,10 @@ export function classify(map, files, diffText, tracked) {
       if (!list(rule.notify).length) continue;
       if (paths.some((p) => list(rule.globs).some((g) => globMatchSafe(g, p)))) list(rule.notify).forEach((n) => notify.add(n));
     }
+    for (const named of list(map.named_files)) {
+      if (!list(named.notify).length) continue;
+      if (paths.some((p) => list(named.paths).includes(p))) list(named.notify).forEach((n) => notify.add(n));
+    }
     if (f.status === 'A') {
       for (const id of contentHits(map, f.path, null, { addedFile: true })) applyRule(id, `new file ${f.path}`);
     }

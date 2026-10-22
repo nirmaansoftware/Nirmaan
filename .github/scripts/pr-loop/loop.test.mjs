@@ -10,7 +10,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ciState, loadState, phaseRecord, runTick, STOP_CLASSES, stepPr } from './pr-loop.mjs';
+import { ciState, loadState, phaseRecord, readPause, runTick, STOP_CLASSES, stepPr } from './pr-loop.mjs';
 import { fingerprint, findingsToFix, fixerArgs, forbiddenChanges, validateFixerOutput } from './fixer.mjs';
 import { acquireLock, PR_TEXT_FILE } from '../pr-review/lib.mjs';
 
@@ -476,11 +476,10 @@ test('a fixer that touches a forbidden path is refused and reverted: nothing pus
   }
 });
 
-test('the fixer asking for the founder, failing to fix, a rate limit or bad output: stop, nothing pushed', async () => {
+test('the fixer asking for the founder, failing to fix or bad output: stop, nothing pushed', async () => {
   for (const [fix, why] of [
     [{ status: 'needs_founder', notAddressed: [{ id: 'F1', reason: 'needs a CODEOWNERS change' }] }, /needs a change the loop may not make \(F1: needs a CODEOWNERS change\)/],
     [{ edits: { 'os/app.js': 'x\n' }, notAddressed: [{ id: 'F1', reason: 'unclear' }] }, /could not fix every finding/],
-    [{ type: 'rate_limit' }, /rate limit/],
     [{ type: 'garbage' }, /not JSON/],
     [{}, /changed no file/],
   ]) {
@@ -791,7 +790,6 @@ test('per-phase log: lock wait is measured from the first pass the lock was busy
 test('per-phase log: a stop records its reason and class, in the stop line and the phase line; a validation deferral records the validator\'s error', async () => {
   const cases = [
     [{ reviews: [{ verdict: 'fail', findings: [{ file: 'os/app.js', line: 999, severity: 'critical', text: 'x' }] }] }, 'validation', /does not exist at the head/],
-    [{ reviews: [{ type: 'rate_limit' }] }, 'rate-limit', null],
     [{ reviews: [fail('bad')], fixes: [{ edits: { '.github/review-teams.yml': 'teams: []\n' } }] }, 'fixer-forbidden-path', null],
     [{ reviews: [fail('bad')], fixes: [{ status: 'needs_founder', notAddressed: [{ id: 'F1', reason: 'PR text' }] }] }, 'loop-may-not-fix', null],
   ];
@@ -808,11 +806,59 @@ test('per-phase log: a stop records its reason and class, in the stop line and t
       assert.equal(p.stop_reason, stopLine.reason);
       assert.equal(t.state().stopped.class, cls);
       if (verr) assert.match(p.key1.teams[0].validation_error, verr);
-      if (cls === 'rate-limit') assert.equal(p.key1.teams[0].call_outcome, 'rate_limit');
       if (cls === 'fixer-forbidden-path') assert.deepEqual(p.key1.teams[0].findings, { blocker: 0, critical: 1, major: 0, minor: 0, info: 0 });
       assert.ok(t.labeled(), 'stops still label needs-founder (unchanged here)');
     } finally { t.cleanup(); }
   }
+});
+
+// ---------------------------------------------------------------- rate-limit pause
+
+const expirePause = (t) => writeFileSync(join(t.stateDir, 'loop', 'rate-limit-pause.json'), JSON.stringify({ until: '2000-01-01T00:00:00Z' }));
+
+test('a key hits a rate limit (after its one retry): the loop pauses, no needs-founder label, no stop; no model call while paused; then it reviews again and merges', async () => {
+  const t = setup({ reviews: [{ type: 'rate_limit' }, { type: 'rate_limit' }, { verdict: 'pass' }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['paused']);
+    assert.ok(!t.labeled(), 'no needs-founder label');
+    assert.equal(t.state().stopped, null, 'not a stop');
+    assert.ok(!t.comments().some((c) => /Automated loop stopped/.test(c)));
+    assert.equal(t.posts.filter((p) => p.type === 'check' && p.state === 'success').length, 0, 'the keys stay pending');
+    const pz = readPause(t.stateDir);
+    assert.ok(pz && Date.parse(pz.until) > Date.now() + 25 * 60 * 1000, 'paused for rate_limit_pause_minutes');
+    const pl = t.log().filter((l) => l.event === 'paused').pop();
+    assert.equal(pl.class, 'rate-limit');
+    assert.equal(t.log().filter((l) => l.kind === 'phase').pop().outcome, 'paused');
+    const calls = t.calls().length;
+    assert.deepEqual(outcomes(await t.tick()), ['paused']);
+    assert.equal(t.calls().length, calls, 'no model call while paused');
+    expirePause(t);
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge'], 'after the pause the same head is reviewed again');
+  } finally { t.cleanup(); }
+});
+
+test('the fixer hits a rate limit: pause, nothing pushed, no label, the findings are not counted as seen; after the pause the round runs and the PR merges', async () => {
+  const t = setup({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ type: 'rate_limit' }, { edits: { 'os/app.js': 'fixed\n' } }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['paused']);
+    assert.equal(t.originHead(), t.firstHead, 'nothing pushed');
+    assert.ok(!t.labeled());
+    assert.deepEqual(t.state().seen, {}, 'not a fix attempt');
+    assert.equal(t.state().rounds, 0);
+    expirePause(t);
+    assert.deepEqual(outcomes(await t.tick()), ['fixed']);
+    assert.notEqual(t.originHead(), t.firstHead);
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+  } finally { t.cleanup(); }
+});
+
+test('any other deferral beside a rate limit still stops with needs-founder', async () => {
+  const t = setup({ reviews: [{ verdict: 'fail', findings: [{ file: 'os/app.js', line: 999, severity: 'critical', text: 'x' }] }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['stopped']);
+    assert.ok(t.labeled());
+    assert.equal(readPause(t.stateDir), null);
+  } finally { t.cleanup(); }
 });
 
 // ---------------------------------------------------------------- stops and locks (L4)

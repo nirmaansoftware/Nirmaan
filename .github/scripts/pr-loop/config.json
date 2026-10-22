@@ -1,6 +1,7 @@
 {
   "authors": ["patel-om"],
   "max_fix_rounds": 3,
+  "rate_limit_pause_minutes": 30,
   "needs_founder_label": "needs-founder",
   "author_fix_label": "author-fix",
   "transient_retries": 3,
