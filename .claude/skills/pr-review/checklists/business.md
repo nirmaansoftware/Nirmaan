@@ -1,4 +1,4 @@
-# Business (lead: legal-compliance; members finance-estimation, tax-accounts, legal-counsel, sales-partnerships, client-communication)
+# Business
 
 Findings are labelled [Technical observation]. No legal advice is given. A
 Business pass is an agent review, never a legal sign-off.
