@@ -1,5 +1,6 @@
 import { prisma } from "../db/client";
 import { loadAgent } from "../agents/loadAgent";
+import { composeSystemPrompt } from "../agents/composePrompt";
 import { callModel } from "../ai/callModel";
 import { extractJsonObject, text } from "../ai/json";
 import { nextCode } from "../ids";
@@ -107,7 +108,7 @@ export async function runPlanner(actor: Actor, projectId: string, opts: { provid
     task: "planning",
     taskType: "requirements",
     agentSlug: "product-manager",
-    systemPrompt: [`You are the ${agent.role} agent at Nirmaan, acting as delivery planner.`, "", agent.body, "", CONTRACT(plannableAgents())].join("\n"),
+    systemPrompt: composeSystemPrompt({ agent, intro: `You are the ${agent.role} agent at Nirmaan, acting as delivery planner.`, contract: CONTRACT(plannableAgents()) }),
     userPrompt: brief.text,
     projectId,
     provider: opts.provider,

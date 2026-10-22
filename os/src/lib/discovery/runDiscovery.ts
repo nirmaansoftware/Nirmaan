@@ -1,5 +1,6 @@
 import { prisma } from "../db/client";
 import { loadAgent } from "../agents/loadAgent";
+import { composeSystemPrompt } from "../agents/composePrompt";
 import { callModel } from "../ai/callModel";
 import { audit } from "../audit";
 import { assertCan } from "../auth/permissions";
@@ -121,13 +122,11 @@ export async function runDiscovery(actor: Actor, leadId: string, opts: { provide
   const intakeFacts = await seedIntakeFacts(leadId);
 
   const agent = loadAgent("business-analyst");
-  const systemPrompt = [
-    `You are the ${agent.role} agent at Nirmaan, a software company whose promise is "You bring the problem. We build the system."`,
-    "",
-    agent.body,
-    "",
-    OUTPUT_CONTRACT,
-  ].join("\n");
+  const systemPrompt = composeSystemPrompt({
+    agent,
+    intro: `You are the ${agent.role} agent at Nirmaan, a software company whose promise is "You bring the problem. We build the system."`,
+    contract: OUTPUT_CONTRACT,
+  });
 
   const { completion, usageId } = await callModel({
     task: "discovery",

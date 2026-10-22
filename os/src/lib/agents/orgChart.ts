@@ -20,6 +20,7 @@ export interface ChartPosition {
   reports_to?: string;
   interim?: boolean;
   plannable?: boolean;
+  deputy?: string;
 }
 
 export interface OrgChart {
@@ -73,4 +74,38 @@ export function managerOnlySlugs(chart: OrgChart = loadOrgChart()): string[] {
     byslug.get(p.occupant)!.add(p.kind);
   }
   return [...byslug].filter(([, kinds]) => kinds.size === 1 && kinds.has("manager")).map(([slug]) => slug).sort();
+}
+
+function who(p: ChartPosition): string {
+  return p.holder === "human" ? `${p.title} (human)` : `${p.title} (${p.occupant})`;
+}
+
+/**
+ * The "Your line" block for one spec (decision record D3 point 6): its
+ * position, manager, deputy and escalation rung, generated from the chart.
+ * Empty for a spec the chart leaves unplaced or that holds no active position.
+ */
+export function yourLine(slug: string, chart: OrgChart = loadOrgChart()): string {
+  const byId = new Map(chart.positions.map((p) => [p.id, p]));
+  const held = chart.positions.filter((p) => p.status === "active" && p.occupant === slug);
+  if (!held.length) return "";
+  const lines = ["## Your line", "", "Generated from agents/org-chart.yml, today's line of command.", ""];
+  for (const pos of held) {
+    lines.push(`- Position: ${pos.title}, layer ${pos.layer}, ${pos.kind}.`);
+    const manager = pos.reports_to ? byId.get(pos.reports_to) : undefined;
+    if (manager) lines.push(`- Reports to: ${who(manager)}.`);
+    const deputy = pos.deputy ? byId.get(pos.deputy) : undefined;
+    if (deputy) lines.push(`- Your deputy: ${who(deputy)}.`);
+    for (const head of chart.positions.filter((p) => p.status === "active" && p.deputy === pos.id)) {
+      lines.push(`- You are the deputy of: ${who(head)}.`);
+    }
+    const rung: string[] = [];
+    const seen = new Set<string>([pos.id]);
+    for (let up = manager; up && !seen.has(up.id); up = up.reports_to ? byId.get(up.reports_to) : undefined) {
+      seen.add(up.id);
+      rung.push(who(up));
+    }
+    if (rung.length) lines.push(`- Escalation rung: ${rung.join(", then ")}.`);
+  }
+  return lines.join("\n");
 }
