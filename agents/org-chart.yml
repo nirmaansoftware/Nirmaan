@@ -92,6 +92,7 @@ positions:
     status: active
     interim: true
     reports_to: orchestrator
+    deputy: ic-appsec-engineer
   - id: head-product-interim
     title: "Head of Product (interim)"
     layer: 4
@@ -187,6 +188,16 @@ positions:
     status: active
     reports_to: head-platform-quality-interim
     target_reports_to: head-platform
+  - id: ic-appsec-engineer
+    # Deputy of Platform and Quality (interim) from H1 (decision record D2.2).
+    title: "Application Security Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: appsec-engineer
+    status: active
+    reports_to: head-platform-quality-interim
+    target_reports_to: head-security
 
   # ------------------------------------------------------------ Product (interim) members
   - id: ic-business-analyst
@@ -523,15 +534,10 @@ positions:
     status: planned
     target_occupant: security-engineer
     reports_to: chief-engineering
-    deputy: ic-appsec-engineer
-  - id: ic-appsec-engineer
-    title: "Application Security Engineer"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H1 (P1)"
-    reports_to: head-security
+    # Target deputy: ic-appsec-engineer (decision record D2.1). It is not set
+    # here while appsec-engineer deputises for Platform and Quality (interim):
+    # a deputy serves one unit, and a planned position holds no deputy duty.
+    # It is set when Security activates (H12, wave 8).
   - id: ic-cloud-security-engineer
     title: "Cloud Security Engineer"
     layer: 6
@@ -817,7 +823,7 @@ units:
     key: 1
     serves: [nirmaan, ip-nirmaan]
     ends: "H11 to H13: Platform, Security, Quality"
-    members: [ic-sre, ic-devops-engineer, ic-qa-engineer, ic-performance-engineer]
+    members: [ic-sre, ic-devops-engineer, ic-qa-engineer, ic-performance-engineer, ic-appsec-engineer]
   - id: business
     name: Business
     head: head-business-interim
@@ -972,10 +978,6 @@ exceptions:
   - position: head-product-interim
     rule: span
     reason: "Product (interim) has 2 members until Head of Product and product-owner are hired (H10, wave 6)."
-    review_by: "2027-01-18"
-  - position: head-platform-quality-interim
-    rule: deputy
-    reason: "The decided deputy, appsec-engineer, joins in H1; no current member was named deputy."
     review_by: "2027-01-18"
   - position: head-business-interim
     rule: deputy
