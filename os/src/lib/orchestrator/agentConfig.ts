@@ -36,6 +36,15 @@ export const AGENT_TASK_TYPES: Record<string, TaskType> = {
   "tax-accounts": "content",
   "sales-partnerships": "content",
   "founder-proxy": "architecture", // reviews founder-class PRs only; the strongest tier, like key 2
+  // Hires of the org chart (docs/operations/capability-hierarchy-decisions.md, section 4).
+  "appsec-engineer": "architecture", // security review, like security-engineer
+  "head-of-commercial": "content",
+  "privacy-counsel": "architecture", // privacy drafting is high-stakes reasoning, like legal-counsel
+  "licensing-counsel": "architecture", // licence analysis is high-stakes reasoning, like legal-counsel
+  "head-of-capability": "architecture", // structural decisions about the organisation, like the orchestrator
+  "org-designer": "content",
+  "capability-programme-manager": "requirements",
+  "knowledge-quality-reviewer": "content",
 };
 
 /**
@@ -88,6 +97,14 @@ export const AGENT_OUTPUT_PATHS: Record<string, string> = {
   "tax-accounts": "reports/tax-notes.md",
   "sales-partnerships": "reports/sales-plan.md",
   "founder-proxy": "reports/founder-proxy-review.md",
+  "appsec-engineer": "testing/appsec-review.md",
+  "head-of-commercial": "reports/commercial-review.md",
+  "privacy-counsel": "reports/privacy-draft.md",
+  "licensing-counsel": "reports/licensing.md",
+  "head-of-capability": "reports/capability-review.md",
+  "org-designer": "reports/org-design.md",
+  "capability-programme-manager": "reports/capability-programme.md",
+  "knowledge-quality-reviewer": "reports/knowledge-quality.md",
 };
 
 /** Artifact.type value each agent's primary output is recorded as. */
@@ -121,6 +138,14 @@ export const AGENT_ARTIFACT_TYPES: Record<string, string> = {
   "tax-accounts": "TAX_NOTES",
   "sales-partnerships": "SALES_PLAN",
   "founder-proxy": "FOUNDER_PROXY_REVIEW",
+  "appsec-engineer": "APPSEC_REVIEW",
+  "head-of-commercial": "COMMERCIAL_REVIEW",
+  "privacy-counsel": "PRIVACY_DRAFT",
+  "licensing-counsel": "LICENSING_ANALYSIS",
+  "head-of-capability": "CAPABILITY_REVIEW",
+  "org-designer": "ORG_DESIGN",
+  "capability-programme-manager": "CAPABILITY_PROGRAMME",
+  "knowledge-quality-reviewer": "KNOWLEDGE_QUALITY",
 };
 
 export function requireTaskType(agentSlug: string): TaskType {

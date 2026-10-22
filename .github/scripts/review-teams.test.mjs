@@ -388,6 +388,29 @@ test('classification: in skill files, examples and capability records, "payments
   }
 });
 
+test('classification: capability/** is Engineering with the database-engineer checklist', () => {
+  const { map, tracked } = realMap();
+  for (const file of ['capability/README.md', 'capability/levels.json', 'capability/tools/levels.mjs']) {
+    const o = owners(map, file, tracked);
+    assert.deepEqual(o.teams, ['engineering'], file);
+    assert.deepEqual(o.checklists, ['database-engineer'], file);
+  }
+});
+
+test('classification: knowledge-legal adds Business (legal-compliance) with no founder class, only in the knowledge folders', () => {
+  const { map } = realMap();
+  const rule = map.content_rules.find((r) => r.id === 'knowledge-legal');
+  assert.deepEqual(rule.adds_teams, ['business']);
+  assert.equal(rule.founder_class, undefined);
+  for (const line of ['Check the dataset licence first.', 'Model weights are not copied.', 'This is not legal advice.', 'Erasure under GDPR and the DPDP Act.']) {
+    assert.ok(contentHits(map, 'capability/records/a.jsonl', line).includes('knowledge-legal'), line);
+    assert.ok(contentHits(map, 'skills/web/form-validation.md', line).includes('knowledge-legal'), line);
+    assert.ok(contentHits(map, 'examples/web/form-validation/README.md', line).includes('knowledge-legal'), line);
+  }
+  assert.ok(!contentHits(map, 'docs/engineering/testing.md', 'Check the dataset licence.').includes('knowledge-legal'));
+  assert.ok(!contentHits(map, 'capability/README.md', 'Levels are computed from records.').includes('knowledge-legal'));
+});
+
 test('classification: internal-org on a site page adds Brand and Content as founder class E', () => {
   const { map } = realMap();
   const rule = map.content_rules.find((r) => r.id === 'internal-org');

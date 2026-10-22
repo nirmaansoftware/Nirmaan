@@ -64,7 +64,7 @@ teams:
     name: Platform and Quality
     lead: security-engineer
     key: 1
-    members: [sre, devops-engineer, qa-engineer, performance-engineer]
+    members: [sre, devops-engineer, qa-engineer, performance-engineer, appsec-engineer]
   - id: business
     name: Business
     lead: legal-compliance
@@ -172,6 +172,12 @@ rules:
     globs: ["docs/engineering/procurement.md", "docs/ai/ai-cost-governance.md"]
     teams: [business]
     checklists: [finance-estimation]
+
+  - id: capability
+    # Records, the levels generator and levels.json (capability/README.md).
+    globs: ["capability/**"]
+    teams: [engineering]
+    checklists: [database-engineer]
 
   # Skills (skills/README.md). Each unit's skills, skills/<unit>/**, get a
   # rule naming that unit, added with the unit's first skill (the skill
@@ -529,6 +535,24 @@ content_rules:
     markers:
       - file: "website/src/_includes/estimator.njk"
       - file: "website/src/privacy.njk"
+  - id: knowledge-legal
+    # Legal topics in the knowledge folders. Adds Business, whose lead is
+    # legal-compliance, as key 1, with no founder class (decision record
+    # D5.2): skills/**, examples/** and capability/** (D6.1).
+    adds_teams: [business]
+    checklists: [legal-compliance]
+    applies_to: ["skills/**", "examples/**", "capability/**"]
+    patterns:
+      - "\\b(personal data|personally identifiable|pii)\\b"
+      - "\\bdatasets?\\b"
+      - "\\blicen[cs]es?\\b"
+      - "\\bmodel weights?\\b"
+      - "\\blegal advice\\b"
+      - "\\b(dpdp|gdpr|hipaa)\\b"
+      - "\\bthird[- ]party (scripts?|trackers?|cookies)\\b"
+    examples: ["trained on a public dataset", "Licence: CC BY 4.0", "model weights under a custom licence", "this is not legal advice", "consent under the DPDP Act", "GDPR erasure request", "loads a third-party script"]
+    markers:
+      - file: "skills/README.md"
   - id: deploy-switch
     adds_teams: [platform-quality]
     founder_class: B
