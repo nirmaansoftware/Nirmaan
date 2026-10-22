@@ -19,8 +19,12 @@
 //            step;
 //   wait     required CI not finished on the head, or GitHub still making
 //            the update's merge commit;
+//   pause    a key, the proxy or the fixer hit a rate limit (the plan's
+//            session or usage limit): no label, the key stays pending, and
+//            the whole loop waits rate_limit_pause_minutes before any model
+//            call, then reviews again;
 //   stop     CI failed on a head the loop pushed, a merge conflict, a key or
-//            the proxy deferred (rate limit, bad output, missing spec), the
+//            the proxy deferred (bad output, missing spec), the
 //            Founder Proxy returned needs-founder (until the founder's own
 //            GitHub review approves the head), a repeated finding, the round
 //            limit, a forbidden path, a failed local check, or any error:
@@ -45,24 +49,37 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globMatch } from '../review-teams.mjs';
-import { acquireLock, findingsBySeverity, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText, redact, requiredCi } from '../pr-review/lib.mjs';
+import { acquireLock, acquireSlot, findingsBySeverity, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText, redact, requiredCi } from '../pr-review/lib.mjs';
 import { reviewerEnv, runOnce } from '../pr-review/claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from '../pr-review/github.mjs';
 import { defaults, differsFromMain, EXIT, runReview } from '../pr-review/review.mjs';
-import { findingsToFix, fixerArgs, fixerSystemPrompt, fixerUserPrompt, forbiddenChanges, validateFixerOutput } from './fixer.mjs';
+import { findingsToFix, fixableBy, fixerArgs, fixerSystemPrompt, fixerUserPrompt, forbiddenChanges, validateFixerOutput } from './fixer.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const MARK = 'nirmaan-pr-loop';
 // After asking GitHub to update a branch, how long the loop waits for the new
 // head before asking again (GitHub makes the merge commit asynchronously).
 const UPDATE_WAIT_MS = 10 * 60 * 1000;
+// The loop-wide rate-limit pause (shared by every PR of this repository).
+function pausePath(stateDir) { return join(stateDir, 'loop', 'rate-limit-pause.json'); }
+export function readPause(stateDir, now = Date.now()) {
+  try {
+    const p = JSON.parse(readFileSync(pausePath(stateDir), 'utf8'));
+    return Date.parse(p.until) > now ? p : null;
+  } catch { return null; }
+}
+
 // The kinds of stop, logged as `class` with every stop (and in the per-phase
 // line): the comment gives the reason, the class groups them for reports.
 export const STOP_CLASSES = [
   'merge-conflict', 'ci-failed-after-fix', 'deferred', 'validation', 'rate-limit', 'call-failed', 'needs-founder',
   'update-failed', 'merge-failed', 'no-findings', 'repeated-finding', 'rounds-used-up', 'fixer-forbidden-path',
-  'fixer-invalid-output', 'loop-may-not-fix', 'fixer-could-not-fix', 'local-check', 'push-failed', 'error',
+  'fixer-invalid-output', 'loop-may-not-fix', 'fixer-could-not-fix', 'local-check', 'push-failed', 'error', 'transient',
 ];
+// Stops that may be passing faults (a failed model process, a GitHub or git
+// error, a failed push): retried on later passes, transient_retries times,
+// before they stop for real with class "transient".
+export const TRANSIENT_CLASSES = new Set(['call-failed', 'error', 'push-failed']);
 
 export function loopDefaults(env = process.env) {
   return {
@@ -142,8 +159,9 @@ export function phaseRecord({ ciGreenAt, lockWaitMs, startedAt, endedAt, review,
     key1: k1.length ? { ...span(k1), teams: k1 } : null,
     key2: keyPhase(review?.key2), proxy: keyPhase(review?.proxy),
     outcome: result?.outcome ?? null,
-    stop_reason: result?.outcome === 'stopped' ? result.reason ?? null : null,
-    stop_class: result?.outcome === 'stopped' ? result.class ?? null : null,
+    // A stop, an author-fix hand-over or a retry on a later pass.
+    stop_reason: ['stopped', 'author-fix', 'retry'].includes(result?.outcome) ? result.reason ?? null : null,
+    stop_class: ['stopped', 'author-fix', 'retry'].includes(result?.outcome) ? result.class ?? null : null,
     merged: false,
   };
 }
@@ -192,6 +210,12 @@ export async function stepPr(o, listed) {
   const skip = (why) => { out(`pr-loop: #${n} skipped: ${why}`); return { outcome: 'skip', reason: why }; };
 
   if (listed.draft) return skip('draft');
+  if (listed.headRepo === cfg.repo && listed.baseRef !== cfg.base_branch) {
+    // Stacked on another open PR: wait for it to merge (GitHub then retargets
+    // this one to main).
+    const base = (o.openPulls ?? []).find((p) => p.number !== n && p.headRef === listed.baseRef);
+    if (base) { out(`pr-loop: #${n} waits: stacked on #${base.number}`); return { outcome: 'wait', reason: `stacked on #${base.number}; waits for it to merge` }; }
+  }
   if (listed.headRepo !== cfg.repo || listed.baseRef !== cfg.base_branch) return skip('not a same-repository PR to main');
   if (!lc.authors.includes(listed.author)) return skip(`author ${listed.author} is not the agents' account`);
   if (listed.labels.includes(cfg.hold_label)) return skip(`"${cfg.hold_label}" label`);
@@ -204,6 +228,14 @@ export async function stepPr(o, listed) {
     log('resumed');
   }
   if (st.stopped && st.stopped.head === listed.headSha) return skip(`stopped on this head: ${st.stopped.reason}`);
+  if (st.authorFix) {
+    // The author fixes what the loop may not: nothing more on this head; a
+    // new head is reviewed from scratch and the label comes off.
+    if (st.authorFix.head === listed.headSha) return skip('waiting for the author to fix findings the loop may not fix');
+    if (o.post !== 'none' && lc.author_fix_label) { try { await o.github.removeLabel(n, lc.author_fix_label); } catch { /* already gone */ } }
+    delete st.authorFix;
+    saveState(o.stateDir, cfg.repo, st);
+  }
   if (st.stopped) st.stopped = null; // unlabeled (--no-post) stop on an older head
 
   const say = async (body) => {
@@ -215,7 +247,20 @@ export async function stepPr(o, listed) {
   const stop = async (head, why, cls = 'error') => {
     // Reasons can carry gh or git error text: redacted before it is logged,
     // saved or posted.
-    const reason = redact(why);
+    let reason = redact(why);
+    if (TRANSIENT_CLASSES.has(cls) && lc.transient_retries) {
+      const tr = st.transient?.head === head ? st.transient : { head, count: 0 };
+      if (tr.count < lc.transient_retries) {
+        tr.count++;
+        st.transient = tr;
+        saveState(o.stateDir, cfg.repo, st);
+        out(`pr-loop: #${n} retries on a later pass (${tr.count} of ${lc.transient_retries}): ${reason}`);
+        log('retry', { reason, class: cls, attempt: tr.count });
+        return { outcome: 'retry', reason, class: cls };
+      }
+      reason = `${reason} (still failing after ${tr.count} retries on later passes)`;
+      cls = 'transient';
+    }
     out(`pr-loop: #${n} stopped: ${reason}`);
     st.stopped = { head, reason, class: cls, at: new Date().toISOString(), labeled: false };
     saveState(o.stateDir, cfg.repo, st);
@@ -232,6 +277,18 @@ export async function stepPr(o, listed) {
       ].join('\n'));
     } catch (e) { out(`pr-loop: #${n}: could not label or comment: ${e.message}`); }
     return { outcome: 'stopped', reason, class: cls };
+  };
+  // A rate limit is not a stop: no label, no deputy (it shares the plan), the key
+  // stays pending, and the loop makes no model call for any PR until the
+  // pause ends; then this head is reviewed again.
+  const pause = (head, why) => {
+    const reason = redact(why);
+    const until = new Date(Date.now() + (lc.rate_limit_pause_minutes ?? 30) * 60 * 1000).toISOString();
+    mkdirSync(join(o.stateDir, 'loop'), { recursive: true });
+    writeFileSync(pausePath(o.stateDir), JSON.stringify({ until, repo: cfg.repo, pr: n, head, reason }));
+    out(`pr-loop: #${n} paused until ${until}: ${reason}`);
+    log('paused', { reason, until, class: 'rate-limit' });
+    return { outcome: 'paused', reason, until };
   };
 
   try {
@@ -257,7 +314,17 @@ export async function stepPr(o, listed) {
     // for the review and the fix round together. Lock wait: from the first
     // pass that found this head ready but the lock held, to the pass that
     // takes it (kept in the PR's state between passes).
-    const lock = acquireLock(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop' });
+    // lock_mode "step" (today): the one shared review lock for the review and
+    // the fix round together. "calls": this repository's own lock plus one of
+    // model_cap model slots, held for the review only; the fixer takes a slot
+    // just for its call, and local checks hold nothing.
+    const callsMode = lc.lock_mode === 'calls';
+    let lock = callsMode ? acquireLock(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop' }, { name: `review-${cfg.repo.replace('/', '_')}.lock` }) : acquireLock(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop' });
+    if (lock.ok && callsMode) {
+      const slot = acquireSlot(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop' }, lc.model_cap ?? 1);
+      if (!slot.ok) { lock.release(); lock = slot; }
+      else { const repoLock = lock; lock = { ok: true, release: () => { slot.release(); repoLock.release(); } }; }
+    }
     if (!lock.ok) {
       if (st.lockWait?.head !== head) { st.lockWait = { head, since: new Date().toISOString() }; saveState(o.stateDir, cfg.repo, st); }
       return { outcome: 'busy', reason: `lock held by ${lock.holder ? `${lock.holder.repo} #${lock.holder.pr}` : 'another process'}` };
@@ -274,7 +341,8 @@ export async function stepPr(o, listed) {
         models: o.models, timeoutMs: o.timeoutMs, backoffMs: o.backoffMs, sleep: o.sleep, out, heldLock: true,
         callerBranch: o.callerBranch, inClaudeSession: o.inClaudeSession,
       });
-      result = await afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out });
+      if (callsMode) { lock.release(); lock.release = () => {}; }
+      result = await afterReview(o, { n, head, pull, st, r, say, stop, pause, skip, log, out });
       return result;
     } finally {
       lock.release();
@@ -288,7 +356,7 @@ export async function stepPr(o, listed) {
 }
 
 // What follows a review: stop, merge path or fix round.
-async function afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out }) {
+async function afterReview(o, { n, head, pull, st, r, say, stop, pause, skip, log, out }) {
   const cfg = o.config;
   if (r.exit === EXIT.headMoved) { log('head-moved'); return { outcome: 'head-moved' }; }
   if (r.exit === EXIT.refused) { st.done = { head, outcome: 'refused' }; saveState(o.stateDir, cfg.repo, st); return { outcome: 'skip', reason: r.reason }; }
@@ -302,6 +370,8 @@ async function afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out 
   const all = [...k1, ...(r.key2 ? [r.key2] : []), ...(r.proxy ? [r.proxy] : [])];
   const deferred = all.filter((k) => k.status === 'deferred');
   if (k1.length === 0) return await stop(head, 'review deferred: no owning team', 'deferred');
+  // Every deferral a rate limit: pause, no label. Any other deferral stops.
+  if (deferred.length && deferred.every((k) => k.callOutcome === 'rate_limit')) return pause(head, `rate limit (${deferred.map((k) => `${k.teamName}: ${k.reason}`).join('; ')})`);
   if (deferred.length) {
     // The class says why (the comment and the label are the same for all).
     const cls = deferred.some((k) => k.validationError) ? 'validation' : deferred.some((k) => k.callOutcome === 'rate_limit') ? 'rate-limit' : deferred.some((k) => k.callOutcome) ? 'call-failed' : 'deferred';
@@ -318,7 +388,7 @@ async function afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out 
   }
 
   if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, out });
-  return await fixRound(o, { n, head, pull, st, r, say, stop, log, out });
+  return await fixRound(o, { n, head, pull, st, r, say, stop, pause, log, out });
 }
 
 // The branch is behind main: ask GitHub to merge main into it (REST
@@ -400,10 +470,66 @@ function passedWhat(r, capital = false) {
   return capital ? what[0].toUpperCase() + what.slice(1) : what;
 }
 
-async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
+async function fixRound(o, { n, head, pull, st, r, say, stop, pause, log, out }) {
   const cfg = o.config, lc = o.loop;
-  const findings = findingsToFix(r);
+  const findings = findingsToFix(r).map((f) => ({ ...f, fixable_by: fixableBy(f, lc.fixer_forbidden) }));
   if (!findings.length) return await stop(head, 'a key failed without findings to fix', 'no-findings');
+  // A finding only the author can fix (the PR text, or a path the fixer may
+  // not change): no fixer run that cannot succeed; the author-fix label and
+  // the proposed changes instead (decision R5.4).
+  const forAuthor = findings.filter((f) => f.fixable_by === 'author');
+  if (forAuthor.length) return await authorFix(o, { n, head, st, findings, forAuthor, say, log, out });
+  // lock_mode "calls": a model slot for the fixer's call; none free, try
+  // again on a later pass (nothing is counted yet).
+  let slot = null;
+  if (lc.lock_mode === 'calls') {
+    slot = acquireSlot(o.stateDir, { repo: cfg.repo, pr: n, by: 'pr-loop fixer' }, lc.model_cap ?? 1);
+    if (!slot.ok) return { outcome: 'busy', reason: 'no model slot free for the fixer' };
+  }
+  // A round that ends in a retry on a later pass (the fixer's process
+  // failed, a git or GitHub error, a failed push) or throws was not a fix
+  // attempt: its findings are not counted as seen, so the next pass runs the
+  // round again instead of stopping as "the same finding failed again".
+  const seenBefore = JSON.stringify(st.seen);
+  const unsee = () => { st.seen = JSON.parse(seenBefore); saveState(o.stateDir, cfg.repo, st); };
+  try {
+    const res = await fixRoundWith(o, { n, head, pull, st, r, say, stop, pause, log, out, findings, releaseSlot: () => { if (slot) { slot.release(); slot = null; } } });
+    if (res?.outcome === 'retry') unsee();
+    return res;
+  } catch (e) {
+    unsee();
+    throw e;
+  } finally { if (slot) slot.release(); }
+}
+
+// The author-fix outcome: label, comment with the proposed changes, and the
+// loop waits for a new head (no needs-founder label, no fixer).
+async function authorFix(o, { n, head, st, findings, forAuthor, say, log, out }) {
+  const cfg = o.config, lc = o.loop;
+  out(`pr-loop: #${n} author-fix: ${forAuthor.length} finding(s) the loop may not fix`);
+  st.authorFix = { head, at: new Date().toISOString() };
+  saveState(o.stateDir, cfg.repo, st);
+  log('author-fix', { class: 'author-fix', findings: findings.length, author_only: forAuthor.length });
+  if (o.post !== 'none') { try { await o.github.addLabels(n, [lc.author_fix_label]); } catch (e) { out(`pr-loop: #${n}: could not label: ${e.message}`); } }
+  try {
+    await say([
+      `<!-- ${MARK} author-fix head=${head} -->`,
+      '### Automated loop: the author fixes this',
+      '',
+      `A key failed on \`${head.slice(0, 7)}\` with ${forAuthor.length === findings.length ? 'findings' : 'at least one finding'} the loop's fixer may not fix (the PR text, or a path the fixer may not change), so no fixer ran. The author pushes a fix; the new head is reviewed from scratch and the \`${lc.author_fix_label}\` label comes off.`,
+      '',
+      '| Id | Key | Severity | Where | Fixable by | Proposed change (the reviewer\'s finding) |',
+      '|---|---|---|---|---|---|',
+      ...findings.map((f) => `| ${f.id} | ${f.key} (${esc(f.team, 40)}) | ${f.severity} | \`${esc(f.file, 200)}:${f.line}\` | ${f.fixable_by} | ${esc(f.text)} |`),
+      '',
+      '_Automated loop, not a sign-off._',
+    ].join('\n'));
+  } catch (e) { out(`pr-loop: #${n}: could not comment: ${e.message}`); }
+  return { outcome: 'author-fix', reason: `${forAuthor.length} finding(s) for the author`, class: 'author-fix' };
+}
+
+async function fixRoundWith(o, { n, head, pull, st, r, say, stop, pause, log, out, findings, releaseSlot }) {
+  const cfg = o.config, lc = o.loop;
   const repeated = findings.filter((f) => st.seen[f.fingerprint]);
   if (repeated.length) return await stop(head, `the same finding failed again after a fix: ${repeated.map((f) => `${f.file}:${f.line} ${f.text}`).join('; ')}`, 'repeated-finding');
   for (const f of findings) st.seen[f.fingerprint] = (st.seen[f.fingerprint] ?? 0) + 1;
@@ -426,8 +552,15 @@ async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
     const user = fixerUserPrompt(ctx);
     out(`pr-loop: #${n} fix round ${round}: ${findings.length} finding(s), fixer model ${o.fixerModel}...`);
     const res = await runOnce({ bin: o.claudeBin, args: fixerArgs({ model: o.fixerModel, systemPrompt: system, forbidden: lc.fixer_forbidden }), input: user, cwd: dir, env: reviewerEnv(), timeoutMs: o.fixerTimeoutMs });
+    releaseSlot(); // lock_mode "calls": the slot was for the model call only
     logCall(o.stateDir, { repo: cfg.repo, pr: n, head, key: 'fixer', team: null, model: o.fixerModel, reported_model: res.reportedModel ?? null, round, attempt: 1, outcome: res.kind, duration_ms: res.durationMs, ...(res.tokens ?? {}), prompt_chars: system.length + user.length });
-    if (res.kind === 'rate_limit') return await stop(head, `fix round ${round}: the fixer hit a rate limit (${res.error})`, 'rate-limit');
+    if (res.kind === 'rate_limit') {
+      // Not a fix attempt: the findings are not counted as seen, so the
+      // round runs again after the pause.
+      for (const f of findings) { if (--st.seen[f.fingerprint] <= 0) delete st.seen[f.fingerprint]; }
+      saveState(o.stateDir, cfg.repo, st);
+      return pause(head, `fix round ${round}: the fixer hit a rate limit (${res.error})`);
+    }
     if (res.kind !== 'ok') return await stop(head, `fix round ${round}: the fixer failed (${res.kind}: ${res.error})`, 'call-failed');
 
     // Whatever the fixer says, its changes are checked first.
@@ -552,6 +685,11 @@ export async function runTick(o) {
   const open = await o.github.listOpenPulls();
   await logMerges(o, new Set(open.map((p) => p.number)));
   const pulls = open.filter((p) => !o.onlyPr || p.number === o.onlyPr);
+  const paused = readPause(o.stateDir);
+  if (paused) {
+    (o.out ?? console.log)(`pr-loop: rate-limit pause until ${paused.until} (#${paused.pr}); no model call this pass`);
+    return pulls.map((p) => ({ pr: p.number, outcome: 'paused', reason: `rate-limit pause until ${paused.until}` }));
+  }
   const inFlight = (p) => { const s = loadState(o.stateDir, cfg.repo, p.number); return s.lastFixHead && !s.done && !s.stopped ? 0 : 1; };
   pulls.sort((a, b) => inFlight(a) - inFlight(b) || a.number - b.number);
   const results = [];
@@ -567,7 +705,7 @@ export async function runTick(o) {
       try { now = await o.mainSha(); } catch { /* unreadable: end the pass */ }
       if (now !== start) break;
     }
-    const r = await o.stepPr(o, p);
+    const r = await o.stepPr({ ...o, openPulls: open }, p);
     results.push({ pr: p.number, ...r });
     // Auto-merge armed: main can move at any moment, so a later PR in this
     // pass would be reviewed against a stale main. End the pass; the next one
