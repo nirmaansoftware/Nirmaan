@@ -39,7 +39,7 @@ Privacy drafting patterns, read against the source text of each law and checked 
 
 ## Outputs
 
-Written to `/projects/{id}/compliance/privacy-draft.md` (or `docs/legal/` for Nirmaan's own documents):
+Written to `/projects/{id}/reports/privacy-draft.md` (or `docs/legal/` for Nirmaan's own documents):
 - The data map, with a citation for every row
 - The draft notice, consent text or procedure, with `[FOR COUNSEL]` markers and the status line `DRAFT, not reviewed by counsel`
 - A one-page brief for the reviewing lawyer: what the document is for, the open `[FOR COUNSEL]` questions and the facts it relies on

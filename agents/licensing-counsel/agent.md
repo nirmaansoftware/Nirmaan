@@ -39,7 +39,7 @@ Open-source licences and their obligations, read from the licence text: permissi
 
 ## Outputs
 
-Written to `/projects/{id}/compliance/licensing.md` (or `docs/legal/` for Nirmaan's own documents):
+Written to `/projects/{id}/reports/licensing.md` (or `docs/legal/` for Nirmaan's own documents):
 - The licence inventory, with the source of each licence
 - An obligations list and any compatibility conflicts, each citing the licence clause
 - Draft notice and attribution files, with `[FOR COUNSEL]` markers and the status line `DRAFT, not reviewed by counsel`
