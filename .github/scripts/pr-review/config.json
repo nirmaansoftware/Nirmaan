@@ -24,5 +24,7 @@
   "review_app_slug": "nirmaan-review",
   "legal_teams": ["business"],
   "strict_citations": { "teams": ["business", "brand-content"], "checklists": ["market-research"] },
-  "key2_max_findings": 10
+  "key2_max_findings": 10,
+  "key1_mode": "per-team",
+  "key1_composite_max_checklists": 12
 }
