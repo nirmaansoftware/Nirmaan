@@ -372,3 +372,42 @@ test('classification: internal-org on a site page adds Brand and Content as foun
   assert.ok(!contentHits(map, 'docs/operations/pr-review.md', 'The orchestrator holds key 2.').includes('internal-org'));
   assert.ok(!contentHits(map, 'website/src/index.njk', 'We build web apps for growing businesses.').includes('internal-org'));
 });
+
+// Classification fixtures for licence terms and export control (content
+// rules licence-and-export and own-licence-field): founder class D, so the
+// Founder Proxy sees them. Against the real map, through the review script's
+// own classify().
+test('classification: licence text, licence fields, restrictive dependency licences and export control are founder class D', async () => {
+  const { classify } = await import('./pr-review/lib.mjs');
+  const { map, tracked } = realMap();
+  const diffOf = (file, added, { isNew = false } = {}) => [
+    `diff --git a/${file} b/${file}`,
+    isNew ? '--- /dev/null' : `--- a/${file}`,
+    `+++ b/${file}`,
+    '@@ -1,1 +1,2 @@',
+    ...added.map((l) => `+${l}`),
+  ].join('\n');
+  const cls = (file, added, opts = {}) => classify(map, [{ path: file, status: opts.isNew ? 'A' : 'M' }], diffOf(file, added, opts), tracked);
+  const cases = [
+    ['LICENSE', ['MIT License', '', 'Permission is hereby granted, free of charge, to any person'], { isNew: true }],
+    ['NOTICE', ['This product includes software licensed under the Apache License, Version 2.0.'], { isNew: true }],
+    ['os/src/lib/x.ts', ['// SPDX-License-Identifier: Apache-2.0']],
+    ['os/package.json', ['  "license": "MIT",']],
+    ['website/package.json', ['  "licence": "UNLICENSED",']],
+    ['os/package-lock.json', ['      "license": "AGPL-3.0-only",']],
+    ['docs/operations/export.md', ['The RTL generator is export-controlled technology (EAR99 at most).'], { isNew: true }],
+    ['docs/legal/terms-draft.md', ['These licence terms apply to skills/ and examples/.'], { isNew: true }],
+  ];
+  for (const [file, added, opts] of cases) {
+    const c = cls(file, added, opts);
+    assert.ok(c.founder.D, `${file}: founder class D`);
+    assert.ok(c.teams.includes('business'), `${file}: Business (Legal) key 1`);
+    assert.ok(c.checklists.includes('legal-compliance'), `${file}: legal-compliance checklist`);
+  }
+  // Not every mention: a routine lockfile bump, a permissive dependency, and prose about licences are not founder class D.
+  for (const [file, added] of [
+    ['os/package-lock.json', ['      "version": "1.2.4",', '      "license": "MIT",']],
+    ['docs/engineering/testing.md', ['Run the tests before you open a PR.']],
+    ['README.md', ['IP Nirmaan is a separate repository.']],
+  ]) assert.equal(cls(file, added).founder.D, undefined, file);
+});
