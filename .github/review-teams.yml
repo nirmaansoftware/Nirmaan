@@ -339,6 +339,8 @@ named_files:
     teams: [design, engineering]
     checklists: [design-system-engineer]
     ip_site_impact: true
+    # The IP council chair is told of every change (decision record D5.2).
+    notify: [ip-council-chair]
 
 # Generated output follows its source. Checked in order; the first entry whose
 # output glob matches wins. `mirror` maps website/public/<x> to
