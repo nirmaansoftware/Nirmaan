@@ -196,6 +196,23 @@ What the script does, in order:
    body: every other copy of the block, and any lone open or close marker
    without its pair, is removed, so the only markers left are the script's
    own.
+   **Key derivation (shadow).** After classification the script also works out
+   who would hold the keys under `main`'s org chart
+   (`agents/org-chart.yml`, read by `.github/scripts/pr-review/derive.mjs`):
+   key 1 is the head of each owning unit (a vacant head rolls up to the
+   nearest active manager); key 2 is the lowest active manager above every
+   key-1 holder, never a key-1 holder and never the human founder; the
+   Orchestrator holds key 2 for founder classes A and B and for any PR that
+   touches `agents/**`, `.github/**`, `.claude/**`, `AGENTS.md` or
+   `CLAUDE.md`. It also records each derived holder's deputy from the chart
+   (none for the legal team). This is logged (`kind` `derive` in
+   `calls.jsonl`, beside the actual holders) and stated in one line of the
+   key-2 comment. It changes nothing that is posted: key 2 stays
+   `key2_role` (the Orchestrator), and no deputy reviews. Without a chart on
+   `main` the line says the derivation is not available. Every deferred key
+   also names its kind (`rate-limit`, `timeout`, `call-failed`,
+   `invalid-output`, `validation`, `missing-spec`, `missing-standard`) in
+   the loop's per-phase line.
 5. **CI first.** For each required job (`os-test`, `website-build`,
    `repo-checks`) the newest run on the head counts (by start time, then run
    id), and a run still in progress, such as a rerun, always means waiting: an
