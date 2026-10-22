@@ -372,3 +372,15 @@ test('classification: knowledge-legal adds Business (legal-compliance) with no f
   assert.ok(!contentHits(map, 'docs/engineering/testing.md', 'Check the dataset licence.').includes('knowledge-legal'));
   assert.ok(!contentHits(map, 'capability/README.md', 'Levels are computed from records.').includes('knowledge-legal'));
 });
+
+test('classification: internal-org on a site page adds Brand and Content as founder class E', () => {
+  const { map } = realMap();
+  const rule = map.content_rules.find((r) => r.id === 'internal-org');
+  assert.deepEqual(rule.adds_teams, ['brand-content']);
+  assert.equal(rule.founder_class, 'E');
+  for (const line of ['Every agent has a skill level.', 'The orchestrator assigns the work.', 'Some skills are knowledge-only.', 'We run 28 agents.', 'Level: Tested']) {
+    assert.ok(contentHits(map, 'website/src/index.njk', line).includes('internal-org'), line);
+  }
+  assert.ok(!contentHits(map, 'docs/operations/pr-review.md', 'The orchestrator holds key 2.').includes('internal-org'));
+  assert.ok(!contentHits(map, 'website/src/index.njk', 'We build web apps for growing businesses.').includes('internal-org'));
+});
