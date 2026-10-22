@@ -331,6 +331,16 @@ test('classification: os keeps the rest of os/ (API routes, scripts, config), wi
   for (const f of files.filter((x) => x.startsWith('os/'))) assert.ok(ruleIds(map, f).length > 0 || (map.named_files ?? []).some((n) => n.paths.includes(f)), f);
 });
 
+test('classification: a dated record in docs/operations is a frozen decision record (Product)', () => {
+  const { map, tracked } = realMap();
+  const file = 'docs/operations/2026-10-20-founder-proxy-widened.md';
+  assert.deepEqual(ruleIds(map, file), ['decision-records']);
+  assert.deepEqual(owners(map, file, tracked).teams, ['product']);
+  assert.equal(map.rules.find((r) => r.id === 'decision-records').frozen, true);
+  // An undated operations doc is not caught by the dated glob.
+  assert.ok(!ruleIds(map, 'docs/operations/pr-review.md').includes('decision-records'));
+});
+
 test('classification: a website page-only change runs the frontend-engineer checklist (website-frontend)', () => {
   const { map, tracked } = realMap();
   const page = owners(map, 'website/src/index.njk', tracked);
