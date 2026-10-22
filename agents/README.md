@@ -46,7 +46,7 @@ The agents form seven teams for pull request review (decided 2026-10-17, [docs/o
 - A lead's `agent.md` has a **Key 1 review** section with its team's checklist; the orchestrator's has a **Key 2 review** section.
 - A member whose checklist a lead must run has a **Checklist for my team lead** section. Members' checklists run inside the lead's single verdict and are cited by name; a member never posts a key of its own. `review-teams.yml` says which member checklists a changed file or content rule requires (`checklists:`).
 - `legal-counsel` never holds a key. It may comment on a PR; its comment is not a check.
-- The Deputy column is recorded in the chart for the deputy rules (a timeout gives the deputy one try). The review script does not use deputies yet (PLANNED).
+- The Deputy column records each unit's deputy from the chart. The review script does not use deputies: today a key that times out gets one retry and is then deferred ([`pr-review.md`](../docs/operations/pr-review.md)). A deputy try on timeout is a proposal of the decision record (D4.4, founder item 2), not in effect.
 - The founder is not a team. PRs in founder classes A to F (listed in `review-teams.yml`) also get the [Founder Proxy (agent)](founder-proxy/agent.md#founder-proxy-review) as a third reviewer after key 2, under the founder's delegation of 2026-10-18. It is not the founder: what only the founder decides it returns as `needs-founder`, and the founder decides that on GitHub.
 - `reviewed_by` in each spec's frontmatter is who reviews that agent's authored work. It is a review edge, not team membership, and it is not a PR key.
 
