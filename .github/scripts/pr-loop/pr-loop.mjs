@@ -45,7 +45,7 @@
 // Exit: 0 done, 2 setup error, 4 refused (this copy differs from main).
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { globMatch } from '../review-teams.mjs';
@@ -680,8 +680,21 @@ function commitIdentity(o, head) {
 // another, and each review or fix round holds the shared lock, so reviews
 // still run one at a time (a lock held elsewhere makes that PR "busy" and
 // the pass goes on to the next).
+// The heartbeat the health alerts read (digest.mjs, docs/operations/
+// pr-loop-runbook.md): written when a pass starts and after each step.
+export function writeHeartbeat(stateDir, repo, event, now = new Date()) {
+  try {
+    mkdirSync(join(stateDir, 'loop'), { recursive: true });
+    const file = join(stateDir, 'loop', `heartbeat-${repo.replace('/', '_')}.json`);
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ at: now.toISOString(), event, pid: process.pid }));
+    renameSync(tmp, file);
+  } catch { /* the heartbeat never stops a pass */ }
+}
+
 export async function runTick(o) {
   const cfg = o.config;
+  writeHeartbeat(o.stateDir, cfg.repo, 'pass');
   const open = await o.github.listOpenPulls();
   await logMerges(o, new Set(open.map((p) => p.number)));
   const pulls = open.filter((p) => !o.onlyPr || p.number === o.onlyPr);
@@ -707,6 +720,7 @@ export async function runTick(o) {
     }
     const r = await o.stepPr({ ...o, openPulls: open }, p);
     results.push({ pr: p.number, ...r });
+    writeHeartbeat(o.stateDir, cfg.repo, `step #${p.number}`);
     // Auto-merge armed: main can move at any moment, so a later PR in this
     // pass would be reviewed against a stale main. End the pass; the next one
     // refetches main and reruns the differs-from-main check first.

@@ -116,6 +116,10 @@ rules:
       - "docs/company/principles.md"
       - "docs/ai/agent-responsibilities.md"
     teams: [product]
+  - id: loop-runbook
+    # How the review loop is run, watched, stopped and restarted (sre).
+    globs: ["docs/operations/pr-loop-runbook.md"]
+    teams: [platform-quality]
   - id: decision-records
     # Dated records: adding is normal; editing one fails key 1 unless the diff
     # only adds a dated "Superseded by" note.
@@ -387,6 +391,7 @@ founder_classes:
       - "docs/operations/decision-meetings.md"
       - "docs/operations/pr-review.md"
       - "docs/operations/pr-loop.plist"
+      - "docs/operations/pr-loop-runbook.md"
       - "docs/company/principles.md"
       - "docs/ai/agent-responsibilities.md"
   - id: B
