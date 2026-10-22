@@ -5,7 +5,7 @@
 
 import { createHash } from 'node:crypto';
 import { globMatch } from '../review-teams.mjs';
-import { markdownSection, untrusted } from '../pr-review/lib.mjs';
+import { markdownSection, PR_TEXT_FILE, untrusted } from '../pr-review/lib.mjs';
 
 // The fixer may read and edit files in its worktree, nothing else: no shell
 // (the loop runs the checks itself), no network, no sub-agents.
@@ -74,6 +74,14 @@ export function findingsToFix(review) {
     }
   }
   return out.map((f, i) => ({ id: `F${i + 1}`, ...f, fingerprint: fingerprint(f) }));
+}
+
+// Who can fix a finding, from its path (never from the model): the PR text
+// and the paths the fixer may not change are the author's; anything else the
+// loop's fixer may try.
+export function fixableBy(f, forbidden) {
+  if (f.file === PR_TEXT_FILE) return 'author';
+  return forbidden.some((g) => globMatch(g, f.file)) ? 'author' : 'loop';
 }
 
 // "The same finding": same key, team, file and wording (case and spacing

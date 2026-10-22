@@ -117,6 +117,9 @@ export function createClient({ repo, token, fetchImpl = fetch }) {
     async addLabels(n, labels) {
       await post(`/issues/${n}/labels`, { labels });
     },
+    async removeLabel(n, label) {
+      await call(fetchImpl, 'DELETE', `${API}/repos/${repo}/issues/${n}/labels/${encodeURIComponent(label)}`, token);
+    },
     async listReviews(n) {
       return (await paged(`/pulls/${n}/reviews`)).map((r) => ({ login: r.user?.login, state: r.state, commitId: r.commit_id }));
     },

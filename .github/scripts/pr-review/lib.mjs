@@ -73,6 +73,10 @@ export function classify(map, files, diffText, tracked) {
       if (!list(rule.notify).length) continue;
       if (paths.some((p) => list(rule.globs).some((g) => globMatchSafe(g, p)))) list(rule.notify).forEach((n) => notify.add(n));
     }
+    for (const named of list(map.named_files)) {
+      if (!list(named.notify).length) continue;
+      if (paths.some((p) => list(named.paths).includes(p))) list(named.notify).forEach((n) => notify.add(n));
+    }
     if (f.status === 'A') {
       for (const id of contentHits(map, f.path, null, { addedFile: true })) applyRule(id, `new file ${f.path}`);
     }
@@ -545,9 +549,9 @@ export const OWNERLESS_LOCK_STALE_MS = 30 * 60 * 1000;
 // whole (a temporary file renamed inside the lock folder), so a reader never
 // sees half of it. A lock whose pid is gone is stale and removed once; so is
 // one with no readable owner file that is older than OWNERLESS_LOCK_STALE_MS.
-export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS, now = Date.now } = {}) {
+export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS, now = Date.now, name = 'review.lock' } = {}) {
   mkdirSync(stateDir, { recursive: true });
-  const dir = join(stateDir, 'review.lock');
+  const dir = join(stateDir, name);
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       mkdirSync(dir);
@@ -572,6 +576,18 @@ export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS
     return { ok: true, release: () => rmSync(dir, { recursive: true, force: true }) };
   }
   return { ok: false, holder: null };
+}
+
+// One of `cap` model slots shared by both repositories' loops. Slot 0 is the
+// shared review lock itself, so a loop that only knows that lock (the
+// ip-nirmaan loop, or this one with lock_mode "step") holds one slot.
+export function acquireSlot(stateDir, owner, cap = 1) {
+  let last = { ok: false, holder: null };
+  for (let i = 0; i < Math.max(1, cap); i++) {
+    last = acquireLock(stateDir, owner, { name: i === 0 ? 'review.lock' : `model-slot-${i}.lock` });
+    if (last.ok) return last;
+  }
+  return last;
 }
 
 function pidAlive(pid) {
