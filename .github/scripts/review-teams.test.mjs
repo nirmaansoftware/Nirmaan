@@ -350,3 +350,15 @@ test('repository: no tracked file is owned by more than three teams (a PR with m
   const over = files.map((f) => [f, owners(map, f, tracked).teams]).filter(([, t]) => t.length > 3).map(([f, t]) => `${f}: ${t.join(', ')}`);
   assert.deepEqual(over, []);
 });
+
+test('classification: internal-org on a site page adds Brand and Content as founder class E', () => {
+  const { map } = realMap();
+  const rule = map.content_rules.find((r) => r.id === 'internal-org');
+  assert.deepEqual(rule.adds_teams, ['brand-content']);
+  assert.equal(rule.founder_class, 'E');
+  for (const line of ['Every agent has a skill level.', 'The orchestrator assigns the work.', 'Some skills are knowledge-only.', 'We run 28 agents.', 'Level: Tested']) {
+    assert.ok(contentHits(map, 'website/src/index.njk', line).includes('internal-org'), line);
+  }
+  assert.ok(!contentHits(map, 'docs/operations/pr-review.md', 'The orchestrator holds key 2.').includes('internal-org'));
+  assert.ok(!contentHits(map, 'website/src/index.njk', 'We build web apps for growing businesses.').includes('internal-org'));
+});
