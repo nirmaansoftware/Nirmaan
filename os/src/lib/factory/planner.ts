@@ -8,7 +8,7 @@ import { logEvent } from "../db/logEvent";
 import { assertCan } from "../auth/permissions";
 import type { Actor } from "../auth/actor";
 import type { ModelProvider } from "@/lib/ai/providers/types";
-import { AGENT_TASK_TYPES } from "../orchestrator/agentConfig";
+import { plannableAgents } from "../agents/orgChart";
 import { projectBrief } from "./brief";
 
 /**
@@ -22,10 +22,11 @@ import { projectBrief } from "./brief";
 export const MAX_FEATURES = 25;
 export const MAX_TASKS_PER_FEATURE = 8;
 
-/** Agents a plan may assign work to: the delivery roles, not the orchestrator or client comms. */
-export const PLANNABLE_AGENTS = Object.keys(AGENT_TASK_TYPES).filter(
-  (slug) => !["orchestrator", "client-communication", "finance-estimation", "legal-compliance", "market-research", "brand-strategist"].includes(slug)
-);
+/**
+ * Agents a plan may assign work to come from agents/org-chart.yml: active ic
+ * or staff positions without `plannable: false`. Managers never own tasks.
+ */
+export { plannableAgents };
 
 export interface PlanTask {
   title: string;
@@ -64,6 +65,7 @@ export function parsePlan(raw: string, validReqCodes: string[], mustCodes: strin
   const valid = new Set(validReqCodes);
   const unknownCodes = new Set<string>();
   const unknownAgents = new Set<string>();
+  const plannable = plannableAgents();
 
   const features: PlanFeature[] = o.features.slice(0, MAX_FEATURES).map((f: Record<string, unknown>) => {
     const satisfies = (Array.isArray(f?.satisfies) ? f.satisfies : [])
@@ -78,7 +80,7 @@ export function parsePlan(raw: string, validReqCodes: string[], mustCodes: strin
       .map((t: Record<string, unknown>) => ({ title: text(t?.title, 160), agent: text(t?.agent, 60), description: text(t?.description, 2000) }))
       .filter((t: PlanTask) => {
         if (!t.title) return false;
-        if (!PLANNABLE_AGENTS.includes(t.agent)) {
+        if (!plannable.includes(t.agent)) {
           unknownAgents.add(t.agent || "(none)");
           return false;
         }
@@ -105,7 +107,7 @@ export async function runPlanner(actor: Actor, projectId: string, opts: { provid
     task: "planning",
     taskType: "requirements",
     agentSlug: "product-manager",
-    systemPrompt: [`You are the ${agent.role} agent at Nirmaan, acting as delivery planner.`, "", agent.body, "", CONTRACT(PLANNABLE_AGENTS)].join("\n"),
+    systemPrompt: [`You are the ${agent.role} agent at Nirmaan, acting as delivery planner.`, "", agent.body, "", CONTRACT(plannableAgents())].join("\n"),
     userPrompt: brief.text,
     projectId,
     provider: opts.provider,
