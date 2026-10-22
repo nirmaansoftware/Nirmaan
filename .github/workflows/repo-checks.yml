@@ -9,6 +9,9 @@
 #   - Review teams coverage: .github/review-teams.yml maps every tracked file
 #     to a team with no dead rule, and no CODEOWNERS file exists (founder
 #     classes are reviewed by the Founder Proxy agent, not a code owner).
+#   - Org chart: agents/org-chart.yml passes its structure checks, its active
+#     key-1 units equal the teams in review-teams.yml, and the team table in
+#     agents/README.md is the one generated from it.
 #   - Capability levels: capability/records/*.jsonl are well formed and
 #     append-only, and capability/levels.json is regenerated and diffed.
 #   - Skill files: every skills/<unit>/<id>.md follows skills/README.md
@@ -52,7 +55,7 @@ jobs:
         with:
           node-version: 22
       - name: Script tests
-        run: node --test .github/scripts/repo-checks.test.mjs .github/scripts/review-teams.test.mjs .github/scripts/examples.test.mjs capability/tools/levels.test.mjs .github/scripts/pr-review/review.test.mjs .github/scripts/pr-loop/loop.test.mjs .github/scripts/review-calibration/run.test.mjs .github/scripts/skills.test.mjs
+        run: node --test .github/scripts/repo-checks.test.mjs .github/scripts/review-teams.test.mjs .github/scripts/examples.test.mjs .github/scripts/org-chart.test.mjs capability/tools/levels.test.mjs .github/scripts/pr-review/review.test.mjs .github/scripts/pr-loop/loop.test.mjs .github/scripts/review-calibration/run.test.mjs .github/scripts/skills.test.mjs
       # Event data goes through env, never straight into the script.
       - name: Pick the base to compare against
         id: base
@@ -88,6 +91,8 @@ jobs:
       # Runs on the whole tree, not the diff.
       - name: Review teams coverage
         run: node .github/scripts/review-teams.mjs
+      - name: Org chart
+        run: node .github/scripts/org-chart.mjs
       # Records are well formed and append-only against the base, and the
       # committed capability/levels.json equals a fresh generation.
       - name: Capability levels
