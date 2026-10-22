@@ -248,7 +248,11 @@ What the script does, in order:
    head (default), the merge base (`"side": "base"`, a line the PR removes) or
    `main` (`"side": "main"`), each checked against that commit's tree; a claim
    cited as `file:line` (optionally `base:` or `main:` first) is checked the
-   same way. When one does not exist:
+   same way. A finding may also quote a few words of its cited line
+   (`"quote"`); the quote must be on that line or within `quote_window` lines
+   of it on the same side (spacing and case ignored), or the citation counts
+   as bad. Quotes on the PR text are not checked. When a citation does not
+   exist, or its quote is not there:
    - a major, minor or info finding is dropped, with a note in the comment;
      it never blocks, so the verdict does not change;
    - a blocker or critical finding beside another blocker or critical finding
