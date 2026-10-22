@@ -444,9 +444,10 @@ founder_classes:
 # whose words drift away from the repository fails the coverage test.
 content_rules:
   - id: money
-    # Not in the knowledge folders (decision record D5.2, founder item 3). The
-    # replacement control, the skill validator's currency check (D6.4), is not
-    # on main yet: until it is, nothing else flags amounts in those folders.
+    # Not in the knowledge folders (decision record D5.2, founder item 3). In
+    # skills/** the skill validator's currency check (D6.4,
+    # .github/scripts/skills.mjs) fails amounts instead; it does not read
+    # examples/** or capability/**, where nothing else flags amounts.
     adds_teams: [business]
     founder_class: C
     exclude: ["skills/**", "examples/**", "capability/**"]
@@ -483,8 +484,9 @@ content_rules:
     markers:
       - file: "website/src/projects.njk"
   - id: market-claims
-    # Not in the knowledge folders (D5.2, founder item 3). The replacement,
-    # the skill validator's company-claim check (D6.4), is not on main yet.
+    # Not in the knowledge folders (D5.2, founder item 3). In skills/** the
+    # skill validator's company-claim check (D6.4) applies instead; it does
+    # not read examples/** or capability/**.
     adds_teams: [product]
     exclude: ["skills/**", "examples/**", "capability/**"]
     checklists: [market-research]
