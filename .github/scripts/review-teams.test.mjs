@@ -401,7 +401,7 @@ test('classification: licence text, licence fields, restrictive dependency licen
   for (const [file, added, opts] of cases) {
     const c = cls(file, added, opts);
     assert.ok(c.founder.D, `${file}: founder class D`);
-    assert.ok(c.teams.includes('business'), `${file}: Business (Legal) key 1`);
+    assert.ok(c.teams.includes('legal'), `${file}: Legal and Compliance key 1`);
     assert.ok(c.checklists.includes('legal-compliance'), `${file}: legal-compliance checklist`);
   }
   // Not every mention: a routine lockfile bump, a permissive dependency, and prose about licences are not founder class D.
