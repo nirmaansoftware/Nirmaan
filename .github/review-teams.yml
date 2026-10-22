@@ -180,6 +180,20 @@ rules:
     teams: [business]
     checklists: [finance-estimation]
 
+  - id: capability
+    # Records, the levels generator and levels.json (capability/README.md).
+    # Owned by the Capability office from H3 (decision record D2.1);
+    # knowledge-quality-reviewer's checklist covers the evidence rules (D6.7
+    # to D6.9).
+    globs: ["capability/**"]
+    teams: [capability]
+    checklists: [knowledge-quality-reviewer]
+  - id: capability-code
+    # The generator's code and the records schema stay with Engineering and
+    # the database-engineer checklist that covered them before H3.
+    globs: ["capability/tools/**", "capability/records/schema.json"]
+    teams: [engineering]
+    checklists: [database-engineer]
   # The skill validator is owned by Capability (decision record D6.4); its
   # checklist is knowledge-quality-reviewer's.
   - id: skill-validator
@@ -531,6 +545,24 @@ content_rules:
     markers:
       - file: "website/src/_includes/estimator.njk"
       - file: "website/src/privacy.njk"
+  - id: knowledge-legal
+    # Legal topics in the knowledge folders. Adds Business, whose lead is
+    # legal-compliance, as key 1, with no founder class (decision record
+    # D5.2): skills/**, examples/** and capability/** (D6.1).
+    adds_teams: [business]
+    checklists: [legal-compliance]
+    applies_to: ["skills/**", "examples/**", "capability/**"]
+    patterns:
+      - "\\b(personal data|personally identifiable|pii)\\b"
+      - "\\bdatasets?\\b"
+      - "\\blicen[cs]es?\\b"
+      - "\\bmodel weights?\\b"
+      - "\\blegal advice\\b"
+      - "\\b(dpdp|gdpr|hipaa)\\b"
+      - "\\bthird[- ]party (scripts?|trackers?|cookies)\\b"
+    examples: ["trained on a public dataset", "Licence: CC BY 4.0", "model weights under a custom licence", "this is not legal advice", "consent under the DPDP Act", "GDPR erasure request", "loads a third-party script"]
+    markers:
+      - file: "skills/README.md"
   - id: deploy-switch
     adds_teams: [platform-quality]
     founder_class: B
