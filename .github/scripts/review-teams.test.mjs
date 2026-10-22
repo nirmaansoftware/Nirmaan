@@ -388,12 +388,15 @@ test('classification: in skill files, examples and capability records, "payments
   }
 });
 
-test('classification: capability/** is Engineering with the database-engineer checklist', () => {
+test('classification: capability/** is Capability with the knowledge-quality-reviewer checklist; its machinery keeps Engineering and database-engineer', () => {
   const { map, tracked } = realMap();
-  for (const file of ['capability/README.md', 'capability/levels.json', 'capability/tools/levels.mjs']) {
+  const record = owners(map, 'capability/records/2026-10.jsonl', new Set([...tracked, 'capability/records/2026-10.jsonl']));
+  assert.deepEqual(record.teams, ['capability']);
+  assert.deepEqual(record.checklists, ['knowledge-quality-reviewer']);
+  for (const file of ['capability/README.md', 'capability/levels.json', 'capability/tools/levels.mjs', 'capability/records/schema.json']) {
     const o = owners(map, file, tracked);
-    assert.deepEqual(o.teams, ['engineering'], file);
-    assert.deepEqual(o.checklists, ['database-engineer'], file);
+    assert.deepEqual([...o.teams].sort(), ['capability', 'engineering'], file);
+    assert.deepEqual([...o.checklists].sort(), ['database-engineer', 'knowledge-quality-reviewer'], file);
   }
 });
 

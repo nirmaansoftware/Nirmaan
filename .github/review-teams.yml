@@ -65,6 +65,11 @@ teams:
     lead: security-engineer
     key: 1
     members: [sre, devops-engineer, qa-engineer, performance-engineer, appsec-engineer]
+  - id: capability
+    name: Capability
+    lead: head-of-capability
+    key: 1
+    members: [org-designer, capability-programme-manager, knowledge-quality-reviewer]
   - id: commercial
     name: Commercial
     lead: head-of-commercial
@@ -122,7 +127,9 @@ rules:
       - "docs/operations/pr-loop.plist"
       - "docs/company/principles.md"
       - "docs/ai/agent-responsibilities.md"
-    teams: [product]
+    # The Capability office owns how the organisation decides and reviews
+    # (decision record D2.3, point 7).
+    teams: [capability]
   - id: decision-records
     # Dated records: adding is normal; editing one fails key 1 unless the diff
     # only adds a dated "Superseded by" note.
@@ -182,9 +189,26 @@ rules:
 
   - id: capability
     # Records, the levels generator and levels.json (capability/README.md).
+    # Owned by the Capability office from H3 (decision record D2.1);
+    # knowledge-quality-reviewer's checklist covers the evidence rules (D6.7
+    # to D6.9).
     globs: ["capability/**"]
+    teams: [capability]
+    checklists: [knowledge-quality-reviewer]
+  - id: capability-code
+    # The machinery (the generator, the records schema, the generated
+    # levels.json and the README that documents them) keeps Engineering and
+    # the database-engineer checklist that covered it before H3; the records
+    # themselves are the Capability office's alone.
+    globs: ["capability/tools/**", "capability/records/schema.json", "capability/levels.json", "capability/README.md"]
     teams: [engineering]
     checklists: [database-engineer]
+  # The skill validator is owned by Capability (decision record D6.4); its
+  # checklist is knowledge-quality-reviewer's.
+  - id: skill-validator
+    globs: [".github/scripts/skills.mjs", ".github/scripts/skills.test.mjs"]
+    teams: [capability]
+    checklists: [knowledge-quality-reviewer]
 
   # Skills (skills/README.md). Each unit's skills, skills/<unit>/**, get a
   # rule naming that unit, added with the unit's first skill (the skill

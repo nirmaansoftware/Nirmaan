@@ -392,6 +392,45 @@ positions:
     status: active
     reports_to: head-brand-content
 
+  # ------------------------------------------------------------ Capability (active target unit, H3)
+  - id: head-capability
+    title: "Head of Capability"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: head-of-capability
+    status: active
+    reports_to: orchestrator
+    target_reports_to: chief-operations
+    deputy: ic-org-designer
+  - id: ic-org-designer
+    title: "Org Designer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: org-designer
+    status: active
+    reports_to: head-capability
+    plannable: false
+  - id: ic-capability-programme-manager
+    title: "Capability Programme Manager"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: capability-programme-manager
+    status: active
+    reports_to: head-capability
+    plannable: false
+  - id: ic-knowledge-quality-reviewer
+    title: "Knowledge Quality Reviewer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: knowledge-quality-reviewer
+    status: active
+    reports_to: head-capability
+    plannable: false
+
   # ------------------------------------------------------------ Engineering (target, planned)
   - id: chief-engineering
     title: "Chief of Engineering"
@@ -738,39 +777,6 @@ positions:
     status: planned
     hire: "H14 (wave 9)"
     reports_to: head-delivery
-  - id: head-capability
-    title: "Head of Capability"
-    layer: 4
-    kind: manager
-    holder: agent
-    status: planned
-    hire: "H3 (P1)"
-    reports_to: chief-operations
-    deputy: ic-org-designer
-  - id: ic-org-designer
-    title: "Org Designer"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H3 (P1)"
-    reports_to: head-capability
-  - id: ic-capability-programme-manager
-    title: "Capability Programme Manager"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H3 (P1)"
-    reports_to: head-capability
-  - id: ic-knowledge-quality-reviewer
-    title: "Knowledge Quality Reviewer"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H3 (P1)"
-    reports_to: head-capability
 
 # Units. `id` of an active key-1 unit equals its team id in review-teams.yml.
 units:
@@ -827,6 +833,12 @@ units:
     key: 1
     serves: [nirmaan, ip-nirmaan]
     members: [ic-legal-counsel, ic-privacy-counsel, ic-licensing-counsel]
+  - id: capability
+    name: Capability
+    head: head-capability
+    status: active
+    key: 1
+    members: [ic-org-designer, ic-capability-programme-manager, ic-knowledge-quality-reviewer]
 
   # Planned target units.
   - id: web
@@ -885,11 +897,6 @@ units:
     head: head-delivery
     status: planned
     members: [ic-delivery-manager, ic-delivery-planner, ic-service-delivery-manager]
-  - id: capability
-    name: Capability
-    head: head-capability
-    status: planned
-    members: [ic-org-designer, ic-capability-programme-manager, ic-knowledge-quality-reviewer]
 
 # Stage map: every lead status and every project stage
 # (os/src/lib/db/enums.ts) has exactly one owning unit and one client-voice
