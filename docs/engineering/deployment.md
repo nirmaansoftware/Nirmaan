@@ -44,7 +44,7 @@ it stops again when idle (`auto_stop_machines = "stop"`), and none is kept runni
 is in `fly.toml`. Without the other secrets the screens still work and those features
 say they aren't set up. The database (`/data/nirmaan.db`) and project files
 (`/data/projects`) live on a persistent volume. Config: `fly.toml` and `Dockerfile.os`
-at the repo root; the image holds only `os/` and `agents/`.
+at the repo root; the image holds only `os/`, `agents/` and `skills/`.
 
 First setup (once; the full list of secrets is for when the worker runs):
 
@@ -142,8 +142,9 @@ Recommended first deployment (see `procurement.md`):
    For prospecting, optionally `GOOGLE_PLACES_API_KEY`, and `OUTREACH_FROM` with
    `SMTP_URL` (or `RESEND_API_KEY`) to send approved emails
    (see `../product/prospecting.md`).
-3. Ship `/agents` alongside the app (the runtime reads specs from `../agents`,
-   or set `AGENTS_ROOT`).
+3. Ship `/agents` and `/skills` alongside the app (the runtime reads specs from
+   `../agents` and skill files from `../skills`, or set `AGENTS_ROOT` and
+   `SKILLS_ROOT`).
 4. `npx prisma migrate deploy`, then create the founder:
    `NIRMAAN_PASSWORD=... npm run user:create -- you@… "Name" FOUNDER`.
 5. Set `intakeEndpoint` in the site's `website/src/_data/site.json` to

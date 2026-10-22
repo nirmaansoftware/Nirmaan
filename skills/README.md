@@ -11,9 +11,12 @@ These style rules are owned by Brand and Content. The validator, [`.github/scrip
 runs in repo-checks and fails a file that breaks a rule marked
 **(checked)** below. Start from [`_template.md`](_template.md).
 
-No skill file exists yet, and no skill is loaded by any agent at runtime
-(PLANNED: the prompt composer and its byte budget come first). No level is
-shown for any skill until the records generator exists.
+No skill file exists yet. At runtime a skill is loaded only when a caller
+names its id: the prompt composer
+([`os/src/lib/agents/composePrompt.ts`](../os/src/lib/agents/composePrompt.ts))
+takes at most 3 skills the role holds (`held_by`), in a delimited reference
+block, within a 64 KiB prompt budget. No level is shown for any skill until
+the records generator exists.
 
 ## Where a skill lives
 

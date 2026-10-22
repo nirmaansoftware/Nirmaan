@@ -19,8 +19,12 @@
 //            step;
 //   wait     required CI not finished on the head, or GitHub still making
 //            the update's merge commit;
+//   pause    a key, the proxy or the fixer hit a rate limit (the plan's
+//            session or usage limit): no label, the key stays pending, and
+//            the whole loop waits rate_limit_pause_minutes before any model
+//            call, then reviews again;
 //   stop     CI failed on a head the loop pushed, a merge conflict, a key or
-//            the proxy deferred (rate limit, bad output, missing spec), the
+//            the proxy deferred (bad output, missing spec), the
 //            Founder Proxy returned needs-founder (until the founder's own
 //            GitHub review approves the head), a repeated finding, the round
 //            limit, a forbidden path, a failed local check, or any error:
@@ -56,6 +60,15 @@ const MARK = 'nirmaan-pr-loop';
 // After asking GitHub to update a branch, how long the loop waits for the new
 // head before asking again (GitHub makes the merge commit asynchronously).
 const UPDATE_WAIT_MS = 10 * 60 * 1000;
+// The loop-wide rate-limit pause (shared by every PR of this repository).
+function pausePath(stateDir) { return join(stateDir, 'loop', 'rate-limit-pause.json'); }
+export function readPause(stateDir, now = Date.now()) {
+  try {
+    const p = JSON.parse(readFileSync(pausePath(stateDir), 'utf8'));
+    return Date.parse(p.until) > now ? p : null;
+  } catch { return null; }
+}
+
 // The kinds of stop, logged as `class` with every stop (and in the per-phase
 // line): the comment gives the reason, the class groups them for reports.
 export const STOP_CLASSES = [
@@ -126,7 +139,7 @@ function keyPhase(k) {
   return {
     team: k.team ?? null, role: k.role ?? null, status: k.status, reused: !!k.reused,
     started_at: k.startedAt ?? null, ended_at: k.endedAt ?? null,
-    findings: findingsBySeverity(k.verdict), validation_error: k.validationError ?? null, call_outcome: k.callOutcome ?? null,
+    findings: findingsBySeverity(k.verdict), validation_error: k.validationError ?? null, call_outcome: k.callOutcome ?? null, deferral_kind: k.deferralKind ?? null,
   };
 }
 
@@ -265,6 +278,18 @@ export async function stepPr(o, listed) {
     } catch (e) { out(`pr-loop: #${n}: could not label or comment: ${e.message}`); }
     return { outcome: 'stopped', reason, class: cls };
   };
+  // A rate limit is not a stop: no label, no deputy (it shares the plan), the key
+  // stays pending, and the loop makes no model call for any PR until the
+  // pause ends; then this head is reviewed again.
+  const pause = (head, why) => {
+    const reason = redact(why);
+    const until = new Date(Date.now() + (lc.rate_limit_pause_minutes ?? 30) * 60 * 1000).toISOString();
+    mkdirSync(join(o.stateDir, 'loop'), { recursive: true });
+    writeFileSync(pausePath(o.stateDir), JSON.stringify({ until, repo: cfg.repo, pr: n, head, reason }));
+    out(`pr-loop: #${n} paused until ${until}: ${reason}`);
+    log('paused', { reason, until, class: 'rate-limit' });
+    return { outcome: 'paused', reason, until };
+  };
 
   try {
     const pull = await o.github.getPull(n);
@@ -317,7 +342,7 @@ export async function stepPr(o, listed) {
         callerBranch: o.callerBranch, inClaudeSession: o.inClaudeSession,
       });
       if (callsMode) { lock.release(); lock.release = () => {}; }
-      result = await afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out });
+      result = await afterReview(o, { n, head, pull, st, r, say, stop, pause, skip, log, out });
       return result;
     } finally {
       lock.release();
@@ -331,7 +356,7 @@ export async function stepPr(o, listed) {
 }
 
 // What follows a review: stop, merge path or fix round.
-async function afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out }) {
+async function afterReview(o, { n, head, pull, st, r, say, stop, pause, skip, log, out }) {
   const cfg = o.config;
   if (r.exit === EXIT.headMoved) { log('head-moved'); return { outcome: 'head-moved' }; }
   if (r.exit === EXIT.refused) { st.done = { head, outcome: 'refused' }; saveState(o.stateDir, cfg.repo, st); return { outcome: 'skip', reason: r.reason }; }
@@ -345,6 +370,8 @@ async function afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out 
   const all = [...k1, ...(r.key2 ? [r.key2] : []), ...(r.proxy ? [r.proxy] : [])];
   const deferred = all.filter((k) => k.status === 'deferred');
   if (k1.length === 0) return await stop(head, 'review deferred: no owning team', 'deferred');
+  // Every deferral a rate limit: pause, no label. Any other deferral stops.
+  if (deferred.length && deferred.every((k) => k.callOutcome === 'rate_limit')) return pause(head, `rate limit (${deferred.map((k) => `${k.teamName}: ${k.reason}`).join('; ')})`);
   if (deferred.length) {
     // The class says why (the comment and the label are the same for all).
     const cls = deferred.some((k) => k.validationError) ? 'validation' : deferred.some((k) => k.callOutcome === 'rate_limit') ? 'rate-limit' : deferred.some((k) => k.callOutcome) ? 'call-failed' : 'deferred';
@@ -361,7 +388,7 @@ async function afterReview(o, { n, head, pull, st, r, say, stop, skip, log, out 
   }
 
   if (failed.length === 0) return await mergePath(o, { n, head, st, r, say, stop, log, out });
-  return await fixRound(o, { n, head, pull, st, r, say, stop, log, out });
+  return await fixRound(o, { n, head, pull, st, r, say, stop, pause, log, out });
 }
 
 // The branch is behind main: ask GitHub to merge main into it (REST
@@ -443,7 +470,7 @@ function passedWhat(r, capital = false) {
   return capital ? what[0].toUpperCase() + what.slice(1) : what;
 }
 
-async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
+async function fixRound(o, { n, head, pull, st, r, say, stop, pause, log, out }) {
   const cfg = o.config, lc = o.loop;
   const findings = findingsToFix(r).map((f) => ({ ...f, fixable_by: fixableBy(f, lc.fixer_forbidden) }));
   if (!findings.length) return await stop(head, 'a key failed without findings to fix', 'no-findings');
@@ -466,7 +493,7 @@ async function fixRound(o, { n, head, pull, st, r, say, stop, log, out }) {
   const seenBefore = JSON.stringify(st.seen);
   const unsee = () => { st.seen = JSON.parse(seenBefore); saveState(o.stateDir, cfg.repo, st); };
   try {
-    const res = await fixRoundWith(o, { n, head, pull, st, r, say, stop, log, out, findings, releaseSlot: () => { if (slot) { slot.release(); slot = null; } } });
+    const res = await fixRoundWith(o, { n, head, pull, st, r, say, stop, pause, log, out, findings, releaseSlot: () => { if (slot) { slot.release(); slot = null; } } });
     if (res?.outcome === 'retry') unsee();
     return res;
   } catch (e) {
@@ -501,7 +528,7 @@ async function authorFix(o, { n, head, st, findings, forAuthor, say, log, out })
   return { outcome: 'author-fix', reason: `${forAuthor.length} finding(s) for the author`, class: 'author-fix' };
 }
 
-async function fixRoundWith(o, { n, head, pull, st, r, say, stop, log, out, findings, releaseSlot }) {
+async function fixRoundWith(o, { n, head, pull, st, r, say, stop, pause, log, out, findings, releaseSlot }) {
   const cfg = o.config, lc = o.loop;
   const repeated = findings.filter((f) => st.seen[f.fingerprint]);
   if (repeated.length) return await stop(head, `the same finding failed again after a fix: ${repeated.map((f) => `${f.file}:${f.line} ${f.text}`).join('; ')}`, 'repeated-finding');
@@ -527,7 +554,13 @@ async function fixRoundWith(o, { n, head, pull, st, r, say, stop, log, out, find
     const res = await runOnce({ bin: o.claudeBin, args: fixerArgs({ model: o.fixerModel, systemPrompt: system, forbidden: lc.fixer_forbidden }), input: user, cwd: dir, env: reviewerEnv(), timeoutMs: o.fixerTimeoutMs });
     releaseSlot(); // lock_mode "calls": the slot was for the model call only
     logCall(o.stateDir, { repo: cfg.repo, pr: n, head, key: 'fixer', team: null, model: o.fixerModel, reported_model: res.reportedModel ?? null, round, attempt: 1, outcome: res.kind, duration_ms: res.durationMs, ...(res.tokens ?? {}), prompt_chars: system.length + user.length });
-    if (res.kind === 'rate_limit') return await stop(head, `fix round ${round}: the fixer hit a rate limit (${res.error})`, 'rate-limit');
+    if (res.kind === 'rate_limit') {
+      // Not a fix attempt: the findings are not counted as seen, so the
+      // round runs again after the pause.
+      for (const f of findings) { if (--st.seen[f.fingerprint] <= 0) delete st.seen[f.fingerprint]; }
+      saveState(o.stateDir, cfg.repo, st);
+      return pause(head, `fix round ${round}: the fixer hit a rate limit (${res.error})`);
+    }
     if (res.kind !== 'ok') return await stop(head, `fix round ${round}: the fixer failed (${res.kind}: ${res.error})`, 'call-failed');
 
     // Whatever the fixer says, its changes are checked first.
@@ -652,6 +685,11 @@ export async function runTick(o) {
   const open = await o.github.listOpenPulls();
   await logMerges(o, new Set(open.map((p) => p.number)));
   const pulls = open.filter((p) => !o.onlyPr || p.number === o.onlyPr);
+  const paused = readPause(o.stateDir);
+  if (paused) {
+    (o.out ?? console.log)(`pr-loop: rate-limit pause until ${paused.until} (#${paused.pr}); no model call this pass`);
+    return pulls.map((p) => ({ pr: p.number, outcome: 'paused', reason: `rate-limit pause until ${paused.until}` }));
+  }
   const inFlight = (p) => { const s = loadState(o.stateDir, cfg.repo, p.number); return s.lastFixHead && !s.done && !s.stopped ? 0 : 1; };
   pulls.sort((a, b) => inFlight(a) - inFlight(b) || a.number - b.number);
   const results = [];
