@@ -37,8 +37,8 @@ teams:
     lead: security-engineer
     key: 1
     members: []
-  - id: business
-    name: Business
+  - id: legal
+    name: Legal and Compliance
     lead: legal-compliance
     key: 1
     members: []
@@ -73,7 +73,7 @@ founder_classes:
     paths: ["pricing.json"]
 content_rules:
   - id: money
-    adds_teams: [business]
+    adds_teams: [legal]
     founder_class: C
     patterns:
       - "\\\\bprice[sd]?\\\\b"
@@ -96,7 +96,7 @@ function setup({ responses = [{ type: 'verdict', verdict: 'pass' }], change, gh 
   sh(work, 'remote', 'add', 'origin', origin);
   write(work, '.github/review-teams.yml', MAP);
   for (const r of ROLES) write(work, `agents/${r}/agent.md`, `# ${r}\nSPEC-MARKER-${r}\n`);
-  for (const c of ['key1-base', 'key2', 'engineering', 'platform-quality', 'business', 'design']) write(work, `${CONFIG.checklist_dir}/${c}.md`, `# ${c}\nCHECKLIST-MARKER-${c}\n`);
+  for (const c of ['key1-base', 'key2', 'engineering', 'platform-quality', 'legal', 'design']) write(work, `${CONFIG.checklist_dir}/${c}.md`, `# ${c}\nCHECKLIST-MARKER-${c}\n`);
   write(work, 'os/app.js', 'line one\nline two\nline three\n');
   write(work, 'site/a.css', 'a {}\n');
   (mainExtra ?? (() => {}))(work);
@@ -541,15 +541,15 @@ test('hold label on a founder-class PR: both keys and the proxy pass, review/exe
   } finally { t.cleanup(); }
 });
 
-test('founder class (content trigger): a price in the diff adds Business and class C, so the Founder Proxy runs', async () => {
+test('founder class (content trigger): a price in the diff adds the legal team of the fixture map and class C, so the Founder Proxy runs', async () => {
   const t = setup({ change: (w) => write(w, 'os/app.js', 'line one\nthe price is up\n') });
   try {
     const r = await t.run();
-    assert.deepEqual(r.classification.teams, ['engineering', 'business']);
+    assert.deepEqual(r.classification.teams, ['engineering', 'legal']);
     assert.ok(r.classification.founder.C);
     assert.equal(r.proxy.status, 'pass');
     assert.equal(t.check('review/executive').state, 'success');
-    assert.match(t.posts.find((p) => p.type === 'comment' && /Business/.test(p.body)).body, /Not a legal sign-off/);
+    assert.match(t.posts.find((p) => p.type === 'comment' && /Legal and Compliance/.test(p.body)).body, /Not a legal sign-off/);
   } finally { t.cleanup(); }
 });
 
@@ -642,14 +642,14 @@ test('a lone open marker written by the author is stripped from the body and fro
 });
 
 test("owning teams come from main's map, never the PR's", async () => {
-  // The PR rewrites the map so os/** belongs to Business and drops the money rule.
+  // The PR rewrites the map so os/** belongs to Legal and Compliance and drops the money rule.
   const t = setup({ change: (w) => {
-    write(w, '.github/review-teams.yml', MAP.replace('globs: ["os/**"]\n    teams: [engineering]', 'globs: ["os/**"]\n    teams: [business]'));
+    write(w, '.github/review-teams.yml', MAP.replace('globs: ["os/**"]\n    teams: [engineering]', 'globs: ["os/**"]\n    teams: [legal]'));
     write(w, 'os/app.js', 'line one\nthe price\n');
   } });
   try {
     const r = await t.run();
-    assert.deepEqual(r.classification.teams, ['engineering', 'platform-quality', 'business'], 'engineering from main; business only from the content rule');
+    assert.deepEqual(r.classification.teams, ['engineering', 'platform-quality', 'legal'], 'engineering from main; legal only from the content rule');
     const sys = t.calls()[0].argv.join(' ');
     assert.match(sys, /SPEC-MARKER-principal-architect/);
   } finally { t.cleanup(); }
