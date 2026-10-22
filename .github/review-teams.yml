@@ -526,10 +526,10 @@ content_rules:
   - id: knowledge-legal
     # Legal topics in the knowledge folders. Adds Business, whose lead is
     # legal-compliance, as key 1, with no founder class (decision record
-    # D5.2). examples/** joins applies_to when it exists.
+    # D5.2): skills/**, examples/** and capability/** (D6.1).
     adds_teams: [business]
     checklists: [legal-compliance]
-    applies_to: ["skills/**", "capability/**"]
+    applies_to: ["skills/**", "examples/**", "capability/**"]
     patterns:
       - "\\b(personal data|personally identifiable|pii)\\b"
       - "\\bdatasets?\\b"
