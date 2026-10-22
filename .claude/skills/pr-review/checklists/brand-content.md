@@ -1,4 +1,4 @@
-# Brand and Content (lead: brand-strategist; members content-strategist, technical-writer, seo-specialist)
+# Brand and Content
 
 FAIL when: a claim does not trace to code, a doc or website/src/_data; copy is
 off-positioning or off-voice, or makes a claim any competitor could make; a
