@@ -78,7 +78,8 @@ teams:
 
 # The Legal and Compliance members draft and may comment; none holds a key or
 # is a deputy, because a pass from a drafting agent would read as "legally
-# approved" (decision record D4.4: Legal and Compliance has no deputy).
+# approved"; Legal and Compliance has no deputy (a recorded exception in
+# agents/org-chart.yml).
 no_key_roles: [legal-counsel, privacy-counsel, licensing-counsel]
 
 # Every file no rule matches belongs to this team. Files on the allowlist may
