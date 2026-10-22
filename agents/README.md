@@ -76,4 +76,13 @@ Every lead runs this before its team's own checklist (minutes of 2026-10-17, Age
   2. control-plane paths (every path founder class A covers in `main`'s map) and `agents/**` are never mixed with product paths (such as `os/**` and `website/**`) in one PR, unless the PR is mechanical (such as a rename or a dependency bump) and says so; key 2 fails a PR that mixes them (Key 2 item 8);
   3. size: keep a PR small in changed lines and files, not counting generated files (`website/public/**`); frontend-engineer asked that the size also count the checklists a PR loads. Size is guidance, never a fail, and no limit is set until the review log shows its effect;
   4. the PR body states the owning teams computed from `main`'s map and the test commands run. For founder classes, the review script's `<!-- review:founder-class -->` block is the statement (item 6 above).
+- **Knowledge PR** (a PR that adds or changes files under `skills/`, `examples/` or `capability/`; decision record D6.4 to D6.6, D6.9). The file format is decision record D6.4 ([`docs/operations/capability-hierarchy-decisions.md`](../docs/operations/capability-hierarchy-decisions.md)). Key 1 also fails the PR when:
+  1. a factual sentence in Core concepts, Standards or Common failures carries no source marker, a procedure in How we do it cites no repository path, or a cited source does not say what the sentence claims (model memory is never a source);
+  2. a run of 12 or more words is copied from a source outside quotation marks, quotations total more than 50 words in the file, or a standard's text is pasted rather than cited and summarised;
+  3. the PR or the file claims a level (Checked, Tested or Used), or adds a record that its writer is not allowed to write (the skill's writer never writes its check record);
+  4. a runnable skill's example under `examples/<skill-id>/` does not run in CI, or a tool-judged eval case is missing;
+  5. the file is over the size limits, or `as_of` is later than the sources were actually checked;
+  6. the PR body does not list the licences of the datasets, model weights and dependencies the skill or example relies on;
+  7. the text tells an agent to change its permissions, its escalation or a review (a skill is reference text; the role spec's constraints win);
+  8. a compliance skill (privacy, tax, contracts, licences, regulation) does not say it is not legal advice.
 - **Size changes the checklist, never the number of keys.** A typo or docs-only PR still gets both keys, with a short checklist: claims, links, status labels, founder classes, and SEO on titles.
