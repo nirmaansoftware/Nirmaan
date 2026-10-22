@@ -331,6 +331,16 @@ test('classification: os keeps the rest of os/ (API routes, scripts, config), wi
   for (const f of files.filter((x) => x.startsWith('os/'))) assert.ok(ruleIds(map, f).length > 0 || (map.named_files ?? []).some((n) => n.paths.includes(f)), f);
 });
 
+test('classification: a dated record in docs/operations is a frozen decision record (Product)', () => {
+  const { map, tracked } = realMap();
+  const file = 'docs/operations/2026-10-20-founder-proxy-widened.md';
+  assert.deepEqual(ruleIds(map, file), ['decision-records']);
+  assert.deepEqual(owners(map, file, tracked).teams, ['product']);
+  assert.equal(map.rules.find((r) => r.id === 'decision-records').frozen, true);
+  // An undated operations doc is not caught by the dated glob.
+  assert.ok(!ruleIds(map, 'docs/operations/pr-review.md').includes('decision-records'));
+});
+
 test('classification: a website page-only change runs the frontend-engineer checklist (website-frontend)', () => {
   const { map, tracked } = realMap();
   const page = owners(map, 'website/src/index.njk', tracked);
@@ -349,4 +359,16 @@ test('repository: no tracked file is owned by more than three teams (a PR with m
   const { map, files, tracked } = realMap();
   const over = files.map((f) => [f, owners(map, f, tracked).teams]).filter(([, t]) => t.length > 3).map(([f, t]) => `${f}: ${t.join(', ')}`);
   assert.deepEqual(over, []);
+});
+
+test('classification: internal-org on a site page adds Brand and Content as founder class E', () => {
+  const { map } = realMap();
+  const rule = map.content_rules.find((r) => r.id === 'internal-org');
+  assert.deepEqual(rule.adds_teams, ['brand-content']);
+  assert.equal(rule.founder_class, 'E');
+  for (const line of ['Every agent has a skill level.', 'The orchestrator assigns the work.', 'Some skills are knowledge-only.', 'We run 28 agents.', 'Level: Tested']) {
+    assert.ok(contentHits(map, 'website/src/index.njk', line).includes('internal-org'), line);
+  }
+  assert.ok(!contentHits(map, 'docs/operations/pr-review.md', 'The orchestrator holds key 2.').includes('internal-org'));
+  assert.ok(!contentHits(map, 'website/src/index.njk', 'We build web apps for growing businesses.').includes('internal-org'));
 });

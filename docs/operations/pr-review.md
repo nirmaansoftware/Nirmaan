@@ -154,7 +154,8 @@ approval.
   founder can turn it off in the ruleset settings.
 
 Changes to the privacy notice or terms also notify the IP council chair,
-because they govern the IP site too.
+because they govern the IP site too. So do changes to the shared layer that
+ip.nirmaan.online copies (`review-teams.yml`, named file `shared-layer`).
 
 **Holding a PR.** A `hold` label tells the review script not to pass key 2.
 The founder's firm stop is converting the PR to a draft or turning auto-merge
@@ -369,10 +370,10 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
 **When it stops.** The loop labels the PR `needs-founder` and comments why when:
 three fix rounds are done and a key still fails; the same finding (same key,
 team, file and wording) fails again after a fix; CI fails after a fix; the
-branch has a merge conflict; a key is deferred (rate limit, bad output,
+branch has a merge conflict; a key is deferred (bad output, a failed call,
 missing spec), or so is the Founder Proxy; the Founder Proxy returns
 `needs-founder` (until the founder's own review approves the head); the fixer
-hits a rate limit, gives no valid answer, cannot
+gives no valid answer, cannot
 fix every finding or changes nothing; a local check fails; the auto-merge
 setting cannot be read or `gh pr merge --auto` fails; the branch is behind
 `main` and the update fails; or any error (after the retries below for
@@ -384,6 +385,17 @@ gh or git error can carry them. If someone pushes while the fixer
 works, the round is dropped without a label and the new head is reviewed from
 scratch. Removing the `needs-founder` label lets the loop resume with a fresh
 round count.
+
+**Rate limits pause, they do not stop.** When a key or the Founder Proxy is
+deferred only because of a rate limit (the plan's session or usage limit,
+after its one retry), or the fixer hits one, the loop does not label the PR
+and does not stop: the key's check stays pending, nothing is pushed, and the
+whole loop makes no model call for any PR for `rate_limit_pause_minutes` (30,
+in `.github/scripts/pr-loop/config.json`). Then it reviews the same head
+again. A fixer round cut short this way does not count its findings as seen.
+No deputy takes the key: a deputy runs on the same plan and would hit the same
+limit. Any other
+deferral beside the rate limit still stops the loop.
 
 **Who fixes what.** Before a fix round the loop tags each finding as
 fixable by the loop or by the author, from the finding's path, never from the
