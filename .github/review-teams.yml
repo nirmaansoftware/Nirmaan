@@ -101,6 +101,11 @@ rules:
     # Loaded at runtime by os/src/lib/agents/loadAgent.ts.
     globs: ["agents/**"]
     teams: [engineering]
+  - id: examples-docs
+    # Worked examples run by the Examples workflow (examples/README.md).
+    globs: ["examples/README.md"]
+    teams: [platform-quality]
+    checklists: [devops-engineer]
 
   # Docs.
   - id: governance-docs
@@ -114,7 +119,11 @@ rules:
   - id: decision-records
     # Dated records: adding is normal; editing one fails key 1 unless the diff
     # only adds a dated "Superseded by" note.
-    globs: ["docs/operations/*-decisions.md", "docs/product/*-decisions.md", "docs/history/**"]
+    globs:
+      - "docs/operations/*-decisions.md"
+      - "docs/operations/20??-??-??-*.md"
+      - "docs/product/*-decisions.md"
+      - "docs/history/**"
     teams: [product]
     frozen: true
   - id: repo-claims
@@ -334,6 +343,8 @@ named_files:
     teams: [design, engineering]
     checklists: [design-system-engineer]
     ip_site_impact: true
+    # The IP council chair is told of every change (decision record D5.2).
+    notify: [ip-council-chair]
 
 # Generated output follows its source. Checked in order; the first entry whose
 # output glob matches wins. `mirror` maps website/public/<x> to
@@ -526,3 +537,18 @@ content_rules:
     markers:
       - file: "os/src/lib/auth/permissions.ts"
       - file: "os/src/lib/prospecting/outreach.ts"
+  - id: internal-org
+    # The site never describes the agent organisation: skill levels, the
+    # capability map, the orchestrator, or counts of agents, roles or skills
+    # (decision record D5.2 and D7.4). Adds Brand and Content; founder class E.
+    adds_teams: [brand-content]
+    founder_class: E
+    applies_to: ["website/src/**"]
+    patterns:
+      - "\\bskill levels?\\b"
+      - "\\b(level|levels)\\s*[:=]\\s*(checked|tested|used)\\b"
+      - "\\bknowledge[- ]only\\b"
+      - "\\bcapability map\\b"
+      - "\\borchestrator\\b"
+      - "\\b\\d+\\s+(ai\\s+)?(agents|roles|skills|agent roles)\\b"
+    examples: ["every skill level is shown", "Level: Tested", "knowledge-only skills", "see the capability map", "the orchestrator assigns work", "28 agents", "140 skills"]
