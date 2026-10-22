@@ -367,21 +367,24 @@ test('content rules: exclude skips files; an exclude may name a folder not yet t
   assert.deepEqual(contentHits(map, 'docs/x.md', 'costs ₹5'), []);
   assert.deepEqual(contentHits(map, 'src/a.js', 'costs ₹5'), ['money']);
   map.content_rules[0].exclude = ['not-yet/**'];
-  assert.doesNotMatch(run(map).join('\n'), /exclude/);
+  assert.deepEqual(run(map), []);
   map.content_rules[0].exclude = ['docs/**'];
   map.content_rules[0].markers = [{ file: 'docs/x.md' }];
   assert.match(run(map).join('\n'), /content rule money: marker file docs\/x\.md is excluded/);
 });
 
-test('classification: in skills/, examples/ and capability/, "payments", "GST" or "versus" is not founder class C or E; elsewhere it still is', () => {
+test('classification: in skill files, examples and capability records, "payments", "GST" or "versus" is not founder class C or E; elsewhere it still is', () => {
   const { map } = realMap();
   for (const line of ['Card payments go through the gateway.', 'Invoices show GST separately.', 'REST versus GraphQL for this API.']) {
-    for (const file of ['skills/web/form-validation.md', 'examples/form-validation/README.md', 'capability/records/a.jsonl']) {
+    for (const file of ['skills/web/form-validation.md', 'examples/web/form-validation/README.md', 'capability/records/a.jsonl', 'capability/levels.json']) {
       const hits = contentHits(map, file, line);
       assert.ok(!hits.includes('money') && !hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
     }
-    const elsewhere = contentHits(map, 'docs/product/x.md', line);
-    assert.ok(elsewhere.includes('money') || elsewhere.includes('market-claims'), `${line}: ${elsewhere}`);
+    // Folder READMEs, the skill template, nested skill files and the tools stay in scope.
+    for (const file of ['docs/product/x.md', 'skills/README.md', 'skills/_template.md', 'skills/web/notes/x.md', 'examples/README.md', 'capability/README.md', 'capability/tools/levels.mjs']) {
+      const hits = contentHits(map, file, line);
+      assert.ok(hits.includes('money') || hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
+    }
   }
 });
 

@@ -455,13 +455,15 @@ founder_classes:
 # whose words drift away from the repository fails the coverage test.
 content_rules:
   - id: money
-    # Not in the knowledge folders (decision record D5.2, founder item 3). In
-    # skills/** the skill validator's currency check (D6.4,
-    # .github/scripts/skills.mjs) fails amounts instead; it does not read
-    # examples/** or capability/**, where nothing else flags amounts.
+    # Not in knowledge content (decision record D5.2, founder item 3): skill
+    # files (skills/<unit>/<id>.md), worked examples (examples/<unit>/...) and
+    # capability records and levels. The skill validator's currency check
+    # (D6.4, .github/scripts/skills.mjs) covers the skill files; nothing
+    # replaces this rule for examples or records. Folder READMEs and the skill
+    # template stay in scope.
     adds_teams: [business]
     founder_class: C
-    exclude: ["skills/**", "examples/**", "capability/**"]
+    exclude: ["skills/*/*.md", "examples/*/**", "capability/records/**", "capability/levels.json"]
     checklists: [finance-estimation, tax-accounts]
     patterns:
       - "₹\\s?\\d"
@@ -495,11 +497,11 @@ content_rules:
     markers:
       - file: "website/src/projects.njk"
   - id: market-claims
-    # Not in the knowledge folders (D5.2, founder item 3). In skills/** the
-    # skill validator's company-claim check (D6.4) applies instead; it does
-    # not read examples/** or capability/**.
+    # Not in knowledge content, the same files as `money` (D5.2, founder item
+    # 3). The skill validator's company-claim check (D6.4) covers the skill
+    # files; nothing replaces this rule for examples or records.
     adds_teams: [product]
-    exclude: ["skills/**", "examples/**", "capability/**"]
+    exclude: ["skills/*/*.md", "examples/*/**", "capability/records/**", "capability/levels.json"]
     checklists: [market-research]
     founder_class: E
     patterns:
