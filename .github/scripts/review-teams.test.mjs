@@ -361,14 +361,12 @@ test('repository: no tracked file is owned by more than three teams (a PR with m
   assert.deepEqual(over, []);
 });
 
-test('classification: capability/** is Capability with the knowledge-quality-reviewer checklist; its code and schema keep Engineering and database-engineer', () => {
+test('classification: capability/** is Capability with the knowledge-quality-reviewer checklist; its machinery keeps Engineering and database-engineer', () => {
   const { map, tracked } = realMap();
-  for (const file of ['capability/README.md', 'capability/levels.json']) {
-    const o = owners(map, file, tracked);
-    assert.deepEqual(o.teams, ['capability'], file);
-    assert.deepEqual(o.checklists, ['knowledge-quality-reviewer'], file);
-  }
-  for (const file of ['capability/tools/levels.mjs', 'capability/records/schema.json']) {
+  const record = owners(map, 'capability/records/2026-10.jsonl', new Set([...tracked, 'capability/records/2026-10.jsonl']));
+  assert.deepEqual(record.teams, ['capability']);
+  assert.deepEqual(record.checklists, ['knowledge-quality-reviewer']);
+  for (const file of ['capability/README.md', 'capability/levels.json', 'capability/tools/levels.mjs', 'capability/records/schema.json']) {
     const o = owners(map, file, tracked);
     assert.deepEqual([...o.teams].sort(), ['capability', 'engineering'], file);
     assert.deepEqual([...o.checklists].sort(), ['database-engineer', 'knowledge-quality-reviewer'], file);

@@ -189,9 +189,11 @@ rules:
     teams: [capability]
     checklists: [knowledge-quality-reviewer]
   - id: capability-code
-    # The generator's code and the records schema stay with Engineering and
-    # the database-engineer checklist that covered them before H3.
-    globs: ["capability/tools/**", "capability/records/schema.json"]
+    # The machinery (the generator, the records schema, the generated
+    # levels.json and the README that documents them) keeps Engineering and
+    # the database-engineer checklist that covered it before H3; the records
+    # themselves are the Capability office's alone.
+    globs: ["capability/tools/**", "capability/records/schema.json", "capability/levels.json", "capability/README.md"]
     teams: [engineering]
     checklists: [database-engineer]
   # The skill validator is owned by Capability (decision record D6.4); its
