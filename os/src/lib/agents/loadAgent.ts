@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import type { AgentDefinition, AgentPermissions } from "./types";
+import { loadSkills } from "./skills";
 
 /**
  * /agents lives at the repo root, one level up from /os (which is this
@@ -26,9 +27,10 @@ function toStringList(value: unknown): string[] {
 /**
  * Load and parse one agent's agent.md (frontmatter + markdown body) into a
  * structured AgentDefinition. Throws if the agent doesn't exist — callers
- * should not silently fall back to a missing agent.
+ * should not silently fall back to a missing agent. `skills` names the skill
+ * ids to load for this call (at most 3); an id the role does not hold throws.
  */
-export function loadAgent(slug: string): AgentDefinition {
+export function loadAgent(slug: string, opts: { skills?: string[] } = {}): AgentDefinition {
   const file = path.join(agentsRoot(), slug, "agent.md");
   if (!fs.existsSync(/*turbopackIgnore: true*/ file)) {
     throw new Error(
@@ -45,6 +47,7 @@ export function loadAgent(slug: string): AgentDefinition {
     reviewedBy: toStringList(data.reviewed_by),
     permissions: (data.permissions ?? {}) as AgentPermissions,
     body: content.trim(),
+    skills: loadSkills(typeof data.slug === "string" ? data.slug : slug, opts.skills),
   };
 }
 

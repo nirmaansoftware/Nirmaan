@@ -1,5 +1,6 @@
 import matter from "gray-matter";
 import { loadAgent } from "./loadAgent";
+import { composeSystemPrompt, skillRefs } from "./composePrompt";
 import { resolveModel, type TaskType, type ModelConfig } from "@/lib/ai/router";
 import { providerFor } from "@/lib/ai/providerFor";
 import type { ModelProvider, TokenUsage } from "@/lib/ai/providers/types";
@@ -18,6 +19,8 @@ export interface RunAgentInput {
   provider?: ModelProvider;
   /** Passed straight through to resolveModel(taskType, overrides) — e.g. dispatch.ts's per-instance complexity adjustment (src/lib/orchestrator/complexityHeuristic.ts). Takes precedence over both the router's default and any env-var override for this task type. */
   modelOverrides?: Partial<ModelConfig>;
+  /** Skill ids to load for this run (at most 3, each held by the agent). None named means no skill text. */
+  skills?: string[];
 }
 
 export interface RunAgentResult {
@@ -37,33 +40,27 @@ export interface RunAgentResult {
 
 export { projectsRoot };
 
-function buildSystemPrompt(role: string, body: string): string {
-  return [
-    `You are the ${role} agent in an AI-native software agency's multi-agent system.`,
-    "",
-    body,
-    "",
-    "## Output format — read carefully",
-    "",
-    "Respond with a single document in this exact shape: YAML frontmatter",
-    "(delimited by --- lines) followed by a markdown body. The frontmatter",
-    "must include these fields:",
-    "",
-    "  status: one of \"ready-for-handoff\", \"blocked-on-input\", \"in-progress\"",
-    "  confidence: one of \"HIGH\", \"MEDIUM\", \"LOW\"",
-    "  assumptions: a YAML list of strings (empty list if none)",
-    "  risks: a YAML list of strings (empty list if none)",
-    "  open_questions: a YAML list of strings (empty list if none)",
-    "  review_required: true or false",
-    "",
-    "Set confidence honestly — LOW confidence with real open_questions is a",
-    "correct and expected output, not a failure. Do not invent information",
-    "that was not given to you or clearly implied by it; put genuine gaps in",
-    "open_questions instead of guessing.",
-    "",
-    "Everything after the closing --- is the actual deliverable content, in markdown.",
-  ].join("\n");
-}
+const OUTPUT_CONTRACT = [
+  "## Output format — read carefully",
+  "",
+  "Respond with a single document in this exact shape: YAML frontmatter",
+  "(delimited by --- lines) followed by a markdown body. The frontmatter",
+  "must include these fields:",
+  "",
+  "  status: one of \"ready-for-handoff\", \"blocked-on-input\", \"in-progress\"",
+  "  confidence: one of \"HIGH\", \"MEDIUM\", \"LOW\"",
+  "  assumptions: a YAML list of strings (empty list if none)",
+  "  risks: a YAML list of strings (empty list if none)",
+  "  open_questions: a YAML list of strings (empty list if none)",
+  "  review_required: true or false",
+  "",
+  "Set confidence honestly — LOW confidence with real open_questions is a",
+  "correct and expected output, not a failure. Do not invent information",
+  "that was not given to you or clearly implied by it; put genuine gaps in",
+  "open_questions instead of guessing.",
+  "",
+  "Everything after the closing --- is the actual deliverable content, in markdown.",
+].join("\n");
 
 function buildUserPrompt(input: RunAgentInput): string {
   return [
@@ -114,13 +111,17 @@ function parseAgentResponse(
  * writeVersionedArtifact in artifactWriter.ts.
  */
 export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
-  const agent = loadAgent(input.agentSlug);
+  const agent = loadAgent(input.agentSlug, { skills: input.skills });
   const modelConfig = resolveModel(input.taskType, input.modelOverrides);
   const provider = input.provider ?? providerFor(modelConfig);
 
   const started = performance.now();
   const completion = await provider.complete({
-    systemPrompt: buildSystemPrompt(agent.role, agent.body),
+    systemPrompt: composeSystemPrompt({
+      agent,
+      intro: `You are the ${agent.role} agent in an AI-native software agency's multi-agent system.`,
+      contract: OUTPUT_CONTRACT,
+    }),
     userPrompt: buildUserPrompt(input),
     model: modelConfig.model,
     maxTokens: modelConfig.maxTokens,
@@ -128,6 +129,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   const durationMs = Math.round(performance.now() - started);
 
   const { metadata, body } = parseAgentResponse(completion.text, input, agent.slug);
+  if (agent.skills.length) metadata.skills = skillRefs(agent);
   const filePath = writeVersionedArtifact(input.projectId, input.outputRelativePath, stripUndefined(metadata), body);
 
   return {
