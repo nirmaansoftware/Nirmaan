@@ -119,7 +119,11 @@ rules:
   - id: decision-records
     # Dated records: adding is normal; editing one fails key 1 unless the diff
     # only adds a dated "Superseded by" note.
-    globs: ["docs/operations/*-decisions.md", "docs/product/*-decisions.md", "docs/history/**"]
+    globs:
+      - "docs/operations/*-decisions.md"
+      - "docs/operations/20??-??-??-*.md"
+      - "docs/product/*-decisions.md"
+      - "docs/history/**"
     teams: [product]
     frozen: true
   - id: repo-claims
