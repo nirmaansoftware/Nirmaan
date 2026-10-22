@@ -138,10 +138,13 @@ function setup({ responses = [{ type: 'verdict', verdict: 'pass' }], change, gh 
   const stateDir = join(tmp, 'state');
   const run = (extra = {}) => runReview({ repoRoot: work, pr: 1, config: CONFIG, github, post: 'app', claudeBin: bin, stateDir, models: { key1: 'k1-model', key2: 'k2-model', proxy: 'proxy-model' }, timeoutMs: 20000, backoffMs: 0, sleep: async () => {}, out: () => {}, ...extra });
   const calls = () => (existsSync(join(fakeDir, 'calls.jsonl')) ? readFileSync(join(fakeDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
-  const log = () => (existsSync(join(stateDir, 'calls.jsonl')) ? readFileSync(join(stateDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
+  const logAll = () => (existsSync(join(stateDir, 'calls.jsonl')) ? readFileSync(join(stateDir, 'calls.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
+  // The model-call lines; the shadow derivation's own lines are derived().
+  const log = () => logAll().filter((l) => l.kind !== 'derive');
+  const derived = () => logAll().filter((l) => l.kind === 'derive');
   const checks = () => posts.filter((p) => p.type === 'check' || p.type === 'status');
   const check = (name) => checks().filter((c) => c.name === name || c.context === name).pop();
-  return { tmp, work, headSha, posts, run, calls, log, checks, check, stateDir, body: () => body, setBody: (b) => { body = b; }, cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
+  return { tmp, work, headSha, posts, run, calls, log, derived, checks, check, stateDir, body: () => body, setBody: (b) => { body = b; }, cleanup: () => rmSync(tmp, { recursive: true, force: true }) };
 }
 
 const noSuccess = (t) => assert.ok(!t.checks().some((c) => c.state === 'success'), 'nothing may be posted as success');
@@ -882,6 +885,139 @@ test('each key result carries when it started and ended, and the validator\'s er
     assert.match(k.startedAt, /^\d{4}-\d\d-\d\dT/);
     assert.ok(k.endedAt >= k.startedAt);
   } finally { t.cleanup(); }
+});
+
+// ---------------------------------------------------------------- key derivation (shadow)
+
+const CHART_YML = `version: 1
+positions:
+  - id: founder
+    title: "Founder"
+    layer: 0
+    kind: manager
+    holder: human
+    status: active
+  - id: orchestrator
+    title: "Orchestrator"
+    layer: 1
+    kind: manager
+    holder: agent
+    occupant: orchestrator
+    status: active
+    reports_to: founder
+  - id: chief-tech
+    title: "Chief Technology Officer"
+    layer: 2
+    kind: manager
+    holder: agent
+    occupant: chief-tech
+    status: active
+    reports_to: orchestrator
+  - id: head-eng
+    title: "Head of Engineering"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: principal-architect
+    status: active
+    reports_to: chief-tech
+    deputy: ic-db
+  - id: head-pq
+    title: "Head of Platform and Quality"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: security-engineer
+    status: active
+    reports_to: orchestrator
+  - id: ic-db
+    title: "Database Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: database-engineer
+    status: active
+    reports_to: head-eng
+units:
+  - id: engineering
+    name: Engineering
+    head: head-eng
+    status: active
+    key: 1
+  - id: platform-quality
+    name: Platform and Quality
+    head: head-pq
+    status: active
+    key: 1
+`;
+
+test('shadow derivation: logged beside the actual keys and stated in the key-2 comment; posting is unchanged', async () => {
+  const t = setup({ mainExtra: (w) => write(w, 'agents/org-chart.yml', CHART_YML) });
+  try {
+    const r = await t.run();
+    const d = t.derived();
+    assert.equal(d.length, 1);
+    assert.equal(d[0].ok, true);
+    assert.equal(d[0].derived_key2, 'chief-tech', 'os/** only: Engineering, whose head reports to chief-tech');
+    assert.equal(d[0].derived_key2_deputy, 'orchestrator');
+    assert.deepEqual(d[0].derived_key1, [{ team: 'engineering', holder: 'principal-architect', position: 'head-eng', rolled_up: false, deputy: 'database-engineer' }]);
+    assert.equal(d[0].actual_key2, 'orchestrator');
+    assert.deepEqual(d[0].actual_key1, [{ team: 'engineering', holder: 'principal-architect' }]);
+    // Posting unchanged: the orchestrator reviews key 2 and the checks are the same.
+    assert.equal(r.key2.role, 'orchestrator');
+    const k2sys = t.calls()[1].argv[t.calls()[1].argv.indexOf('--system-prompt') + 1];
+    assert.match(k2sys, /SPEC-MARKER-orchestrator/);
+    assert.doesNotMatch(k2sys, /chief-tech/);
+    assert.equal(t.check('review/executive').state, 'success');
+    const k2c = t.posts.find((p) => p.type === 'comment' && /key 2/.test(p.body)).body;
+    assert.match(k2c, /Key 2 derived \(shadow\): chief-tech \(Chief Technology Officer; lowest active manager above every key-1 holder\)[\s\S]*not today's key 2 \(orchestrator\); posting is unchanged/);
+  } finally { t.cleanup(); }
+});
+
+test('shadow derivation: the apex floor on a control-plane PR, and no chart on main is only noted', async () => {
+  const a = setup({ mainExtra: (w) => write(w, 'agents/org-chart.yml', CHART_YML), change: (w) => write(w, '.github/workflows/x.yml', 'name: x\n') });
+  try {
+    await a.run();
+    assert.equal(a.derived()[0].derived_key2, 'orchestrator');
+    assert.match(a.derived()[0].derived_reason, /apex floor/);
+  } finally { a.cleanup(); }
+  const b = setup();
+  try {
+    const r = await b.run();
+    assert.equal(b.derived()[0].ok, false);
+    assert.match(b.derived()[0].error, /no agents\/org-chart\.yml on main/);
+    assert.equal(r.key2.status, 'pass');
+    assert.match(b.posts.find((p) => p.type === 'comment' && /key 2/.test(p.body)).body, /Key 2 derived \(shadow\): not available/);
+  } finally { b.cleanup(); }
+});
+
+test('deferral kinds: each deferral names its kind', async () => {
+  const cases = [
+    [{ responses: [{ type: 'rate_limit' }] }, 'rate-limit'],
+    [{ responses: [{ type: 'error' }] }, 'call-failed'],
+    [{ responses: [{ type: 'result', text: 'not json' }] }, 'invalid-output'],
+    [{ responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/nope.js', line: 1, severity: 'critical', text: 'x' }] }] }, 'validation'],
+    [{ change: (w) => write(w, 'site/a.css', 'b {}\n') }, 'missing-standard'],
+  ];
+  for (const [s, kind] of cases) {
+    const t = setup(s);
+    try {
+      const r = await t.run();
+      assert.equal(r.key1[0].status, 'deferred', kind);
+      assert.equal(r.key1[0].deferralKind, kind);
+    } finally { t.cleanup(); }
+  }
+  const t = setup({ responses: [{ type: 'sleep', ms: 3000 }] });
+  try {
+    const r = await t.run({ timeoutMs: 200 });
+    assert.equal(r.key1[0].deferralKind, 'timeout');
+  } finally { t.cleanup(); }
+  const m = setup();
+  try {
+    rmSync(join(m.work, CONFIG.checklist_dir, 'engineering.md'));
+    sh(m.work, 'commit', '-qam', 'drop checklist'); sh(m.work, 'push', '-q', 'origin', 'main');
+    assert.equal((await m.run()).key1[0].deferralKind, 'missing-spec');
+  } finally { m.cleanup(); }
 });
 
 test('findingsBySeverity counts every severity', () => {
