@@ -50,7 +50,7 @@ import { parseYaml } from '../review-teams.mjs';
 import {
   acquireLock, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText,
   prTextBlock, prTextDigest, proxySystemPrompt, PROXY_VERDICT_SCHEMA, renderComment, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict,
-  VERDICT_SCHEMA, withFounderClassBlock,
+  VERDICT_SCHEMA, verdictCacheName, withFounderClassBlock,
 } from './lib.mjs';
 import { claudeArgs, reviewerEnv, runWithRetry } from './claude.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from './github.mjs';
@@ -268,34 +268,42 @@ export async function runReview(o) {
     const memberText = (role) => markdownSection(roleSpec(role), cfg.member_section) ?? roleSpec(role);
     const teamsById = new Map((map.teams ?? []).map((t) => [t.id, t]));
 
-    // One reviewer call, cached per (head, main, PR text, key, team) so a
-    // rerun (after the founder decides a needs-founder PR, or after a
+    // One reviewer call, cached per (head, main, PR text, key, team, role) so
+    // a rerun (after the founder decides a needs-founder PR, or after a
     // restart) does not spend another call. The reviewers read the title and
     // body (include_pr_body), so a change to either is a new review, not a
-    // reused verdict. The Founder Proxy is key "proxy" here.
+    // reused verdict; another role on the same key and team is a new review
+    // too. The Founder Proxy is key "proxy" here. Each result carries when
+    // the call started and ended and, when the output failed, the
+    // validation error (for the loop's per-phase log line).
     const cacheDir = join(o.stateDir, 'verdicts', cfg.repo.replace('/', '_'), `pr-${o.pr}`);
     const textDigest = prTextDigest({ title: pull.title, body: pull.body, includeBody: cfg.include_pr_body });
-    const review = async ({ key, team, model, system, user }) => {
+    const review = async (call) => {
+      const startedAt = new Date().toISOString();
+      const r = await reviewCall(call);
+      return { ...r, startedAt, endedAt: new Date().toISOString() };
+    };
+    const reviewCall = async ({ key, team, role, model, system, user }) => {
       const proxy = key === 'proxy';
-      const cacheFile = join(cacheDir, `${headSha}-${mainSha}-${textDigest}-k${key}-${team ?? (proxy ? cfg.proxy_role : 'executive')}.json`);
+      const cacheFile = join(cacheDir, verdictCacheName({ headSha, mainSha, textDigest, key, team, role }));
       if (!o.fresh && existsSync(cacheFile)) {
         const cached = JSON.parse(readFileSync(cacheFile, 'utf8'));
-        logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, model, attempt: 0, outcome: 'reused' });
-        return { ...cached, notes: [...(cached.notes ?? []), REUSED_NOTE] };
+        logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, role, model, attempt: 0, outcome: 'reused' });
+        return { ...cached, reused: true, notes: [...(cached.notes ?? []), REUSED_NOTE] };
       }
       const args = claudeArgs({ model, systemPrompt: system, addDirs: [mainDir], schema: proxy ? PROXY_VERDICT_SCHEMA : VERDICT_SCHEMA });
       const r = await runWithRetry(
         { bin: o.claudeBin, args, input: user, cwd: headDir, env: reviewerEnv(), timeoutMs: o.timeoutMs },
         {
           backoffMs: o.backoffMs, sleep: o.sleep,
-          onAttempt: (res, attempt) => logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, model, reported_model: res.reportedModel ?? null, attempt, outcome: res.kind, duration_ms: res.durationMs, ...(res.tokens ?? {}), prompt_chars: system.length + user.length }),
+          onAttempt: (res, attempt) => logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, role, model, reported_model: res.reportedModel ?? null, attempt, outcome: res.kind, duration_ms: res.durationMs, ...(res.tokens ?? {}), prompt_chars: system.length + user.length }),
         },
       );
-      if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, model };
+      if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, callOutcome: r.kind, model };
       let raw;
-      try { raw = r.structured ?? parseVerdictText(r.text); } catch (e) { return { status: 'deferred', reason: `the reviewer's output is not valid JSON (${e.message})`, model }; }
+      try { raw = r.structured ?? parseVerdictText(r.text); } catch (e) { return { status: 'deferred', reason: `the reviewer's output is not valid JSON (${e.message})`, validationError: `not valid JSON: ${e.message}`, model }; }
       const v = validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count, proxy });
-      if (!v.ok) return { status: 'deferred', reason: `the verdict failed validation: ${v.error}`, model };
+      if (!v.ok) return { status: 'deferred', reason: `the verdict failed validation: ${v.error}`, validationError: v.error, model };
       const result = { status: v.verdict.verdict, verdict: v.verdict, notes: v.notes, model: r.reportedModel ?? model };
       mkdirSync(cacheDir, { recursive: true });
       writeFileSync(cacheFile, JSON.stringify(result));
@@ -327,7 +335,7 @@ export async function runReview(o) {
       }
       const user = userPrompt({ ...promptCtx, key: 1, team: teamId });
       out(`pr-review: key 1 for ${base.teamName} (${base.role})...`);
-      key1.push({ ...base, ...(await review({ key: 1, team: teamId, model: o.models.key1, system, user })) });
+      key1.push({ ...base, ...(await review({ key: 1, team: teamId, role: base.role, model: o.models.key1, system, user })) });
     }
 
     // Post key 1.
@@ -350,13 +358,15 @@ export async function runReview(o) {
     let k2;
     try {
       const teams = classification.teams.map((id) => { const t = teamsById.get(id); return { name: t.name, lead: t.lead, leadSpec: roleSpec(t.lead) }; });
-      const k2spec = markdownSection(roleSpec(cfg.key2_role), cfg.key2_section);
-      const checklists = [...(k2spec ? [] : [checklist('key2')]), baseChecklist(), ...classification.teams.flatMap((id) => teamChecklists(id, teamsById.get(id).lead))];
+      // The generic Key 2 checklist always loads, also when the key-2 role's
+      // spec has its own "Key 2 review" section (loaded with the whole spec):
+      // the generic one is the floor any key-2 holder reviews against.
+      const checklists = [checklist('key2'), baseChecklist(), ...classification.teams.flatMap((id) => teamChecklists(id, teamsById.get(id).lead))];
       const system = key2SystemPrompt({ ...promptCtx, role: cfg.key2_role, roleSpec: roleSpec(cfg.key2_role), checklists, teams });
       const key1Results = key1.map((r) => ({ team: r.team, role: r.role, verdict: r.verdict }));
       const user = userPrompt({ ...promptCtx, key: 2, key1Results });
       out(`pr-review: key 2 (${cfg.key2_role})...`);
-      k2 = { ...k2base, ...(await review({ key: 2, team: null, model: o.models.key2, system, user })) };
+      k2 = { ...k2base, ...(await review({ key: 2, team: null, role: cfg.key2_role, model: o.models.key2, system, user })) };
     } catch (e) {
       k2 = { ...k2base, status: 'deferred', reason: `spec or checklist missing on main: ${e.message}` };
     }
@@ -385,7 +395,7 @@ export async function runReview(o) {
           key2Result: { role: cfg.key2_role, verdict: k2.verdict },
         });
         out(`pr-review: Founder Proxy (${cfg.proxy_role})...`);
-        proxy = { ...pbase, ...(await review({ key: 'proxy', team: null, model: o.models.proxy, system, user })) };
+        proxy = { ...pbase, ...(await review({ key: 'proxy', team: null, role: cfg.proxy_role, model: o.models.proxy, system, user })) };
       } catch (e) {
         proxy = { ...pbase, status: 'deferred', reason: `spec missing on main: ${e.message}` };
       }

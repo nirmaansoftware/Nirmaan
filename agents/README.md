@@ -46,7 +46,7 @@ The agents form seven teams for pull request review (decided 2026-10-17, [docs/o
 - A lead's `agent.md` has a **Key 1 review** section with its team's checklist; the orchestrator's has a **Key 2 review** section.
 - A member whose checklist a lead must run has a **Checklist for my team lead** section. Members' checklists run inside the lead's single verdict and are cited by name; a member never posts a key of its own. `review-teams.yml` says which member checklists a changed file or content rule requires (`checklists:`).
 - `legal-counsel` never holds a key. It may comment on a PR; its comment is not a check.
-- The Deputy column is recorded in the chart for the deputy rules (a timeout gives the deputy one try). The review script does not use deputies yet (PLANNED).
+- The Deputy column records each unit's deputy from the chart. The review script does not use deputies: today a key that times out gets one retry and is then deferred ([`pr-review.md`](../docs/operations/pr-review.md)). A deputy try on timeout is a proposal of the decision record (D4.4, founder item 2), not in effect.
 - The founder is not a team. PRs in founder classes A to F (listed in `review-teams.yml`) also get the [Founder Proxy (agent)](founder-proxy/agent.md#founder-proxy-review) as a third reviewer after key 2, under the founder's delegation of 2026-10-18. It is not the founder: what only the founder decides it returns as `needs-founder`, and the founder decides that on GitHub.
 - `reviewed_by` in each spec's frontmatter is who reviews that agent's authored work. It is a review edge, not team membership, and it is not a PR key.
 
@@ -71,4 +71,9 @@ Every lead runs this before its team's own checklist (minutes of 2026-10-17, Age
 - **Citations:** every finding and every claim it passes cites `file:line` at the head commit.
 - **The comment:** role, "fresh read-only session", base and head commit, a claims table with verdict and citation, the CI run cited, what was not run, and findings with severity. A comment whose commit is not the head is void.
 - **Wording:** "agent review (role), head <sha7>". A pass means an agent role found no blocking finding on that commit. It is an agent review, not a sign-off, an approval or a release decision.
+- **PR shape** (decision R5.7 of [2026-10-18-review-loop-decisions.md](../docs/operations/2026-10-18-review-loop-decisions.md)). Authors shape PRs this way, and key 1 lists a missed rule as a minor finding:
+  1. one owning unit per PR where the change allows; more than two owning teams needs a reason stated in the PR body (more than three teams is a key-2 fail unless the PR is split or mechanical, Key 2 item 5);
+  2. control-plane paths (every path founder class A covers in `main`'s map) and `agents/**` are never mixed with product paths (such as `os/**` and `website/**`) in one PR, unless the PR is mechanical (such as a rename or a dependency bump) and says so; key 2 fails a PR that mixes them (Key 2 item 8);
+  3. size: keep a PR small in changed lines and files, not counting generated files (`website/public/**`); frontend-engineer asked that the size also count the checklists a PR loads. Size is guidance, never a fail, and no limit is set until the review log shows its effect;
+  4. the PR body states the owning teams computed from `main`'s map and the test commands run. For founder classes, the review script's `<!-- review:founder-class -->` block is the statement (item 6 above).
 - **Size changes the checklist, never the number of keys.** A typo or docs-only PR still gets both keys, with a short checklist: claims, links, status labels, founder classes, and SEO on titles.
