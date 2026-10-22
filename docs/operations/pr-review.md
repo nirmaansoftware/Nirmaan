@@ -59,8 +59,9 @@ This page does not copy its rules. In short:
   two owners needs both leads.
 - A file no rule matches belongs to Engineering.
 - Content rules sit beside path rules: a price, currency, discount, refund or
-  guarantee, or a client, partner or prospect name, anywhere in the diff adds
-  Business; a market or competitor claim adds Product's market check.
+  guarantee anywhere in the diff adds Commercial; a client, partner or
+  prospect name adds Commercial and Legal and Compliance; a market or
+  competitor claim adds Product's market check.
 - Generated files follow their source (`website/public/**` follows
   `website/src/**`).
 - The shared layer copied into ip.nirmaan.online is owned by Design and
