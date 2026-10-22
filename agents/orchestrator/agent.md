@@ -10,7 +10,7 @@ permissions:
   delete: false
 ---
 
-# Orchestrator (CTO Agent)
+# Orchestrator
 
 ## Mission
 
