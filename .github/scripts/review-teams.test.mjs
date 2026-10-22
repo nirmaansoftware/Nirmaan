@@ -370,10 +370,10 @@ test('classification: capability/** is Engineering with the database-engineer ch
   }
 });
 
-test('classification: knowledge-legal adds Business (legal-compliance) with no founder class, only in the knowledge folders', () => {
+test('classification: knowledge-legal adds Legal and Compliance (legal-compliance) with no founder class, only in the knowledge folders', () => {
   const { map } = realMap();
   const rule = map.content_rules.find((r) => r.id === 'knowledge-legal');
-  assert.deepEqual(rule.adds_teams, ['business']);
+  assert.deepEqual(rule.adds_teams, ['legal']);
   assert.equal(rule.founder_class, undefined);
   for (const line of ['Check the dataset licence first.', 'Model weights are not copied.', 'This is not legal advice.', 'Erasure under GDPR and the DPDP Act.']) {
     assert.ok(contentHits(map, 'capability/records/a.jsonl', line).includes('knowledge-legal'), line);
