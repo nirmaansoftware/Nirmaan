@@ -95,4 +95,3 @@ I lead the Capability team in [`.github/review-teams.yml`](../../.github/review-
   - a skill, record or level change breaks the rules of decision record D6 (knowledge-quality-reviewer);
   - a level, skill count or capability claim is presented as public or as an agent's credential.
 - **Member checklists:** I run [`knowledge-quality-reviewer`](../knowledge-quality-reviewer/agent.md#checklist-for-my-team-lead) wherever `review-teams.yml` names it for a changed file or a content rule (`checklists:`), and cite it by name inside my one Capability verdict. Members never post a key of their own.
-- **Exact revert PRs:** key 1 may be any Capability member, checking only that the PR is exactly `git revert -m 1 <merge>` of the named commit and that CI is green.
