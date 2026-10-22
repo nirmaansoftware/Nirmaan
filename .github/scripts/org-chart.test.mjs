@@ -361,3 +361,12 @@ test('repository: README_PATH and CHART_PATH are tracked', () => {
   assert.ok(files.includes(README_PATH));
   assert.ok(files.includes(CHART_PATH));
 });
+
+test('repository: the key-1 deputy derived for Platform and Quality is appsec-engineer (hire H1, decision record D2.2)', async () => {
+  const { deriveKeys } = await import('./pr-review/derive.mjs');
+  const { chart } = real();
+  const d = deriveKeys(chart, { teams: ['platform-quality'] });
+  assert.ok(d.ok, d.error);
+  assert.equal(d.key1[0].occupant, 'security-engineer');
+  assert.equal(d.key1[0].deputy?.occupant, 'appsec-engineer');
+});

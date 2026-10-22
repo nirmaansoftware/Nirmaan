@@ -64,7 +64,7 @@ teams:
     name: Platform and Quality
     lead: security-engineer
     key: 1
-    members: [sre, devops-engineer, qa-engineer, performance-engineer]
+    members: [sre, devops-engineer, qa-engineer, performance-engineer, appsec-engineer]
   - id: business
     name: Business
     lead: legal-compliance
