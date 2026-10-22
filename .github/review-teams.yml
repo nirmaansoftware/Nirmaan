@@ -459,16 +459,24 @@ founder_classes:
 
 # Content rules: what a path cannot show. The review script runs each rule's
 # patterns (JavaScript regular expressions, case-insensitive) over the diff's
-# changed lines in files matching `applies_to` (every file when absent). A hit
-# adds `adds_teams` and, when set, makes the PR `founder_class`.
+# changed lines in files matching `applies_to` (every file when absent) and
+# not matching `exclude`. A hit adds `adds_teams` and, when set, makes the PR
+# `founder_class`.
 # `trigger: added_files` fires on a new file matching `applies_to` instead.
 # `examples` must each match a pattern (a test of the pattern itself);
 # `markers` name tracked files where a pattern must match today, so a rule
 # whose words drift away from the repository fails the coverage test.
 content_rules:
   - id: money
+    # Not in knowledge content (decision record D5.2, founder item 3): skill
+    # files (skills/<unit>/<id>.md), worked examples (examples/<unit>/...) and
+    # capability records and levels. The skill validator's currency check
+    # (D6.4, .github/scripts/skills.mjs) covers the skill files; nothing
+    # replaces this rule for examples or records. Folder READMEs and the skill
+    # template stay in scope.
     adds_teams: [commercial]
     founder_class: C
+    exclude: ["skills/*/*.md", "examples/*/**", "capability/records/**", "capability/levels.json"]
     checklists: [finance-estimation, tax-accounts]
     patterns:
       - "₹\\s?\\d"
@@ -502,7 +510,11 @@ content_rules:
     markers:
       - file: "website/src/projects.njk"
   - id: market-claims
+    # Not in knowledge content, the same files as `money` (D5.2, founder item
+    # 3). The skill validator's company-claim check (D6.4) covers the skill
+    # files; nothing replaces this rule for examples or records.
     adds_teams: [product]
+    exclude: ["skills/*/*.md", "examples/*/**", "capability/records/**", "capability/levels.json"]
     checklists: [market-research]
     founder_class: E
     patterns:

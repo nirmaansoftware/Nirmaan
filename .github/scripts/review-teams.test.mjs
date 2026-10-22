@@ -361,6 +361,33 @@ test('repository: no tracked file is owned by more than three teams (a PR with m
   assert.deepEqual(over, []);
 });
 
+test('content rules: exclude skips files; an exclude may name a folder not yet tracked; a marker may not be excluded', () => {
+  const map = fixture();
+  map.content_rules[0].exclude = ['docs/**'];
+  assert.deepEqual(contentHits(map, 'docs/x.md', 'costs ₹5'), []);
+  assert.deepEqual(contentHits(map, 'src/a.js', 'costs ₹5'), ['money']);
+  map.content_rules[0].exclude = ['not-yet/**'];
+  assert.deepEqual(run(map), []);
+  map.content_rules[0].exclude = ['docs/**'];
+  map.content_rules[0].markers = [{ file: 'docs/x.md' }];
+  assert.match(run(map).join('\n'), /content rule money: marker file docs\/x\.md is excluded/);
+});
+
+test('classification: in skill files, examples and capability records, "payments", "GST" or "versus" is not founder class C or E; elsewhere it still is', () => {
+  const { map } = realMap();
+  for (const line of ['Card payments go through the gateway.', 'Invoices show GST separately.', 'REST versus GraphQL for this API.']) {
+    for (const file of ['skills/web/form-validation.md', 'examples/web/form-validation/README.md', 'capability/records/a.jsonl', 'capability/levels.json']) {
+      const hits = contentHits(map, file, line);
+      assert.ok(!hits.includes('money') && !hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
+    }
+    // Folder READMEs, the skill template, nested skill files and the tools stay in scope.
+    for (const file of ['docs/product/x.md', 'skills/README.md', 'skills/_template.md', 'skills/web/notes/x.md', 'examples/README.md', 'capability/README.md', 'capability/tools/levels.mjs']) {
+      const hits = contentHits(map, file, line);
+      assert.ok(hits.includes('money') || hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
+    }
+  }
+});
+
 test('classification: capability/** is Engineering with the database-engineer checklist', () => {
   const { map, tracked } = realMap();
   for (const file of ['capability/README.md', 'capability/levels.json', 'capability/tools/levels.mjs']) {
