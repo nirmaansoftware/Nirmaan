@@ -397,10 +397,10 @@ test('classification: capability/** is Engineering with the database-engineer ch
   }
 });
 
-test('classification: knowledge-legal adds Business (legal-compliance) with no founder class, only in the knowledge folders', () => {
+test('classification: knowledge-legal adds Legal and Compliance (legal-compliance) with no founder class, only in the knowledge folders', () => {
   const { map } = realMap();
   const rule = map.content_rules.find((r) => r.id === 'knowledge-legal');
-  assert.deepEqual(rule.adds_teams, ['business']);
+  assert.deepEqual(rule.adds_teams, ['legal']);
   assert.equal(rule.founder_class, undefined);
   for (const line of ['Check the dataset licence first.', 'Model weights are not copied.', 'This is not legal advice.', 'Erasure under GDPR and the DPDP Act.']) {
     assert.ok(contentHits(map, 'capability/records/a.jsonl', line).includes('knowledge-legal'), line);
@@ -451,7 +451,7 @@ test('classification: licence text, licence fields, restrictive dependency licen
   for (const [file, added, opts] of cases) {
     const c = cls(file, added, opts);
     assert.ok(c.founder.D, `${file}: founder class D`);
-    assert.ok(c.teams.includes('business'), `${file}: Business (Legal) key 1`);
+    assert.ok(c.teams.includes('legal'), `${file}: Legal and Compliance key 1`);
     assert.ok(c.checklists.includes('legal-compliance'), `${file}: legal-compliance checklist`);
   }
   // Not every mention: a routine lockfile bump, a permissive dependency, and prose about licences are not founder class D.

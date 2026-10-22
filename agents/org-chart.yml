@@ -103,15 +103,6 @@ positions:
     interim: true
     reports_to: orchestrator
     deputy: ic-business-analyst
-  - id: head-business-interim
-    title: "Head of Business (interim)"
-    layer: 4
-    kind: manager
-    holder: agent
-    occupant: legal-compliance
-    status: active
-    interim: true
-    reports_to: orchestrator
 
   # ------------------------------------------------------------ Engineering (interim) members
   - id: ic-frontend-engineer
@@ -220,7 +211,17 @@ positions:
     target_reports_to: head-product
     plannable: false
 
-  # ------------------------------------------------------------ Business (interim) members
+  # ------------------------------------------------------------ Commercial (active target unit, H2)
+  - id: head-commercial
+    title: "Head of Commercial"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: head-of-commercial
+    status: active
+    reports_to: orchestrator
+    target_reports_to: chief-operations
+    deputy: ic-sales-partnerships
   - id: ic-finance-estimation
     title: "Finance and Estimation Analyst"
     layer: 6
@@ -228,8 +229,7 @@ positions:
     holder: agent
     occupant: finance-estimation
     status: active
-    reports_to: head-business-interim
-    target_reports_to: head-commercial
+    reports_to: head-commercial
     plannable: false
   - id: ic-tax-accounts
     title: "Tax and Accounts Analyst"
@@ -238,18 +238,7 @@ positions:
     holder: agent
     occupant: tax-accounts
     status: active
-    reports_to: head-business-interim
-    target_reports_to: head-commercial
-  - id: ic-legal-counsel
-    # Never holds a key and is never a deputy.
-    title: "Legal Counsel (agent; not a lawyer; drafts only)"
-    layer: 6
-    kind: ic
-    holder: agent
-    occupant: legal-counsel
-    status: active
-    reports_to: head-business-interim
-    target_reports_to: head-legal-compliance
+    reports_to: head-commercial
   - id: ic-sales-partnerships
     title: "Sales and Partnerships"
     layer: 6
@@ -257,8 +246,7 @@ positions:
     holder: agent
     occupant: sales-partnerships
     status: active
-    reports_to: head-business-interim
-    target_reports_to: head-commercial
+    reports_to: head-commercial
   - id: ic-client-communication
     # Drafts and never sends.
     title: "Client Communication"
@@ -267,9 +255,62 @@ positions:
     holder: agent
     occupant: client-communication
     status: active
-    reports_to: head-business-interim
-    target_reports_to: head-commercial
+    reports_to: head-commercial
     plannable: false
+  - id: ic-customer-support
+    title: "Customer Support (drafts, never publishes)"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H9 (wave 5)"
+    reports_to: head-commercial
+  - id: ic-pre-sales-solutions-architect
+    title: "Pre-sales Solutions Architect (never prices)"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H9 (wave 5)"
+    reports_to: head-commercial
+
+  # ------------------------------------------------------------ Legal and Compliance (active target unit, H2)
+  - id: head-legal-compliance
+    # A control function outside the commercial line it checks. No deputy.
+    title: "Head of Legal and Compliance (agent; not a lawyer)"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: legal-compliance
+    status: active
+    reports_to: orchestrator
+  - id: ic-legal-counsel
+    # Drafts only. Never holds a key and is never a deputy.
+    title: "Legal Counsel (agent; not a lawyer; drafts only)"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: legal-counsel
+    status: active
+    reports_to: head-legal-compliance
+  - id: ic-privacy-counsel
+    # Drafts only. Never holds a key and is never a deputy.
+    title: "Privacy Counsel (agent; not a lawyer; not a statutory officer)"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: privacy-counsel
+    status: active
+    reports_to: head-legal-compliance
+  - id: ic-licensing-counsel
+    # Drafts only. Never holds a key and is never a deputy.
+    title: "Licensing Counsel (agent; not a lawyer)"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: licensing-counsel
+    status: active
+    reports_to: head-legal-compliance
 
   # ------------------------------------------------------------ Design (active target unit)
   - id: head-design
@@ -664,31 +705,6 @@ positions:
     status: planned
     hire: "H14 (wave 9)"
     reports_to: orchestrator
-  - id: head-commercial
-    title: "Head of Commercial"
-    layer: 4
-    kind: manager
-    holder: agent
-    status: planned
-    hire: "H2 (P1)"
-    reports_to: chief-operations
-    deputy: ic-sales-partnerships
-  - id: ic-customer-support
-    title: "Customer Support (drafts, never publishes)"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H9 (wave 5)"
-    reports_to: head-commercial
-  - id: ic-pre-sales-solutions-architect
-    title: "Pre-sales Solutions Architect (never prices)"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H9 (wave 5)"
-    reports_to: head-commercial
   - id: head-delivery
     title: "Head of Delivery"
     layer: 4
@@ -756,33 +772,6 @@ positions:
     hire: "H3 (P1)"
     reports_to: head-capability
 
-  # ------------------------------------------------------------ Legal and Compliance (target, planned)
-  - id: head-legal-compliance
-    # A control function outside the commercial line it checks. No deputy.
-    title: "Head of Legal and Compliance (agent; not a lawyer)"
-    layer: 4
-    kind: manager
-    holder: agent
-    status: planned
-    target_occupant: legal-compliance
-    reports_to: orchestrator
-  - id: ic-privacy-counsel
-    title: "Privacy Counsel (agent; not a lawyer; not a statutory officer)"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H2 (P1)"
-    reports_to: head-legal-compliance
-  - id: ic-licensing-counsel
-    title: "Licensing Counsel (agent; not a lawyer)"
-    layer: 6
-    kind: ic
-    holder: agent
-    status: planned
-    hire: "H2 (P1)"
-    reports_to: head-legal-compliance
-
 # Units. `id` of an active key-1 unit equals its team id in review-teams.yml.
 units:
   # Active now.
@@ -824,15 +813,20 @@ units:
     serves: [nirmaan, ip-nirmaan]
     ends: "H11 to H13: Platform, Security, Quality"
     members: [ic-sre, ic-devops-engineer, ic-qa-engineer, ic-performance-engineer, ic-appsec-engineer]
-  - id: business
-    name: Business
-    head: head-business-interim
+  - id: commercial
+    name: Commercial
+    head: head-commercial
     status: active
-    interim: true
     key: 1
     serves: [nirmaan, ip-nirmaan]
-    ends: "H2 (P1): Legal and Compliance, Commercial"
-    members: [ic-finance-estimation, ic-tax-accounts, ic-legal-counsel, ic-sales-partnerships, ic-client-communication]
+    members: [ic-finance-estimation, ic-tax-accounts, ic-sales-partnerships, ic-client-communication, ic-customer-support, ic-pre-sales-solutions-architect]
+  - id: legal
+    name: Legal and Compliance
+    head: head-legal-compliance
+    status: active
+    key: 1
+    serves: [nirmaan, ip-nirmaan]
+    members: [ic-legal-counsel, ic-privacy-counsel, ic-licensing-counsel]
 
   # Planned target units.
   - id: web
@@ -886,11 +880,6 @@ units:
     head: head-product
     status: planned
     members: [ic-product-manager, ic-business-analyst, ic-market-research, ic-product-owner]
-  - id: commercial
-    name: Commercial
-    head: head-commercial
-    status: planned
-    members: [ic-finance-estimation, ic-tax-accounts, ic-sales-partnerships, ic-client-communication, ic-customer-support, ic-pre-sales-solutions-architect]
   - id: delivery
     name: Delivery
     head: head-delivery
@@ -901,18 +890,11 @@ units:
     head: head-capability
     status: planned
     members: [ic-org-designer, ic-capability-programme-manager, ic-knowledge-quality-reviewer]
-  - id: legal
-    name: Legal and Compliance
-    head: head-legal-compliance
-    status: planned
-    serves: [nirmaan, ip-nirmaan]
-    members: [ic-legal-counsel, ic-privacy-counsel, ic-licensing-counsel]
 
 # Stage map: every lead status and every project stage
 # (os/src/lib/db/enums.ts) has exactly one owning unit and one client-voice
 # unit, both active. `target_owner` and `target_client_voice` are the target
-# units. Until Commercial is active, Business holds its stages; until
-# Delivery is active, Product owns APPROVED to DEPLOYMENT and MAINTENANCE;
+# units. Until Delivery is active, Product owns APPROVED to DEPLOYMENT and MAINTENANCE;
 # until Platform is active, Platform and Quality owns MONITORING. In every
 # stage client-communication drafts and a person sends; no agent position
 # grants an OS role or holds a project gate.
@@ -920,15 +902,15 @@ stages:
   - id: lead-pipeline
     kind: lead
     statuses: [NEW, DISCOVERY, QUALIFIED, PROPOSAL, WON, LOST, SPAM]
-    owner: business
-    client_voice: business
+    owner: commercial
+    client_voice: commercial
     target_owner: commercial
     target_client_voice: commercial
   - id: project-lead
     kind: project
     statuses: [LEAD]
-    owner: business
-    client_voice: business
+    owner: commercial
+    client_voice: commercial
     target_owner: commercial
     target_client_voice: commercial
   - id: project-scope
@@ -936,7 +918,7 @@ stages:
     kind: project
     statuses: [DISCOVERY, REQUIREMENTS]
     owner: product
-    client_voice: business
+    client_voice: commercial
     target_owner: product-target
     target_client_voice: commercial
   - id: project-pricing
@@ -945,29 +927,29 @@ stages:
     # the project records a feasibility check.
     kind: project
     statuses: [ESTIMATION, PROPOSAL]
-    owner: business
-    client_voice: business
+    owner: commercial
+    client_voice: commercial
     target_owner: commercial
     target_client_voice: commercial
   - id: project-build
     kind: project
     statuses: [APPROVED, PLANNING, DESIGN, ARCHITECTURE, IMPLEMENTATION, QA, SECURITY_REVIEW, DEPLOYMENT]
     owner: product
-    client_voice: business
+    client_voice: commercial
     target_owner: delivery
     target_client_voice: delivery
   - id: project-monitoring
     kind: project
     statuses: [MONITORING]
     owner: platform-quality
-    client_voice: business
+    client_voice: commercial
     target_owner: platform
     target_client_voice: commercial
   - id: project-maintenance
     kind: project
     statuses: [MAINTENANCE]
     owner: product
-    client_voice: business
+    client_voice: commercial
     target_owner: delivery
     target_client_voice: commercial
 
@@ -978,10 +960,6 @@ exceptions:
   - position: head-product-interim
     rule: span
     reason: "Product (interim) has 2 members until Head of Product and product-owner are hired (H10, wave 6)."
-    review_by: "2027-01-18"
-  - position: head-business-interim
-    rule: deputy
-    reason: "Business (interim) is led by legal-compliance, and Legal and Compliance has no deputy; legal-counsel is never a deputy. Ends with H2."
     review_by: "2027-01-18"
   - position: head-legal-compliance
     rule: deputy

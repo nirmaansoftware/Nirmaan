@@ -2,7 +2,7 @@
 
 FAIL when: a claim does not trace to code, a doc or website/src/_data; copy is
 off-positioning or off-voice, or makes a claim any competitor could make; a
-comparative or regulated claim has no Business review; a client is named
+comparative or regulated claim has no Legal and Compliance review; a client is named
 without a consent record. content-strategist: orphan page, or nav,
 sitemap.njk and navLinks.json disagree; wrong funnel stage or CTA.
 seo-specialist (on built HTML in website/public): unique title and
