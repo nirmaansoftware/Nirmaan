@@ -101,6 +101,11 @@ rules:
     # Loaded at runtime by os/src/lib/agents/loadAgent.ts.
     globs: ["agents/**"]
     teams: [engineering]
+  - id: examples-docs
+    # Worked examples run by the Examples workflow (examples/README.md).
+    globs: ["examples/README.md"]
+    teams: [platform-quality]
+    checklists: [devops-engineer]
 
   # Docs.
   - id: governance-docs

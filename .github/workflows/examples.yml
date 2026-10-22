@@ -1,0 +1,61 @@
+# Examples: runs the worked examples under examples/<skill-id>/
+# (examples/README.md) with .github/scripts/examples.mjs.
+#
+# - On a pull request, only the examples it changes run; the others are
+#   reported as skipped, and the job always reports (no path filter), so it
+#   can become a required check without other PRs waiting on it. Making it
+#   required is a ruleset change, which is the founder's; it is not required
+#   today.
+# - On a push to main, every week and by hand, every example runs.
+# - Each example has its own lockfile and installs without install scripts
+#   (`npm ci --ignore-scripts`; Python with --require-hashes). Examples run
+#   with a clean environment: no secret, token or model key is passed, and
+#   none is defined for this workflow.
+# - Free GitHub-hosted runners only (ubuntu-latest); a time budget per example
+#   and a timeout on the job.
+# Actions are pinned by commit SHA, with the release in a comment.
+name: Examples
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: examples-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  examples:
+    name: examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # the base branch is needed to find the changed examples
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      # For AI and ML examples written in Python.
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      # Event data goes through env, never straight into the script.
+      - name: Run examples
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            node .github/scripts/examples.mjs --changed "origin/$BASE_REF"
+          else
+            node .github/scripts/examples.mjs --all
+          fi
