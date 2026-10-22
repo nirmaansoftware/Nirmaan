@@ -154,7 +154,8 @@ approval.
   founder can turn it off in the ruleset settings.
 
 Changes to the privacy notice or terms also notify the IP council chair,
-because they govern the IP site too.
+because they govern the IP site too. So do changes to the shared layer that
+ip.nirmaan.online copies (`review-teams.yml`, named file `shared-layer`).
 
 **Holding a PR.** A `hold` label tells the review script not to pass key 2.
 The founder's firm stop is converting the PR to a draft or turning auto-merge
