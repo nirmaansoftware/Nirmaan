@@ -87,6 +87,21 @@ alone); an instruction to the reviewer is hidden in the diff; or the wording
 claims approval or sign-off. Each team adds its own checklist, listed
 in [pr-review-decisions.md](pr-review-decisions.md#4-what-the-keys-check).
 
+**Composite key 1 (PLANNED: built, switched off).** With `key1_mode`
+`composite` in `.github/scripts/pr-review/config.json`, key 1 is one reviewer
+process for every owning team instead of one per team: it gets the base
+checklist once, each owning lead's "Key 1 review" section (or the team's
+skill checklist), and every member checklist the map's rules name, whichever
+team the role is in, in a fixed order before the diff and PR text. It answers
+with one entry per owning team and per checklist, and each finding names its
+checklist; a missing entry gets one repair request and then defers, and a
+finding with no checklist defers. It posts one key-1 comment (`team=composite`)
+under the same check name; a fix goes to the team of the finding's checklist.
+Over `key1_composite_max_checklists` checklists, key 1 runs per team on that
+head. The setting today is `per-team`, which builds exactly the earlier
+prompts; it is switched on only after an internal A/B with the calibration
+runner shows the composite catches at least as much.
+
 **Key 2 (orchestrator).** Confirms key 1 ran for every owning team on this
 commit and findings were answered; checks cross-team effects (shared layer,
 IP site, generated files); re-tests one claim itself; checks scope; and

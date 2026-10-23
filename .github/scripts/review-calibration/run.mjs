@@ -22,9 +22,12 @@
 //     the loop holds it.
 //
 // Modes: production (key 1 per owning team, then key 2, then the Founder
-// Proxy, as on a real PR), key2-alone (key 1 answered by a stub pass, so key 2
-// runs on every seed) and proxy-alone (key 1 and key 2 stubbed; the proxy runs
-// on founder-class seeds). Stubbed keys are never scored.
+// Proxy, as on a real PR), key1-alone (key 2 and the proxy answered by a stub
+// pass, so only key 1 is called and scored), key2-alone (key 1 answered by a
+// stub pass, so key 2 runs on every seed) and proxy-alone (key 1 and key 2
+// stubbed; the proxy runs on founder-class seeds). Stubbed keys are never
+// scored. --key1-mode overrides `key1_mode` in pr-review/config.json for the
+// run (the A/B of the composite key 1 against per-team key 1, gate R-G2).
 //
 // Corpus: <corpus>/seeds/*.json, one seed or control per file:
 //   { "id": "s01", "kind": "seed" | "control", "checklist": "key1-base",
@@ -40,7 +43,8 @@
 // through CI; seeds target checklist items, not test failures.
 //
 // Usage: node .github/scripts/review-calibration/run.mjs [--corpus <dir>]
-//   [--results <dir>] [--mode production|key2-alone|proxy-alone] [--runs <n>]
+//   [--results <dir>] [--mode production|key1-alone|key2-alone|proxy-alone]
+//   [--key1-mode per-team|composite] [--runs <n>]
 //   [--only <id,id>] [--base <ref>] [--lock-dir <dir>] [--claude <bin>]
 //   [--lock-wait-minutes <n>]
 // Exit: 0 ran (whatever the scores), 2 setup error or refusal.
@@ -55,7 +59,8 @@ import { acquireLock, NEEDS_FOUNDER } from '../pr-review/lib.mjs';
 import { APP_ENV } from '../pr-review/github.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const MODES = ['production', 'key2-alone', 'proxy-alone'];
+export const MODES = ['production', 'key1-alone', 'key2-alone', 'proxy-alone'];
+export const KEY1_MODES = ['per-team', 'composite'];
 export const STUB_MODEL = 'calibration-stub';
 export const TOKEN_ENV = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', ...Object.values(APP_ENV)];
 const MARKER = /\bseeds?\b|calibrat|planted|\bdefects?\b/i;
@@ -178,6 +183,7 @@ if (model !== cfg.stubModel) {
 
 export function modelsFor(mode, models) {
   if (!MODES.includes(mode)) throw new Error(`mode must be one of ${MODES.join(', ')}`);
+  if (mode === 'key1-alone') return { ...models, key2: STUB_MODEL, proxy: STUB_MODEL };
   if (mode === 'key2-alone') return { ...models, key1: STUB_MODEL };
   if (mode === 'proxy-alone') return { ...models, key1: STUB_MODEL, key2: STUB_MODEL };
   return { ...models };
@@ -213,7 +219,8 @@ export function scoreResult(seed, r) {
 // The key holders a run measured: [{holder, result}]. Stubbed keys are left out.
 export function measured(mode, review) {
   const out = [];
-  if (mode === 'production') for (const r of review.key1 ?? []) out.push({ holder: `key1:${r.team}`, result: r });
+  if (mode === 'production' || mode === 'key1-alone') for (const r of review.key1 ?? []) out.push({ holder: `key1:${r.team}`, result: r });
+  if (mode === 'key1-alone') return out;
   if (mode !== 'proxy-alone' && review.key2) out.push({ holder: 'key2', result: review.key2 });
   if (review.proxy) out.push({ holder: 'proxy', result: review.proxy });
   return out;
@@ -293,10 +300,13 @@ export async function runCalibration(o) {
   }
   const seeds = loadCorpus(o.corpus, { only: o.only });
   const models = modelsFor(o.mode, o.models);
+  if (o.key1Mode !== undefined && !KEY1_MODES.includes(o.key1Mode)) throw new Error(`--key1-mode must be one of ${KEY1_MODES.join(', ')}`);
+  const config = o.key1Mode ? { ...o.config, key1_mode: o.key1Mode } : o.config;
+  const key1Mode = config.key1_mode ?? 'per-team';
   const runs = Math.max(1, Number(o.runs) || 1);
   const baseSha = git(o.repoRoot, ['rev-parse', '--verify', `${o.base}^{commit}`]).trim();
   const stamp = (o.now ?? (() => new Date()))().toISOString().replace(/[:.]/g, '-');
-  const resultsDir = join(o.results, `${stamp}-${o.mode}`);
+  const resultsDir = join(o.results, `${stamp}-${o.mode}-${key1Mode}`);
 
   const tmp = mkdtempSync(join(tmpdir(), 'nirmaan-calibration-'));
   try {
@@ -332,7 +342,7 @@ export async function runCalibration(o) {
         git(work, ['checkout', '--quiet', '--force', '--detach', baseSha]);
         out(`calibration: run ${run}/${runs}, ${seed.id} (${seed.kind}, ${seed.checklist ?? (seed.checklists ?? []).join(', ') ?? ''})...`);
         const review = await withProductionLock(o.lockDir, { repo: 'calibration', pr, by: 'review-calibration' }, { waitMs: o.lockWaitMs ?? 2 * 60 * 60 * 1000, sleep, out }, () => runReview({
-          repoRoot: work, pr, config: o.config, github: fakeGithub({ pr, seed, headSha, config: o.config }), post: 'none',
+          repoRoot: work, pr, config, github: fakeGithub({ pr, seed, headSha, config }), post: 'none',
           claudeBin, stateDir, models, timeoutMs: o.timeoutMs, backoffMs: o.backoffMs, sleep, fresh: true, heldLock: true, out: () => {},
         }));
         const checklist = seed.kind === 'seed' ? seed.checklist : (seed.checklists ?? ['control']).join('+');
@@ -349,10 +359,10 @@ export async function runCalibration(o) {
     mkdirSync(resultsDir, { recursive: true });
     writeFileSync(join(resultsDir, 'results.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + (rows.length ? '\n' : ''));
     const text = formatSummary(groups);
-    writeFileSync(join(resultsDir, 'summary.json'), JSON.stringify({ mode: o.mode, runs, base: baseSha, seeds: seeds.map((s) => s.id), groups }, null, 2));
+    writeFileSync(join(resultsDir, 'summary.json'), JSON.stringify({ mode: o.mode, key1_mode: key1Mode, runs, base: baseSha, seeds: seeds.map((s) => s.id), groups }, null, 2));
     writeFileSync(join(resultsDir, 'summary.txt'), `${text}\n`);
     if (existsSync(join(stateDir, 'calls.jsonl'))) cpSync(join(stateDir, 'calls.jsonl'), join(resultsDir, 'calls.jsonl'));
-    out(`calibration: mode ${o.mode}, base ${baseSha.slice(0, 7)}, ${seeds.length} seeds x ${runs} runs; nothing posted.`);
+    out(`calibration: mode ${o.mode}, key 1 ${key1Mode}, base ${baseSha.slice(0, 7)}, ${seeds.length} seeds x ${runs} runs; nothing posted.`);
     out(text);
     out(`calibration: results in ${resultsDir}`);
     return { rows, groups, resultsDir, baseSha };
@@ -369,6 +379,7 @@ export function parseArgs(argv) {
     if (a === '--corpus') o.corpus = resolve(val());
     else if (a === '--results') o.results = resolve(val());
     else if (a === '--mode') o.mode = val();
+    else if (a === '--key1-mode') o.key1Mode = val();
     else if (a === '--runs') o.runs = Number(val());
     else if (a === '--only') o.only = val().split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--base') o.base = val();
