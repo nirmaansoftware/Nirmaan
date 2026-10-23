@@ -226,15 +226,19 @@ What the script does, in order:
    key-2 comment. It does not change who holds key 2: that stays
    `key2_role` (the Orchestrator). Without a chart on `main` the line says
    the derivation is not available.
-   **Deputy try.** When a key-1 lead's call times out or its process fails
-   (after its one retry), the unit's deputy named in `main`'s chart gets one
-   try with the deputy's own spec and the lead's checklists; the comment and
-   the `review/team-lead` check name the deputy. There is no deputy try for
-   a rate limit (the deputy runs on the same plan), invalid output or failed
-   validation (PR text can cause those), a missing spec, the legal team
-   (Legal and Compliance has no deputy), or without a chart on `main`; key 2 has none
-   today (above the Orchestrator is only the founder). If the deputy does not
-   answer either, the key is deferred and the loop stops as before. Every deferred key
+   **Deputy try** (decision D4.4 in
+   [capability-hierarchy-decisions.md](capability-hierarchy-decisions.md)).
+   When a key-1 lead's call times out, or its process fails with no output
+   at all (after its one retry), the unit's deputy named in `main`'s chart
+   gets one try with the deputy's own spec and the lead's checklists; the
+   comment and the `review/team-lead` check name the deputy. There is no
+   deputy try for a rate limit (the deputy runs on the same plan), for a
+   failure that produced output (an error result, invalid output or failed
+   validation, even when a repair run then times out: PR text can cause
+   those), for a missing spec, for the legal team (Legal and Compliance has
+   no deputy), or without a chart on `main`; key 2 has none today (above the
+   Orchestrator is only the founder). If the deputy does not answer either,
+   the key is deferred and the loop stops as before. Every deferred key
    also names its kind (`rate-limit`, `timeout`, `call-failed`,
    `invalid-output`, `validation`, `missing-spec`, `missing-standard`) in
    the loop's per-phase line.

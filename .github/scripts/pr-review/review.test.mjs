@@ -1176,6 +1176,36 @@ test('deputy try: the lead times out, the unit\'s deputy from main\'s chart gets
   } finally { b.cleanup(); }
 });
 
+test('deputy try: the lead\'s process fails with no output at all (twice), and the deputy answers', async () => {
+  const t = setup({ mainExtra: (w) => write(w, 'agents/org-chart.yml', CHART_YML), responses: [{ type: 'crash' }, { type: 'crash' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await t.run();
+    assert.equal(r.key1[0].status, 'pass');
+    assert.equal(r.key1[0].deputy, 'database-engineer');
+    assert.equal(r.key1[0].role, 'database-engineer (deputy for principal-architect)');
+  } finally { t.cleanup(); }
+});
+
+test('no deputy try for the legal team, or when the deputy\'s spec is missing on main', async () => {
+  const withChart = (w) => write(w, 'agents/org-chart.yml', CHART_YML);
+  const a = setup({ mainExtra: withChart, responses: [{ type: 'crash' }, { type: 'crash' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await a.run({ config: { ...CONFIG, legal_teams: ['engineering'] } });
+    assert.equal(r.key1[0].status, 'deferred');
+    assert.equal(r.key1[0].deputy, undefined);
+    assert.equal(a.calls().length, 2, 'the lead twice; no deputy for a legal team');
+  } finally { a.cleanup(); }
+  const b = setup({ mainExtra: (w) => { withChart(w); rmSync(join(w, 'agents/database-engineer/agent.md')); }, responses: [{ type: 'crash' }, { type: 'crash' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await b.run();
+    assert.equal(r.key1[0].status, 'deferred');
+    assert.equal(r.key1[0].deputy, undefined);
+    assert.equal(b.calls().length, 2, 'the lead twice; no deputy without its spec');
+    assert.match(r.key1[0].notes.join(' '), /No deputy try/);
+    noSuccess(b);
+  } finally { b.cleanup(); }
+});
+
 test('no deputy try for a rate limit, invalid output, failed validation, or without a chart on main', async () => {
   const withChart = (w) => write(w, 'agents/org-chart.yml', CHART_YML);
   for (const [s, n] of [
@@ -1184,6 +1214,8 @@ test('no deputy try for a rate limit, invalid output, failed validation, or with
     // A sole bad critical citation gets the one repair run (R8), then defers.
     [{ mainExtra: withChart, responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/nope.js', line: 1, severity: 'critical', text: 'x' }] }] }, 2],
     [{ responses: [{ type: 'sleep', ms: 3000 }] }, 2],
+    // A process failure that produced output (an error result): no deputy.
+    [{ mainExtra: withChart, responses: [{ type: 'error' }, { type: 'error' }, { type: 'verdict', verdict: 'pass' }] }, 2],
     // Failed validation, then the repair run times out (twice): still no deputy.
     [{ mainExtra: withChart, responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/nope.js', line: 1, severity: 'critical', text: 'x' }] }, { type: 'sleep', ms: 3000 }, { type: 'sleep', ms: 3000 }, { type: 'verdict', verdict: 'pass' }] }, 3],
   ]) {

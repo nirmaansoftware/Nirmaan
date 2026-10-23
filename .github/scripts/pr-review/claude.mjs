@@ -50,7 +50,9 @@ export function interpret({ code, stdout, stderr }) {
   let data;
   try { data = JSON.parse(stdout); } catch {
     const detail = `${stderr || ''}\n${stdout || ''}`.trim().split('\n').pop() || 'no output';
-    return { kind: RATE_LIMIT.test(`${stderr} ${stdout}`) ? 'rate_limit' : 'error', error: `claude exited ${code} without a JSON result: ${detail.slice(0, 300)}` };
+    // noOutput: the process wrote nothing at all (decision D4.4's "process
+    // failure with no output", the only failure a deputy may answer).
+    return { kind: RATE_LIMIT.test(`${stderr} ${stdout}`) ? 'rate_limit' : 'error', error: `claude exited ${code} without a JSON result: ${detail.slice(0, 300)}`, noOutput: !String(stdout ?? '').trim() };
   }
   const usage = data.usage || {};
   const tokens = {
@@ -76,7 +78,7 @@ export function runOnce({ bin, args, input, cwd, env, timeoutMs }) {
     try {
       child = spawn(bin, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) {
-      resolve({ kind: 'error', error: `claude could not start: ${e.message}`, durationMs: 0 });
+      resolve({ kind: 'error', error: `claude could not start: ${e.message}`, noOutput: true, durationMs: 0 });
       return;
     }
     let stdout = '', stderr = '', done = false;
