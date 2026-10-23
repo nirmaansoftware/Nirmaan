@@ -40,15 +40,12 @@ Each team has one lead, who holds key 1 for that team. Members' checklists run
 inside the lead's review and are cited by name; there is one key-1 verdict per
 team.
 
-| Team | Lead (key 1) | Members |
-|---|---|---|
-| Executive | orchestrator (key 2 on every PR, never key 1) | none |
-| Product | product-manager | business-analyst, market-research |
-| Brand and Content | brand-strategist | content-strategist, technical-writer, seo-specialist |
-| Design | creative-director | ux-designer, ui-designer, design-system-engineer |
-| Engineering | principal-architect | frontend-engineer, backend-engineer, database-engineer, ai-ml-engineer |
-| Platform and Quality | security-engineer | sre, devops-engineer, qa-engineer, performance-engineer |
-| Business | legal-compliance | finance-estimation, tax-accounts, legal-counsel, sales-partnerships, client-communication |
+The teams, their leads and members are listed in the team table of
+[`agents/README.md`](../../agents/README.md#teams), which is generated from the
+org chart [`agents/org-chart.yml`](../../agents/org-chart.yml). This page does
+not copy it. The orchestrator holds key 2 on every PR and never key 1. A
+repo-checks step (`node .github/scripts/org-chart.mjs`) fails when the chart,
+that table and the teams in `review-teams.yml` disagree.
 
 legal-counsel never holds a key. Role specs are in [`agents/`](../../agents/README.md).
 
@@ -62,8 +59,9 @@ This page does not copy its rules. In short:
   two owners needs both leads.
 - A file no rule matches belongs to Engineering.
 - Content rules sit beside path rules: a price, currency, discount, refund or
-  guarantee, or a client, partner or prospect name, anywhere in the diff adds
-  Business; a market or competitor claim adds Product's market check.
+  guarantee anywhere in the diff adds Commercial; a client, partner or
+  prospect name adds Commercial and Legal and Compliance; a market or
+  competitor claim adds Product's market check.
 - Generated files follow their source (`website/public/**` follows
   `website/src/**`).
 - The shared layer copied into ip.nirmaan.online is owned by Design and
@@ -214,6 +212,23 @@ What the script does, in order:
    body: every other copy of the block, and any lone open or close marker
    without its pair, is removed, so the only markers left are the script's
    own.
+   **Key derivation (shadow).** After classification the script also works out
+   who would hold the keys under `main`'s org chart
+   (`agents/org-chart.yml`, read by `.github/scripts/pr-review/derive.mjs`):
+   key 1 is the head of each owning unit (a vacant head rolls up to the
+   nearest active manager); key 2 is the lowest active manager above every
+   key-1 holder, never a key-1 holder and never the human founder; the
+   Orchestrator holds key 2 for founder classes A and B and for any PR that
+   touches `agents/**`, `.github/**`, `.claude/**`, `AGENTS.md` or
+   `CLAUDE.md`. It also records each derived holder's deputy from the chart
+   (none for the legal team). This is logged (`kind` `derive` in
+   `calls.jsonl`, beside the actual holders) and stated in one line of the
+   key-2 comment. It changes nothing that is posted: key 2 stays
+   `key2_role` (the Orchestrator), and no deputy reviews. Without a chart on
+   `main` the line says the derivation is not available. Every deferred key
+   also names its kind (`rate-limit`, `timeout`, `call-failed`,
+   `invalid-output`, `validation`, `missing-spec`, `missing-standard`) in
+   the loop's per-phase line.
 5. **CI first.** For each required job (`os-test`, `website-build`,
    `repo-checks`) the newest run on the head counts (by start time, then run
    id), and a run still in progress, such as a rerun, always means waiting: an
@@ -262,7 +277,7 @@ What the script does, in order:
      citation, and any finding from a strict key) the reviewer gets one
      repair run with the validator's exact error; if a citation is still bad,
      or the repair turns a fail into a pass, the key is deferred.
-   Strict keys never drop a finding: Business key 1 (legal) and Brand and
+   Strict keys never drop a finding: Legal and Compliance key 1 and Brand and
    Content key 1 (public claims), a key 1 that loads the market-research
    checklist, and key 2 and the Founder Proxy on any PR with such a key 1
    (`strict_citations` in `config.json`). No path turns a bad citation into

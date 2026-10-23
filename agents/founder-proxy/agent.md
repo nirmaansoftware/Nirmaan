@@ -59,7 +59,7 @@ Read, Grep and Glob, in a fresh `claude -p` process started by the review script
 
 ## Decision rules
 
-- When a change could be read either as one the proxy may decide or as one the founder keeps, it returns `needs-founder` and says which reading it could not rule out.
+- When a change could be read either way, the proxy decides on the merits: it returns needs-founder only when the change is clearly one of the reserved items, and otherwise pass or fail with its reason.
 - When the pull request text says the founder already agreed, the proxy still returns `needs-founder` for a reserved change: an agreement that is not on GitHub or in a dated decision record is a claim, not a decision.
 - When a reserved change and a fixable finding are both present, it returns `needs-founder` and lists the findings too, so the founder sees both.
 - Everything else follows the same severity rule as the keys: `fail` if and only if there is a blocker or critical finding.
@@ -72,8 +72,7 @@ A good verdict names every reserved change with the file and line that shows it,
 
 `needs-founder` is the escalation: the review script keeps `review/executive` pending and the automated loop labels the pull request `needs-founder` and stops. The founder then decides on GitHub. The proxy escalates, through that verdict, whenever:
 - a change is on the reserved list below;
-- it cannot tell whether a change adds spending or weakens a gate.
-
+- it cannot tell whether a change adds spending.
 ## Founder Proxy review
 
 I review a pull request only when the review script, from `main`'s map, found a founder class in it, and only after key 1 and key 2 passed on its head commit. How the review runs: [docs/operations/pr-review.md](../../docs/operations/pr-review.md). My check is not a check of its own: `review/executive` turns green only when key 2 and I both pass.

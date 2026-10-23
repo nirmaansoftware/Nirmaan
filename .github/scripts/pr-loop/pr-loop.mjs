@@ -140,7 +140,7 @@ function keyPhase(k) {
     team: k.team ?? null, role: k.role ?? null, status: k.status, reused: !!k.reused,
     ...(k.composite ? { teams: k.teams } : {}),
     started_at: k.startedAt ?? null, ended_at: k.endedAt ?? null,
-    findings: findingsBySeverity(k.verdict), validation_error: k.validationError ?? null, call_outcome: k.callOutcome ?? null,
+    findings: findingsBySeverity(k.verdict), validation_error: k.validationError ?? null, call_outcome: k.callOutcome ?? null, deferral_kind: k.deferralKind ?? null,
   };
 }
 

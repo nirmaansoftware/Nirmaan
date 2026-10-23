@@ -1,5 +1,6 @@
 import { prisma } from "../db/client";
 import { loadAgent } from "../agents/loadAgent";
+import { composeSystemPrompt } from "../agents/composePrompt";
 import { callModel } from "../ai/callModel";
 import { extractJsonObject, text, textList } from "../ai/json";
 import { audit } from "../audit";
@@ -100,7 +101,7 @@ export async function runArchitecture(actor: Actor, projectId: string, opts: { p
     task: "architecture",
     taskType: "architecture",
     agentSlug: "principal-architect",
-    systemPrompt: [`You are the ${agent.role} agent at Nirmaan.`, "", agent.body, "", CONTRACT].join("\n"),
+    systemPrompt: composeSystemPrompt({ agent, intro: `You are the ${agent.role} agent at Nirmaan.`, contract: CONTRACT }),
     userPrompt: brief.text,
     projectId,
     provider: opts.provider,
