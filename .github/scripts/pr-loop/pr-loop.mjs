@@ -218,7 +218,7 @@ export async function stepPr(o, listed) {
     if (base) { out(`pr-loop: #${n} waits: stacked on #${base.number}`); return { outcome: 'wait', reason: `stacked on #${base.number}; waits for it to merge` }; }
   }
   if (listed.headRepo !== cfg.repo || listed.baseRef !== cfg.base_branch) return skip('not a same-repository PR to main');
-  if (!lc.authors.includes(listed.author)) return skip(`author ${listed.author} is not the agents' account`);
+  if (!lc.authors.includes(listed.author)) return skip(`author ${listed.author} is not an accepted author (${lc.authors.join(', ')})`);
   if (listed.labels.includes(cfg.hold_label)) return skip(`"${cfg.hold_label}" label`);
   if (listed.labels.includes(lc.needs_founder_label)) return skip(`"${lc.needs_founder_label}" label`);
   if (st.stopped?.labeled) {
@@ -298,7 +298,7 @@ export async function stepPr(o, listed) {
     // Behind main: update first, also for a head that already finished (it
     // cannot merge while behind).
     if (pull.mergeableState === 'behind' && st.done?.outcome !== 'refused') {
-      const u = await updateBehind(o, { n, head, st, say, stop, log, out });
+      const u = await updateBehind(o, { n, head, st, say, stop, log, out, author: pull.author });
       if (u) return u;
     }
     if (st.done?.head === head) return skip(`${st.done.outcome} on this head`);
@@ -397,13 +397,27 @@ async function afterReview(o, { n, head, pull, st, r, say, stop, pause, skip, lo
 // `gh pr update-branch`, but pinned with expected_head_sha so a person's push
 // in between is never merged over). Returns the step's result, or null to go
 // on (--no-post never updates).
-async function updateBehind(o, { n, head, st, say, stop, log, out }) {
+async function updateBehind(o, { n, head, st, say, stop, log, out, author }) {
   const cfg = o.config;
+  const lc = o.loop;
   const sha7 = head.slice(0, 7);
   if (o.post === 'none') { out(`pr-loop: #${n} is behind main; not updated (--no-post)`); return null; }
-  if (st.updated?.from === head && Date.now() - Date.parse(st.updated.at) < UPDATE_WAIT_MS) {
-    out(`pr-loop: #${n} waiting for GitHub to update the branch (head ${sha7})`);
-    return { outcome: 'wait', reason: 'waiting for GitHub to update the branch' };
+  const bot = (lc.no_fixer_authors ?? []).includes(author);
+  // A bot is asked once per head, with no repeat: it rebases when it can.
+  if (st.updated?.from === head && (bot || Date.now() - Date.parse(st.updated.at) < UPDATE_WAIT_MS)) {
+    out(`pr-loop: #${n} waiting for ${bot ? author : 'GitHub'} to update the branch (head ${sha7})`);
+    return { outcome: 'wait', reason: `waiting for ${bot ? author : 'GitHub'} to update the branch` };
+  }
+  // A bot's branch is never pushed to, not even by update-branch: the loop
+  // asks the bot to rebase its own branch (rebase_commands), or stops.
+  if (bot) {
+    const command = lc.rebase_commands?.[author];
+    if (!command) return await stop(head, `the branch is behind main and ${author}'s branch is never pushed to; a person asks ${author} to update it`, 'update-failed');
+    st.updated = { from: head, at: new Date().toISOString() };
+    saveState(o.stateDir, cfg.repo, st);
+    log('updated', { by: author });
+    await say(`${command}\n\n<!-- ${MARK} updated from=${head} -->\nThe automated loop: the branch is behind \`main\`, and the loop never pushes to a ${author} branch, so it asks ${author} to rebase it. The new head is reviewed from scratch.`);
+    return { outcome: 'updated' };
   }
   try {
     o.runGh(['api', '-X', 'PUT', `repos/${cfg.repo}/pulls/${n}/update-branch`, '-f', `expected_head_sha=${head}`]);
@@ -426,7 +440,7 @@ async function mergePath(o, { n, head, st, r, say, stop, log, out }) {
   if (now.labels.includes(cfg.hold_label)) { log('held'); return { outcome: 'skip', reason: 'hold label set during the review' }; }
   // main moved during the review: this head cannot merge, so update it rather
   // than ask GitHub to merge it.
-  if (now.mergeableState === 'behind' && o.post !== 'none') return await updateBehind(o, { n, head, st, say, stop, log, out });
+  if (now.mergeableState === 'behind' && o.post !== 'none') return await updateBehind(o, { n, head, st, say, stop, log, out, author: now.author });
   // The repository's "Allow auto-merge" setting decides between auto-merge
   // and "ready": read with the gh login (`allow_auto_merge`, a field, never
   // the wording of an error). Off: ready. On: `gh pr merge --auto`, and any
@@ -473,7 +487,10 @@ function passedWhat(r, capital = false) {
 
 async function fixRound(o, { n, head, pull, st, r, say, stop, pause, log, out }) {
   const cfg = o.config, lc = o.loop;
-  const findings = findingsToFix(r).map((f) => ({ ...f, fixable_by: fixableBy(f, lc.fixer_forbidden) }));
+  // A bot's branch (Dependabot) is never pushed to: every finding is the
+  // author's, so the PR gets author-fix (an agent recreates or closes it).
+  const botBranch = (lc.no_fixer_authors ?? []).includes(pull.author);
+  const findings = findingsToFix(r).map((f) => ({ ...f, fixable_by: botBranch ? 'author' : fixableBy(f, lc.fixer_forbidden) }));
   if (!findings.length) return await stop(head, 'a key failed without findings to fix', 'no-findings');
   // A finding only the author can fix (the PR text, or a path the fixer may
   // not change): no fixer run that cannot succeed; the author-fix label and

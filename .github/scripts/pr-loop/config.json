@@ -1,5 +1,7 @@
 {
-  "authors": ["patel-om"],
+  "authors": ["patel-om", "dependabot[bot]"],
+  "no_fixer_authors": ["dependabot[bot]"],
+  "rebase_commands": { "dependabot[bot]": "@dependabot rebase" },
   "max_fix_rounds": 3,
   "rate_limit_pause_minutes": 30,
   "needs_founder_label": "needs-founder",
