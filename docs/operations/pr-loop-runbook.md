@@ -73,11 +73,12 @@ pause file by hand.
 
 ## Deputy try
 
-When a key-1 lead's call times out or its process fails after its one retry,
-the unit's deputy named in `main`'s org chart gets one try, named on the
-comment and the `review/team-lead` check ([pr-review.md](pr-review.md), step
-4). There is no deputy try for a rate limit, invalid output, failed
-validation, a missing spec or the legal team. A deputy that does not answer
+When a key-1 lead's call times out, or its process fails with no output at
+all, after its one retry, the unit's deputy named in `main`'s org chart gets
+one try, named on the comment and the `review/team-lead` check
+([pr-review.md](pr-review.md), step 4). There is no deputy try for a rate
+limit, a failure that produced output (an error result, invalid output or
+failed validation), a missing spec or the legal team. A deputy that does not answer
 leaves the key deferred and the loop stops the PR as above.
 
 ## Stop and restart
