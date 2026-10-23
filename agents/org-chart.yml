@@ -1,0 +1,974 @@
+# Nirmaan org chart: the line of command of the agent roles (employees).
+#
+# This file is the one source of truth for who reports to whom. Every other
+# view is generated from it or checked against it by
+# .github/scripts/org-chart.mjs (run by repo-checks):
+#   - the team table in agents/README.md is generated from it
+#     (node .github/scripts/org-chart.mjs --write);
+#   - the teams and leads in .github/review-teams.yml must equal its active
+#     key-1 units and their heads.
+# Decisions behind it: docs/operations/capability-hierarchy-decisions.md
+# (D1 span, activation and exceptions; D2 the target chart, the interim chart,
+# stage ownership and titles; D3 this file and its checks; section 4 the hire
+# list that `hire` labels follow). Each rule is also stated in this header or
+# in org-chart.mjs and enforced there.
+# Changing this file is founder class A (agents/**).
+#
+# Layers: 0 the founder (human), 1 the agent apex, 2 a chief, 3 a VP,
+# 4 a head of department, 5 a lead (only above 8 ICs), 6 an individual
+# contributor. Staff positions hold authority over a subject, no line and no
+# key. Every position is held by an agent unless `holder: human`.
+#
+# Positions and slugs are kept apart: `occupant` is the agents/<slug>/ that
+# holds a position today, so a promotion moves an occupant and renames
+# nothing in agents/ or review-teams.yml.
+#   - status active: the position is held now. An active position reports to
+#     an active position (`reports_to` is today's line manager).
+#   - status planned: the position exists in the plan and holds nothing (no
+#     key, deputy duty, path, skill or stage). `reports_to` is its line in the
+#     target chart; until it activates, its reports report to its nearest
+#     active ancestor. `hire` is the hiring PR (H1 to H16, in the record's
+#     hire list) and its wave; the order can change. `target_occupant`
+#     names an existing agent that will move into it.
+#   - `interim: true`: today's review teams, recorded as interim units with
+#     their current heads and keys. Each hiring PR splits an interim unit
+#     into target units and ends it; interim positions are not part of the
+#     target chart.
+#   - `target_reports_to`: an active position's line in the target chart,
+#     when it differs from today's.
+#   - `plannable: false`: an ic or staff position the delivery planner never
+#     assigns tasks to (managers never own tasks).
+#
+# Units: an interim unit's members are the positions reporting to its head
+# today; any other unit's members are the positions whose target line is its
+# head. `key: 1` units are the review teams that hold key 1.
+
+version: 1
+
+# One legal entity or two is the founder's decision. Drafts take party names
+# only from this field, never from unit names.
+legal_entity: undetermined
+
+# Specs the chart does not place, each with the reason. An unplaced spec holds
+# no position, and nothing here decides where it would sit.
+unplaced:
+  - slug: founder-proxy
+    reason: "The decision meeting did not place the Founder Proxy (agent) in the chart (decision record, note at the top, and section 9, item 10); this chart leaves it outside the agent line."
+
+positions:
+  # ------------------------------------------------------------ apex
+  - id: founder
+    title: "Founder"
+    layer: 0
+    kind: manager
+    holder: human
+    status: active
+  - id: orchestrator
+    title: "Orchestrator"
+    layer: 1
+    kind: manager
+    holder: agent
+    occupant: orchestrator
+    status: active
+    reports_to: founder
+
+  # ------------------------------------------------------------ interim units (today's review teams)
+  - id: head-engineering-interim
+    title: "Head of Engineering (interim)"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: principal-architect
+    status: active
+    interim: true
+    reports_to: orchestrator
+    deputy: ic-backend-engineer
+  - id: head-platform-quality-interim
+    title: "Head of Platform and Quality (interim)"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: security-engineer
+    status: active
+    interim: true
+    reports_to: orchestrator
+    deputy: ic-appsec-engineer
+  - id: head-product-interim
+    title: "Head of Product (interim)"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: product-manager
+    status: active
+    interim: true
+    reports_to: orchestrator
+    deputy: ic-business-analyst
+
+  # ------------------------------------------------------------ Engineering (interim) members
+  - id: ic-frontend-engineer
+    title: "Frontend Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: frontend-engineer
+    status: active
+    reports_to: head-engineering-interim
+    target_reports_to: head-web
+  - id: ic-backend-engineer
+    title: "Backend Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: backend-engineer
+    status: active
+    reports_to: head-engineering-interim
+    target_reports_to: head-web
+  - id: ic-database-engineer
+    title: "Database Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: database-engineer
+    status: active
+    reports_to: head-engineering-interim
+    target_reports_to: head-data
+  - id: ic-ai-ml-engineer
+    title: "AI and ML Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: ai-ml-engineer
+    status: active
+    reports_to: head-engineering-interim
+    target_reports_to: head-ai-ml
+
+  # ------------------------------------------------------------ Platform and Quality (interim) members
+  - id: ic-sre
+    title: "Site Reliability Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: sre
+    status: active
+    reports_to: head-platform-quality-interim
+    target_reports_to: head-platform
+  - id: ic-devops-engineer
+    title: "DevOps and Cloud Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: devops-engineer
+    status: active
+    reports_to: head-platform-quality-interim
+    target_reports_to: head-platform
+  - id: ic-qa-engineer
+    title: "QA Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: qa-engineer
+    status: active
+    reports_to: head-platform-quality-interim
+    target_reports_to: head-quality
+  - id: ic-performance-engineer
+    title: "Performance Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: performance-engineer
+    status: active
+    reports_to: head-platform-quality-interim
+    target_reports_to: head-platform
+  - id: ic-appsec-engineer
+    # Deputy of Platform and Quality (interim) from H1 (decision record D2.2).
+    title: "Application Security Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: appsec-engineer
+    status: active
+    reports_to: head-platform-quality-interim
+    target_reports_to: head-security
+
+  # ------------------------------------------------------------ Product (interim) members
+  - id: ic-business-analyst
+    title: "Business Analyst"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: business-analyst
+    status: active
+    reports_to: head-product-interim
+    target_reports_to: head-product
+  - id: ic-market-research
+    title: "Market Researcher"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: market-research
+    status: active
+    reports_to: head-product-interim
+    target_reports_to: head-product
+    plannable: false
+
+  # ------------------------------------------------------------ Commercial (active target unit, H2)
+  - id: head-commercial
+    title: "Head of Commercial"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: head-of-commercial
+    status: active
+    reports_to: orchestrator
+    target_reports_to: chief-operations
+    deputy: ic-sales-partnerships
+  - id: ic-finance-estimation
+    title: "Finance and Estimation Analyst"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: finance-estimation
+    status: active
+    reports_to: head-commercial
+    plannable: false
+  - id: ic-tax-accounts
+    title: "Tax and Accounts Analyst"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: tax-accounts
+    status: active
+    reports_to: head-commercial
+  - id: ic-sales-partnerships
+    title: "Sales and Partnerships"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: sales-partnerships
+    status: active
+    reports_to: head-commercial
+  - id: ic-client-communication
+    # Drafts and never sends.
+    title: "Client Communication"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: client-communication
+    status: active
+    reports_to: head-commercial
+    plannable: false
+  - id: ic-customer-support
+    title: "Customer Support (drafts, never publishes)"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H9 (wave 5)"
+    reports_to: head-commercial
+  - id: ic-pre-sales-solutions-architect
+    title: "Pre-sales Solutions Architect (never prices)"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H9 (wave 5)"
+    reports_to: head-commercial
+
+  # ------------------------------------------------------------ Legal and Compliance (active target unit, H2)
+  - id: head-legal-compliance
+    # A control function outside the commercial line it checks. No deputy.
+    title: "Head of Legal and Compliance (agent; not a lawyer)"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: legal-compliance
+    status: active
+    reports_to: orchestrator
+  - id: ic-legal-counsel
+    # Drafts only. Never holds a key and is never a deputy.
+    title: "Legal Counsel (agent; not a lawyer; drafts only)"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: legal-counsel
+    status: active
+    reports_to: head-legal-compliance
+  - id: ic-privacy-counsel
+    # Drafts only. Never holds a key and is never a deputy.
+    title: "Privacy Counsel (agent; not a lawyer; not a statutory officer)"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: privacy-counsel
+    status: active
+    reports_to: head-legal-compliance
+  - id: ic-licensing-counsel
+    # Drafts only. Never holds a key and is never a deputy.
+    title: "Licensing Counsel (agent; not a lawyer)"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: licensing-counsel
+    status: active
+    reports_to: head-legal-compliance
+
+  # ------------------------------------------------------------ Design (active target unit)
+  - id: head-design
+    title: "Head of Design"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: creative-director
+    status: active
+    reports_to: orchestrator
+    target_reports_to: chief-product
+    deputy: ic-ui-designer
+  - id: ic-ux-designer
+    title: "UX Designer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: ux-designer
+    status: active
+    reports_to: head-design
+  - id: ic-ui-designer
+    title: "UI Designer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: ui-designer
+    status: active
+    reports_to: head-design
+  - id: ic-design-system-engineer
+    title: "Design System Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: design-system-engineer
+    status: active
+    reports_to: head-design
+  - id: ic-user-researcher
+    title: "User Researcher"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H6 (wave 2)"
+    reports_to: head-design
+
+  # ------------------------------------------------------------ Brand and Content (active target unit)
+  - id: head-brand-content
+    title: "Head of Brand and Content"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: brand-strategist
+    status: active
+    reports_to: orchestrator
+    target_reports_to: chief-product
+    deputy: ic-content-strategist
+  - id: ic-content-strategist
+    title: "Content Strategist"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: content-strategist
+    status: active
+    reports_to: head-brand-content
+  - id: ic-technical-writer
+    title: "Technical Writer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: technical-writer
+    status: active
+    reports_to: head-brand-content
+  - id: ic-seo-specialist
+    title: "SEO Specialist"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: seo-specialist
+    status: active
+    reports_to: head-brand-content
+
+  # ------------------------------------------------------------ Capability (active target unit, H3)
+  - id: head-capability
+    title: "Head of Capability"
+    layer: 4
+    kind: manager
+    holder: agent
+    occupant: head-of-capability
+    status: active
+    reports_to: orchestrator
+    target_reports_to: chief-operations
+    deputy: ic-org-designer
+  - id: ic-org-designer
+    title: "Org Designer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: org-designer
+    status: active
+    reports_to: head-capability
+    plannable: false
+  - id: ic-capability-programme-manager
+    title: "Capability Programme Manager"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: capability-programme-manager
+    status: active
+    reports_to: head-capability
+    plannable: false
+  - id: ic-knowledge-quality-reviewer
+    title: "Knowledge Quality Reviewer"
+    layer: 6
+    kind: ic
+    holder: agent
+    occupant: knowledge-quality-reviewer
+    status: active
+    reports_to: head-capability
+    plannable: false
+
+  # ------------------------------------------------------------ Engineering (target, planned)
+  - id: chief-engineering
+    title: "Chief of Engineering"
+    layer: 2
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H4 (wave 1)"
+    reports_to: orchestrator
+  - id: principal-architect
+    # Architecture authority and ADRs; no line, no key.
+    title: "Principal Architect"
+    layer: 3
+    kind: staff
+    holder: agent
+    status: planned
+    target_occupant: principal-architect
+    reports_to: chief-engineering
+  - id: vp-product-engineering
+    title: "VP Product Engineering"
+    layer: 3
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H15 (wave 10)"
+    reports_to: chief-engineering
+  - id: head-web
+    title: "Head of Web"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H5 (wave 2)"
+    reports_to: vp-product-engineering
+    deputy: ic-frontend-engineer
+  - id: ic-cms-ecommerce-engineer
+    title: "CMS and E-commerce Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H5 (wave 2)"
+    reports_to: head-web
+  - id: head-mobile-desktop
+    title: "Head of Mobile and Desktop"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H15 (wave 10)"
+    reports_to: vp-product-engineering
+  - id: ic-ios-engineer
+    title: "iOS Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H15 (wave 10)"
+    reports_to: head-mobile-desktop
+  - id: ic-android-engineer
+    title: "Android Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H15 (wave 10)"
+    reports_to: head-mobile-desktop
+  - id: ic-cross-platform-engineer
+    title: "Cross-platform Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H15 (wave 10)"
+    reports_to: head-mobile-desktop
+  - id: head-integrations
+    title: "Head of Integrations"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H7 (wave 3)"
+    reports_to: vp-product-engineering
+    deputy: ic-payments-india-stack-engineer
+  - id: ic-payments-india-stack-engineer
+    title: "Payments and India Stack Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H7 (wave 3)"
+    reports_to: head-integrations
+  - id: ic-business-systems-engineer
+    title: "Business Systems Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H7 (wave 3)"
+    reports_to: head-integrations
+  - id: ic-messaging-telephony-engineer
+    title: "Messaging and Telephony Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H7 (wave 3)"
+    reports_to: head-integrations
+  - id: vp-data-ai-platform
+    title: "VP Data, AI and Platform"
+    layer: 3
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H11 (wave 7)"
+    reports_to: chief-engineering
+  - id: head-ai-ml
+    title: "Head of AI and ML"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H4 (wave 1, pilot)"
+    reports_to: vp-data-ai-platform
+    deputy: ic-ai-ml-engineer
+  - id: ic-ml-engineer
+    title: "ML Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H4 (wave 1, pilot)"
+    reports_to: head-ai-ml
+  - id: ic-mlops-engineer
+    title: "MLOps Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H4 (wave 1, pilot)"
+    reports_to: head-ai-ml
+  - id: head-data
+    title: "Head of Data"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H8 (wave 4)"
+    reports_to: vp-data-ai-platform
+    deputy: ic-database-engineer
+  - id: ic-data-engineer
+    title: "Data Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H8 (wave 4)"
+    reports_to: head-data
+  - id: ic-analytics-engineer
+    title: "Analytics Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H8 (wave 4)"
+    reports_to: head-data
+  - id: head-platform
+    title: "Head of Platform"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H11 (wave 7)"
+    reports_to: vp-data-ai-platform
+    deputy: ic-sre
+  - id: head-security
+    title: "Head of Security"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    target_occupant: security-engineer
+    reports_to: chief-engineering
+    # Target deputy: ic-appsec-engineer (decision record D2.1). It is not set
+    # here while appsec-engineer deputises for Platform and Quality (interim):
+    # a deputy serves one unit, and a planned position holds no deputy duty.
+    # It is set when Security activates (H12, wave 8).
+  - id: ic-cloud-security-engineer
+    title: "Cloud Security Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H12 (wave 8)"
+    reports_to: head-security
+  - id: ic-privacy-engineer
+    title: "Privacy Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H12 (wave 8)"
+    reports_to: head-security
+  - id: head-quality
+    title: "Head of Quality"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H13 (wave 8)"
+    reports_to: chief-engineering
+    deputy: ic-qa-engineer
+  - id: ic-test-automation-engineer
+    title: "Test Automation Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H13 (wave 8)"
+    reports_to: head-quality
+  - id: ic-accessibility-test-engineer
+    title: "Accessibility Test Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H13 (wave 8)"
+    reports_to: head-quality
+  - id: head-systems-frontier
+    title: "Head of Systems and Frontier"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H16 (wave 11)"
+    reports_to: chief-engineering
+  - id: ic-systems-engineer
+    title: "Systems Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H16 (wave 11)"
+    reports_to: head-systems-frontier
+  - id: ic-embedded-iot-engineer
+    title: "Embedded and IoT Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H16 (wave 11)"
+    reports_to: head-systems-frontier
+  - id: ic-web3-engineer
+    title: "Web3 Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H16 (wave 11)"
+    reports_to: head-systems-frontier
+  - id: ic-xr-games-engineer
+    title: "XR and Games Engineer"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H16 (wave 11)"
+    reports_to: head-systems-frontier
+
+  # ------------------------------------------------------------ Product (target, planned)
+  - id: chief-product
+    title: "Chief of Product"
+    layer: 2
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H10 (wave 6)"
+    reports_to: orchestrator
+  - id: head-product
+    title: "Head of Product"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H10 (wave 6)"
+    reports_to: chief-product
+    deputy: ic-product-manager
+  - id: ic-product-manager
+    title: "Product Manager"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    target_occupant: product-manager
+    reports_to: head-product
+  - id: ic-product-owner
+    title: "Product Owner"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H10 (wave 6)"
+    reports_to: head-product
+
+  # ------------------------------------------------------------ Operations (target, planned)
+  - id: chief-operations
+    title: "Chief of Operations"
+    layer: 2
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H14 (wave 9)"
+    reports_to: orchestrator
+  - id: head-delivery
+    title: "Head of Delivery"
+    layer: 4
+    kind: manager
+    holder: agent
+    status: planned
+    hire: "H14 (wave 9)"
+    reports_to: chief-operations
+    deputy: ic-delivery-manager
+  - id: ic-delivery-manager
+    title: "Delivery Manager"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H14 (wave 9)"
+    reports_to: head-delivery
+  - id: ic-delivery-planner
+    title: "Delivery Planner"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H14 (wave 9)"
+    reports_to: head-delivery
+  - id: ic-service-delivery-manager
+    title: "Service Delivery Manager"
+    layer: 6
+    kind: ic
+    holder: agent
+    status: planned
+    hire: "H14 (wave 9)"
+    reports_to: head-delivery
+
+# Units. `id` of an active key-1 unit equals its team id in review-teams.yml.
+units:
+  # Active now.
+  - id: product
+    name: Product
+    head: head-product-interim
+    status: active
+    interim: true
+    key: 1
+    ends: "H10 (wave 6): Head of Product"
+    members: [ic-business-analyst, ic-market-research]
+  - id: brand-content
+    name: Brand and Content
+    head: head-brand-content
+    status: active
+    key: 1
+    members: [ic-content-strategist, ic-technical-writer, ic-seo-specialist]
+  - id: design
+    name: Design
+    head: head-design
+    status: active
+    key: 1
+    serves: [nirmaan, ip-nirmaan]
+    members: [ic-ux-designer, ic-ui-designer, ic-design-system-engineer, ic-user-researcher]
+  - id: engineering
+    name: Engineering
+    head: head-engineering-interim
+    status: active
+    interim: true
+    key: 1
+    ends: "H4 to H8: Web, AI and ML, Data"
+    members: [ic-frontend-engineer, ic-backend-engineer, ic-database-engineer, ic-ai-ml-engineer]
+  - id: platform-quality
+    name: Platform and Quality
+    head: head-platform-quality-interim
+    status: active
+    interim: true
+    key: 1
+    serves: [nirmaan, ip-nirmaan]
+    ends: "H11 to H13: Platform, Security, Quality"
+    members: [ic-sre, ic-devops-engineer, ic-qa-engineer, ic-performance-engineer, ic-appsec-engineer]
+  - id: commercial
+    name: Commercial
+    head: head-commercial
+    status: active
+    key: 1
+    serves: [nirmaan, ip-nirmaan]
+    members: [ic-finance-estimation, ic-tax-accounts, ic-sales-partnerships, ic-client-communication, ic-customer-support, ic-pre-sales-solutions-architect]
+  - id: legal
+    name: Legal and Compliance
+    head: head-legal-compliance
+    status: active
+    key: 1
+    serves: [nirmaan, ip-nirmaan]
+    members: [ic-legal-counsel, ic-privacy-counsel, ic-licensing-counsel]
+  - id: capability
+    name: Capability
+    head: head-capability
+    status: active
+    key: 1
+    members: [ic-org-designer, ic-capability-programme-manager, ic-knowledge-quality-reviewer]
+
+  # Planned target units.
+  - id: web
+    name: Web
+    head: head-web
+    status: planned
+    members: [ic-frontend-engineer, ic-backend-engineer, ic-cms-ecommerce-engineer]
+  - id: mobile-desktop
+    name: Mobile and Desktop
+    head: head-mobile-desktop
+    status: planned
+    members: [ic-ios-engineer, ic-android-engineer, ic-cross-platform-engineer]
+  - id: integrations
+    name: Integrations
+    head: head-integrations
+    status: planned
+    members: [ic-payments-india-stack-engineer, ic-business-systems-engineer, ic-messaging-telephony-engineer]
+  - id: ai-ml
+    name: AI and ML
+    head: head-ai-ml
+    status: planned
+    members: [ic-ai-ml-engineer, ic-ml-engineer, ic-mlops-engineer]
+  - id: data
+    name: Data
+    head: head-data
+    status: planned
+    members: [ic-database-engineer, ic-data-engineer, ic-analytics-engineer]
+  - id: platform
+    name: Platform
+    head: head-platform
+    status: planned
+    serves: [nirmaan, ip-nirmaan]
+    members: [ic-sre, ic-devops-engineer, ic-performance-engineer]
+  - id: security
+    name: Security
+    head: head-security
+    status: planned
+    members: [ic-appsec-engineer, ic-cloud-security-engineer, ic-privacy-engineer]
+  - id: quality
+    name: Quality
+    head: head-quality
+    status: planned
+    members: [ic-qa-engineer, ic-test-automation-engineer, ic-accessibility-test-engineer]
+  - id: systems-frontier
+    name: Systems and Frontier
+    head: head-systems-frontier
+    status: planned
+    members: [ic-systems-engineer, ic-embedded-iot-engineer, ic-web3-engineer, ic-xr-games-engineer]
+  - id: product-target
+    name: Product
+    head: head-product
+    status: planned
+    members: [ic-product-manager, ic-business-analyst, ic-market-research, ic-product-owner]
+  - id: delivery
+    name: Delivery
+    head: head-delivery
+    status: planned
+    members: [ic-delivery-manager, ic-delivery-planner, ic-service-delivery-manager]
+
+# Stage map: every lead status and every project stage
+# (os/src/lib/db/enums.ts) has exactly one owning unit and one client-voice
+# unit, both active. `target_owner` and `target_client_voice` are the target
+# units. Until Delivery is active, Product owns APPROVED to DEPLOYMENT and MAINTENANCE;
+# until Platform is active, Platform and Quality owns MONITORING. In every
+# stage client-communication drafts and a person sends; no agent position
+# grants an OS role or holds a project gate.
+stages:
+  - id: lead-pipeline
+    kind: lead
+    statuses: [NEW, DISCOVERY, QUALIFIED, PROPOSAL, WON, LOST, SPAM]
+    owner: commercial
+    client_voice: commercial
+    target_owner: commercial
+    target_client_voice: commercial
+  - id: project-lead
+    kind: project
+    statuses: [LEAD]
+    owner: commercial
+    client_voice: commercial
+    target_owner: commercial
+    target_client_voice: commercial
+  - id: project-scope
+    # Product supplies the scope facts.
+    kind: project
+    statuses: [DISCOVERY, REQUIREMENTS]
+    owner: product
+    client_voice: commercial
+    target_owner: product-target
+    target_client_voice: commercial
+  - id: project-pricing
+    # finance-estimation drafts the estimate and the founder sets the client
+    # price; before a proposal is sent, the engineering head who would staff
+    # the project records a feasibility check.
+    kind: project
+    statuses: [ESTIMATION, PROPOSAL]
+    owner: commercial
+    client_voice: commercial
+    target_owner: commercial
+    target_client_voice: commercial
+  - id: project-build
+    kind: project
+    statuses: [APPROVED, PLANNING, DESIGN, ARCHITECTURE, IMPLEMENTATION, QA, SECURITY_REVIEW, DEPLOYMENT]
+    owner: product
+    client_voice: commercial
+    target_owner: delivery
+    target_client_voice: delivery
+  - id: project-monitoring
+    kind: project
+    statuses: [MONITORING]
+    owner: platform-quality
+    client_voice: commercial
+    target_owner: platform
+    target_client_voice: commercial
+  - id: project-maintenance
+    kind: project
+    statuses: [MAINTENANCE]
+    owner: product
+    client_voice: commercial
+    target_owner: delivery
+    target_client_voice: commercial
+
+# Exceptions to span or deputies. Each has a reason and a review_by date; the
+# validator fails once the date has passed, and fails an exception that no
+# longer excuses anything.
+exceptions:
+  - position: head-product-interim
+    rule: span
+    reason: "Product (interim) has 2 members until Head of Product and product-owner are hired (H10, wave 6)."
+    review_by: "2027-01-18"
+  - position: head-legal-compliance
+    rule: deputy
+    reason: "Legal and Compliance has no deputy, permanently: if Legal's key 1 defers, the PR stops for the founder."
+    review_by: "2027-10-18"

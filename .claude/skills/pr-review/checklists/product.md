@@ -1,4 +1,4 @@
-# Product (lead: product-manager; members business-analyst, market-research)
+# Product
 
 FAIL when: a capability, status or date is not supported by
 docs/product/<product>.md or docs/assessment/current-state.md; a requirement

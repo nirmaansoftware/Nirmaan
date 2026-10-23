@@ -4,6 +4,8 @@
  * on the artifact file itself so the artifact is self-describing.
  */
 
+import type { LoadedSkill } from "./skills";
+
 export type Confidence = "HIGH" | "MEDIUM" | "LOW";
 
 export type HandoffStatus =
@@ -25,6 +27,8 @@ export interface HandoffMetadata {
   open_questions: string[];
   next_agent?: string;
   review_required: boolean;
+  /** Skills loaded for this run, as `id@sha` (git blob SHA). Absent when none was named. */
+  skills?: string[];
 }
 
 export interface AgentPermissions {
@@ -42,4 +46,6 @@ export interface AgentDefinition {
   permissions: AgentPermissions;
   /** Full markdown body (mission, expertise, responsibilities, ... escalation rules) — used as the agent's system prompt. */
   body: string;
+  /** Skills named for this call (loadAgent's `skills` option), checked against `held_by`. Empty when none was named. */
+  skills: LoadedSkill[];
 }
