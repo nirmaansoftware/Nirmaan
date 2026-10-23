@@ -5,7 +5,7 @@
 // response in order, and records each call to calls.jsonl beside it.
 //
 // Response types: verdict {verdict, findings, sha?}, result {text},
-// stdout {text}, sleep {ms}, rate_limit, error.
+// stdout {text}, sleep {ms}, rate_limit, crash (no output), error.
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,7 @@ process.stdin.on('end', async () => {
     case 'result': ok(r.text); break;
     case 'stdout': process.stdout.write(r.text); break;
     case 'sleep': await new Promise((res) => setTimeout(res, r.ms)); ok('{}'); break;
+    case 'crash': process.exitCode = 1; break; // exits with no output at all
     case 'rate_limit': out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'API Error: 429 rate limit exceeded' }); break;
     default: out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'something broke' }); process.exitCode = 1;
   }
