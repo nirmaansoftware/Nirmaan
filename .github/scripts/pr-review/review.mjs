@@ -326,7 +326,7 @@ export async function runReview(o) {
       const parse = (r) => { try { return { raw: r.structured ?? parseVerdictText(r.text) }; } catch (e) { return { error: e.message }; } };
       const validate = (raw) => validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count, proxy, strict, ...(composite ? { composite } : {}) });
       let r = await call(user, null);
-      if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, callOutcome: r.kind, deferralKind: r.kind === 'rate_limit' ? 'rate-limit' : r.kind === 'timeout' ? 'timeout' : 'call-failed', model };
+      if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, callOutcome: r.kind, deferralKind: r.kind === 'rate_limit' ? 'rate-limit' : r.kind === 'timeout' ? 'timeout' : 'call-failed', ...(r.noOutput ? { noOutput: true } : {}), model };
       let p = parse(r);
       if (p.error) return { status: 'deferred', reason: `the reviewer's output is not valid JSON (${p.error})`, validationError: `not valid JSON: ${p.error}`, deferralKind: 'invalid-output', model };
       let v = validate(p.raw);
@@ -398,7 +398,35 @@ export async function runReview(o) {
       }
       const user = userPrompt({ ...promptCtx, key: 1, team: teamId });
       out(`pr-review: key 1 for ${base.teamName} (${base.role})...`);
-      key1.push({ ...base, ...(await review({ key: 1, team: teamId, role: base.role, model: o.models.key1, system, user, strict: strictKey1(teamId) })) });
+      let res = { ...base, ...(await review({ key: 1, team: teamId, role: base.role, model: o.models.key1, system, user, strict: strictKey1(teamId) })) };
+      // Deputy try (decision D4.4): when the lead's call timed out, or its
+      // process failed with no output at all (after its retry), the unit's
+      // deputy from main's org chart gets one try, marked "deputy" on the
+      // comment and the check. Not for a rate limit (same plan); not for any
+      // failure that produced output (an error result, invalid output or
+      // failed validation: PR text can induce those); not for a missing
+      // spec or the legal team (no deputy). If the deputy does not answer either, the key defers as
+      // before and the loop stops. A repair run that times out after a
+      // failed validation is still a failed validation: no deputy.
+      const dep = derived.ok ? derived.key1.find((k) => k.team === teamId)?.deputy?.occupant : null;
+      const noAnswer = res.deferralKind === 'timeout' || (res.deferralKind === 'call-failed' && res.noOutput === true);
+      if (res.status === 'deferred' && noAnswer && !res.validationError && dep && !cfg.legal_teams.includes(teamId)) {
+        try {
+          const leadSection = markdownSection(roleSpec(team.lead), cfg.lead_section);
+          const dsys = key1SystemPrompt({
+            ...promptCtx, team, lead: `${dep}, deputy for ${team.lead}`, leadSpec: roleSpec(dep),
+            checklists: [baseChecklist(), ...(leadSection ? [{ name: `${team.lead} Key 1 review`, text: leadSection, source: 'spec' }] : teamChecklists(teamId, team.lead))],
+            memberSpecs: classification.checklists.filter((c) => new Set([team.lead, ...(team.members ?? [])]).has(c) && c !== team.lead).map((role) => ({ role, text: memberText(role) })),
+          });
+          out(`pr-review: key 1 for ${base.teamName}: ${base.role} did not answer (${res.deferralKind}); deputy ${dep}...`);
+          const first = res.reason;
+          res = { ...base, role: `${dep} (deputy for ${team.lead})`, deputy: dep, ...(await review({ key: 1, team: teamId, role: dep, model: o.models.key1, system: dsys, user, strict: strictKey1(teamId) })) };
+          res.notes = [...(res.notes ?? []), `Deputy: ${team.lead} did not answer (${first}); ${dep}, the unit's deputy in main's org chart, reviewed instead (one try).`];
+        } catch (e) {
+          res.notes = [...(res.notes ?? []), `No deputy try: ${e.message}.`];
+        }
+      }
+      key1.push(res);
     }
 
     // The composite key 1's inputs: the base checklist once, each owning
@@ -460,7 +488,7 @@ export async function runReview(o) {
     for (const r of key1) r.url = await comment(renderComment(r, ctx));
     const k1fail = key1.filter((r) => r.status === 'fail'), k1def = key1.filter((r) => r.status === 'deferred');
     const sha7 = headSha.slice(0, 7);
-    const who = key1.length === 1 ? key1[0].role : `${key1.length} team leads`;
+    const who = key1.length === 1 ? key1[0].role : `${key1.length} team leads${key1.some((r) => r.deputy) ? ', with a deputy' : ''}`;
     const k1url = (k1fail[0] ?? k1def[0] ?? key1[0])?.url;
     if (key1.length === 0) await check('key1', 'pending', `review deferred: no owning team computed for ${sha7}`);
     else if (k1fail.length) await check('key1', 'failure', `agent review (${who}), head ${sha7}: fail (${k1fail.map(failedTeamNames).join(', ')})`, k1url);
