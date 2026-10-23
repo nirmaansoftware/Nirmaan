@@ -150,12 +150,20 @@ approval.
   key 2 and the proxy pass; there is no third check, so the ruleset needs no
   change.
 - **What it may not decide** returns `needs-founder`: new spending (a paid
-  service, account, API key billing or runner); contracts and legal counsel;
-  public names and renames; prices published to clients; turning on the OS
-  worker or any sending; and anything that weakens the review system's own
-  gates (removing a key, disabling CI, widening a reviewer's tools, or
-  changing the proxy itself). It also fails attribution other than the
-  company "Nirmaan" (never a person's name or personal email address).
+  service, account, API key billing, a runner, or a dependency or tool that
+  needs a paid licence); contracts and legal counsel; and turning on the OS
+  worker or any sending. Since the founder's record of 2026-10-20
+  ([2026-10-20-founder-proxy-widened.md](2026-10-20-founder-proxy-widened.md))
+  the proxy decides everything else itself, including the open founder items
+  it names. When a change could be read either way, it decides on the merits:
+  `needs-founder` only when the change is clearly one of these items, or when
+  it cannot tell whether a change adds spending
+  ([agents/founder-proxy/agent.md](../../agents/founder-proxy/agent.md)). A change that weakens a review gate (removes or skips a key, a
+  required CI job or a required check; lets a check pass by default, on a
+  timeout or on a deferred review; reads rules from the pull request instead
+  of `main`; or lets the loop merge without both keys and the proxy) is a
+  fail, not `needs-founder`. It also fails attribution other than the company
+  "Nirmaan" (never a person's name or personal email address).
 - **Needs the founder.** `review/executive` stays pending and the loop labels
   the PR `needs-founder`. The founder decides on GitHub: their own review
   approving the current head commit lets the script pass `review/executive`
@@ -510,6 +518,25 @@ state (rounds, findings seen, the last head it pushed, lock wait) is in
 `~/.nirmaan/pr-review/loop/`. The needs-founder digest, the health alerts
 and the turnaround report read these records:
 [pr-loop-runbook.md](pr-loop-runbook.md).
+
+**Author-side usage.** Author pipelines that run `claude -p` steps (a
+writer, a checker, an eval) can run each step through
+`.github/scripts/author/run.mjs`, so the plan's use by authors is logged beside
+the review loop's:
+
+```sh
+node .github/scripts/author/run.mjs --role content-strategist --step writer \
+  [--pr <n>] [--repo <owner/name>] -- -p --model sonnet < prompt.txt
+```
+
+Everything after `--` goes to `claude` unchanged (with `--output-format json`
+added when not given; another output format is refused, since the usage is
+read from the JSON result). Input, output and exit code pass through. Each run
+appends one line (`kind` `author`: role, step, model, outcome, exit code,
+duration, input, output and cache tokens; never the prompt or the answer) to
+`calls.jsonl` in the state directory (`NIRMAAN_REVIEW_STATE_DIR`, default
+`~/.nirmaan/pr-review`), outside the repository. Bad arguments exit 2 and run
+nothing.
 
 **Running it.** It runs on the founder's Mac with the Mac's own `claude` login
 (the plan) and `gh` login, so it adds no spend and no secret in GitHub
