@@ -405,9 +405,10 @@ export async function runReview(o) {
       // Not for a rate limit (same plan), invalid output or failed validation
       // (PR text can induce those), a missing spec, or the legal team (no
       // deputy). If the deputy does not answer either, the key defers as
-      // before and the loop stops.
+      // before and the loop stops. A repair run that times out after a
+      // failed validation is still a failed validation: no deputy.
       const dep = derived.ok ? derived.key1.find((k) => k.team === teamId)?.deputy?.occupant : null;
-      if (res.status === 'deferred' && ['timeout', 'call-failed'].includes(res.deferralKind) && dep && !cfg.legal_teams.includes(teamId)) {
+      if (res.status === 'deferred' && ['timeout', 'call-failed'].includes(res.deferralKind) && !res.validationError && dep && !cfg.legal_teams.includes(teamId)) {
         try {
           const leadSection = markdownSection(roleSpec(team.lead), cfg.lead_section);
           const dsys = key1SystemPrompt({

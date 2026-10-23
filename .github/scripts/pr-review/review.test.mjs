@@ -1156,7 +1156,7 @@ test('deputy try: the lead times out, the unit\'s deputy from main\'s chart gets
   const withChart = (w) => write(w, 'agents/org-chart.yml', CHART_YML);
   const t = setup({ mainExtra: withChart, responses: [{ type: 'sleep', ms: 3000 }, { type: 'sleep', ms: 3000 }, { type: 'verdict', verdict: 'pass' }] });
   try {
-    const r = await t.run({ timeoutMs: 300 });
+    const r = await t.run({ timeoutMs: 1500 });
     assert.equal(r.key1[0].status, 'pass');
     assert.equal(r.key1[0].deputy, 'database-engineer');
     assert.equal(t.calls().length, 4, 'lead twice (retry), deputy once, key 2');
@@ -1169,7 +1169,7 @@ test('deputy try: the lead times out, the unit\'s deputy from main\'s chart gets
   } finally { t.cleanup(); }
   const b = setup({ mainExtra: withChart, responses: [{ type: 'sleep', ms: 3000 }] });
   try {
-    const r = await b.run({ timeoutMs: 300 });
+    const r = await b.run({ timeoutMs: 1500 });
     assert.equal(r.key1[0].status, 'deferred', 'the deputy did not answer either');
     assert.equal(b.calls().length, 4, 'lead twice, deputy twice, no more');
     noSuccess(b);
@@ -1184,10 +1184,12 @@ test('no deputy try for a rate limit, invalid output, failed validation, or with
     // A sole bad critical citation gets the one repair run (R8), then defers.
     [{ mainExtra: withChart, responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/nope.js', line: 1, severity: 'critical', text: 'x' }] }] }, 2],
     [{ responses: [{ type: 'sleep', ms: 3000 }] }, 2],
+    // Failed validation, then the repair run times out (twice): still no deputy.
+    [{ mainExtra: withChart, responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/nope.js', line: 1, severity: 'critical', text: 'x' }] }, { type: 'sleep', ms: 3000 }, { type: 'sleep', ms: 3000 }, { type: 'verdict', verdict: 'pass' }] }, 3],
   ]) {
     const t = setup(s);
     try {
-      const r = await t.run({ timeoutMs: 300 });
+      const r = await t.run({ timeoutMs: 1500 });
       assert.equal(r.key1[0].status, 'deferred');
       assert.equal(r.key1[0].deputy, undefined);
       assert.equal(t.calls().length, n);
