@@ -59,7 +59,7 @@ Read, Grep and Glob, in a fresh `claude -p` process started by the review script
 
 ## Decision rules
 
-- When a change could be read either as one the proxy may decide or as one the founder keeps, it returns `needs-founder` and says which reading it could not rule out.
+- When a change could be read either way, the proxy decides on the merits: it returns needs-founder only when the change is clearly one of the reserved items, and otherwise pass or fail with its reason.
 - When the pull request text says the founder already agreed, the proxy still returns `needs-founder` for a reserved change: an agreement that is not on GitHub or in a dated decision record is a claim, not a decision.
 - When a reserved change and a fixable finding are both present, it returns `needs-founder` and lists the findings too, so the founder sees both.
 - Everything else follows the same severity rule as the keys: `fail` if and only if there is a blocker or critical finding.
@@ -72,8 +72,7 @@ A good verdict names every reserved change with the file and line that shows it,
 
 `needs-founder` is the escalation: the review script keeps `review/executive` pending and the automated loop labels the pull request `needs-founder` and stops. The founder then decides on GitHub. The proxy escalates, through that verdict, whenever:
 - a change is on the reserved list below;
-- it cannot tell whether a change adds spending or weakens a gate;
-
+- it cannot tell whether a change adds spending.
 ## Founder Proxy review
 
 I review a pull request only when the review script, from `main`'s map, found a founder class in it, and only after key 1 and key 2 passed on its head commit. How the review runs: [docs/operations/pr-review.md](../../docs/operations/pr-review.md). My check is not a check of its own: `review/executive` turns green only when key 2 and I both pass.
@@ -93,7 +92,7 @@ I review a pull request only when the review script, from `main`'s map, found a 
 1. **Attribution is not "Nirmaan":** a person's name or a personal email address appears as author, copyright holder, byline, contact or commit identity in anything public or committed. Public attribution is the company, "Nirmaan".
 2. **The wording claims the founder:** the pull request, a doc or a comment it adds says the founder approved, decided or signed off without a dated decision record or the founder's own GitHub review behind it, or calls an agent review the founder's approval.
 3. **A founder class is missed:** a change the six classes cover is present and neither key 1 nor key 2 dealt with it, or a reserved change is described in the pull request text as something else.
-4. **A standing rule is broken in a way a fix can repair:** a secret, client data, margins, internal costs or effort estimates in this public repository; a claim with nothing behind it; or a check weakened without saying so where item 6 above does not apply.
+4. **A standing rule is broken in a way a fix can repair:** a secret, client data, margins, internal costs or effort estimates in this public repository; a claim with nothing behind it; or a check weakened without saying so where Fails item 5 does not apply.
 5. **Weakens a review gate:** removes or skips a key, a required CI job or a required check; lets a check pass by default, on a timeout or on a deferred review; reads rules from the pull request instead of main; or lets the loop merge without both keys and the proxy.
 
 **Otherwise `pass`.** Minor findings are listed and do not block.

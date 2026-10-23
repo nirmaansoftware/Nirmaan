@@ -331,6 +331,16 @@ test('classification: os keeps the rest of os/ (API routes, scripts, config), wi
   for (const f of files.filter((x) => x.startsWith('os/'))) assert.ok(ruleIds(map, f).length > 0 || (map.named_files ?? []).some((n) => n.paths.includes(f)), f);
 });
 
+test('classification: a dated record in docs/operations is a frozen decision record (Product)', () => {
+  const { map, tracked } = realMap();
+  const file = 'docs/operations/2026-10-20-founder-proxy-widened.md';
+  assert.deepEqual(ruleIds(map, file), ['decision-records']);
+  assert.deepEqual(owners(map, file, tracked).teams, ['product']);
+  assert.equal(map.rules.find((r) => r.id === 'decision-records').frozen, true);
+  // An undated operations doc is not caught by the dated glob.
+  assert.ok(!ruleIds(map, 'docs/operations/pr-review.md').includes('decision-records'));
+});
+
 test('classification: a website page-only change runs the frontend-engineer checklist (website-frontend)', () => {
   const { map, tracked } = realMap();
   const page = owners(map, 'website/src/index.njk', tracked);
@@ -349,4 +359,108 @@ test('repository: no tracked file is owned by more than three teams (a PR with m
   const { map, files, tracked } = realMap();
   const over = files.map((f) => [f, owners(map, f, tracked).teams]).filter(([, t]) => t.length > 3).map(([f, t]) => `${f}: ${t.join(', ')}`);
   assert.deepEqual(over, []);
+});
+
+test('content rules: exclude skips files; an exclude may name a folder not yet tracked; a marker may not be excluded', () => {
+  const map = fixture();
+  map.content_rules[0].exclude = ['docs/**'];
+  assert.deepEqual(contentHits(map, 'docs/x.md', 'costs ₹5'), []);
+  assert.deepEqual(contentHits(map, 'src/a.js', 'costs ₹5'), ['money']);
+  map.content_rules[0].exclude = ['not-yet/**'];
+  assert.deepEqual(run(map), []);
+  map.content_rules[0].exclude = ['docs/**'];
+  map.content_rules[0].markers = [{ file: 'docs/x.md' }];
+  assert.match(run(map).join('\n'), /content rule money: marker file docs\/x\.md is excluded/);
+});
+
+test('classification: in skill files, examples and capability records, "payments", "GST" or "versus" is not founder class C or E; elsewhere it still is', () => {
+  const { map } = realMap();
+  for (const line of ['Card payments go through the gateway.', 'Invoices show GST separately.', 'REST versus GraphQL for this API.']) {
+    for (const file of ['skills/web/form-validation.md', 'examples/web/form-validation/README.md', 'capability/records/a.jsonl', 'capability/levels.json']) {
+      const hits = contentHits(map, file, line);
+      assert.ok(!hits.includes('money') && !hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
+    }
+    // Folder READMEs, the skill template, nested skill files and the tools stay in scope.
+    for (const file of ['docs/product/x.md', 'skills/README.md', 'skills/_template.md', 'skills/web/notes/x.md', 'examples/README.md', 'capability/README.md', 'capability/tools/levels.mjs']) {
+      const hits = contentHits(map, file, line);
+      assert.ok(hits.includes('money') || hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
+    }
+  }
+});
+
+test('classification: capability/** is Capability with the knowledge-quality-reviewer checklist; its machinery keeps Engineering and database-engineer', () => {
+  const { map, tracked } = realMap();
+  const record = owners(map, 'capability/records/2026-10.jsonl', new Set([...tracked, 'capability/records/2026-10.jsonl']));
+  assert.deepEqual(record.teams, ['capability']);
+  assert.deepEqual(record.checklists, ['knowledge-quality-reviewer']);
+  for (const file of ['capability/README.md', 'capability/levels.json', 'capability/tools/levels.mjs', 'capability/records/schema.json']) {
+    const o = owners(map, file, tracked);
+    assert.deepEqual([...o.teams].sort(), ['capability', 'engineering'], file);
+    assert.deepEqual([...o.checklists].sort(), ['database-engineer', 'knowledge-quality-reviewer'], file);
+  }
+});
+
+test('classification: knowledge-legal adds Legal and Compliance (legal-compliance) with no founder class, only in the knowledge folders', () => {
+  const { map } = realMap();
+  const rule = map.content_rules.find((r) => r.id === 'knowledge-legal');
+  assert.deepEqual(rule.adds_teams, ['legal']);
+  assert.equal(rule.founder_class, undefined);
+  for (const line of ['Check the dataset licence first.', 'Model weights are not copied.', 'This is not legal advice.', 'Erasure under GDPR and the DPDP Act.']) {
+    assert.ok(contentHits(map, 'capability/records/a.jsonl', line).includes('knowledge-legal'), line);
+    assert.ok(contentHits(map, 'skills/web/form-validation.md', line).includes('knowledge-legal'), line);
+    assert.ok(contentHits(map, 'examples/web/form-validation/README.md', line).includes('knowledge-legal'), line);
+  }
+  assert.ok(!contentHits(map, 'docs/engineering/testing.md', 'Check the dataset licence.').includes('knowledge-legal'));
+  assert.ok(!contentHits(map, 'capability/README.md', 'Levels are computed from records.').includes('knowledge-legal'));
+});
+
+test('classification: internal-org on a site page adds Brand and Content as founder class E', () => {
+  const { map } = realMap();
+  const rule = map.content_rules.find((r) => r.id === 'internal-org');
+  assert.deepEqual(rule.adds_teams, ['brand-content']);
+  assert.equal(rule.founder_class, 'E');
+  for (const line of ['Every agent has a skill level.', 'The orchestrator assigns the work.', 'Some skills are knowledge-only.', 'We run 28 agents.', 'Level: Tested']) {
+    assert.ok(contentHits(map, 'website/src/index.njk', line).includes('internal-org'), line);
+  }
+  assert.ok(!contentHits(map, 'docs/operations/pr-review.md', 'The orchestrator holds key 2.').includes('internal-org'));
+  assert.ok(!contentHits(map, 'website/src/index.njk', 'We build web apps for growing businesses.').includes('internal-org'));
+});
+
+// Classification fixtures for licence terms and export control (content
+// rules licence-and-export and own-licence-field): founder class D, so the
+// Founder Proxy sees them. Against the real map, through the review script's
+// own classify().
+test('classification: licence text, licence fields, restrictive dependency licences and export control are founder class D', async () => {
+  const { classify } = await import('./pr-review/lib.mjs');
+  const { map, tracked } = realMap();
+  const diffOf = (file, added, { isNew = false } = {}) => [
+    `diff --git a/${file} b/${file}`,
+    isNew ? '--- /dev/null' : `--- a/${file}`,
+    `+++ b/${file}`,
+    '@@ -1,1 +1,2 @@',
+    ...added.map((l) => `+${l}`),
+  ].join('\n');
+  const cls = (file, added, opts = {}) => classify(map, [{ path: file, status: opts.isNew ? 'A' : 'M' }], diffOf(file, added, opts), tracked);
+  const cases = [
+    ['LICENSE', ['MIT License', '', 'Permission is hereby granted, free of charge, to any person'], { isNew: true }],
+    ['NOTICE', ['This product includes software licensed under the Apache License, Version 2.0.'], { isNew: true }],
+    ['os/src/lib/x.ts', ['// SPDX-License-Identifier: Apache-2.0']],
+    ['os/package.json', ['  "license": "MIT",']],
+    ['website/package.json', ['  "licence": "UNLICENSED",']],
+    ['os/package-lock.json', ['      "license": "AGPL-3.0-only",']],
+    ['docs/operations/export.md', ['The RTL generator is export-controlled technology (EAR99 at most).'], { isNew: true }],
+    ['docs/legal/terms-draft.md', ['These licence terms apply to skills/ and examples/.'], { isNew: true }],
+  ];
+  for (const [file, added, opts] of cases) {
+    const c = cls(file, added, opts);
+    assert.ok(c.founder.D, `${file}: founder class D`);
+    assert.ok(c.teams.includes('legal'), `${file}: Legal and Compliance key 1`);
+    assert.ok(c.checklists.includes('legal-compliance'), `${file}: legal-compliance checklist`);
+  }
+  // Not every mention: a routine lockfile bump, a permissive dependency, and prose about licences are not founder class D.
+  for (const [file, added] of [
+    ['os/package-lock.json', ['      "version": "1.2.4",', '      "license": "MIT",']],
+    ['docs/engineering/testing.md', ['Run the tests before you open a PR.']],
+    ['README.md', ['IP Nirmaan is a separate repository.']],
+  ]) assert.equal(cls(file, added).founder.D, undefined, file);
 });

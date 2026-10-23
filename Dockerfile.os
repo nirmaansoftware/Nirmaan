@@ -20,11 +20,14 @@ RUN npm install -g @anthropic-ai/claude-code@latest && claude --version
 WORKDIR /srv/os
 COPY --from=build /srv/os ./
 COPY agents /srv/agents
+# Skill files, loaded only when a caller names them (os/src/lib/agents/skills.ts).
+COPY skills /srv/skills
 ENV NODE_ENV=production \
     PORT=3000 \
     DATABASE_URL=file:/data/nirmaan.db \
     PROJECTS_ROOT=/data/projects \
     AGENTS_ROOT=/srv/agents \
+    SKILLS_ROOT=/srv/skills \
     CLAUDE_CODE_EXECPATH=claude \
     NEXT_TELEMETRY_DISABLED=1
 EXPOSE 3000

@@ -40,15 +40,12 @@ Each team has one lead, who holds key 1 for that team. Members' checklists run
 inside the lead's review and are cited by name; there is one key-1 verdict per
 team.
 
-| Team | Lead (key 1) | Members |
-|---|---|---|
-| Executive | orchestrator (key 2 on every PR, never key 1) | none |
-| Product | product-manager | business-analyst, market-research |
-| Brand and Content | brand-strategist | content-strategist, technical-writer, seo-specialist |
-| Design | creative-director | ux-designer, ui-designer, design-system-engineer |
-| Engineering | principal-architect | frontend-engineer, backend-engineer, database-engineer, ai-ml-engineer |
-| Platform and Quality | security-engineer | sre, devops-engineer, qa-engineer, performance-engineer |
-| Business | legal-compliance | finance-estimation, tax-accounts, legal-counsel, sales-partnerships, client-communication |
+The teams, their leads and members are listed in the team table of
+[`agents/README.md`](../../agents/README.md#teams), which is generated from the
+org chart [`agents/org-chart.yml`](../../agents/org-chart.yml). This page does
+not copy it. The orchestrator holds key 2 on every PR and never key 1. A
+repo-checks step (`node .github/scripts/org-chart.mjs`) fails when the chart,
+that table and the teams in `review-teams.yml` disagree.
 
 legal-counsel never holds a key. Role specs are in [`agents/`](../../agents/README.md).
 
@@ -62,8 +59,9 @@ This page does not copy its rules. In short:
   two owners needs both leads.
 - A file no rule matches belongs to Engineering.
 - Content rules sit beside path rules: a price, currency, discount, refund or
-  guarantee, or a client, partner or prospect name, anywhere in the diff adds
-  Business; a market or competitor claim adds Product's market check.
+  guarantee anywhere in the diff adds Commercial; a client, partner or
+  prospect name adds Commercial and Legal and Compliance; a market or
+  competitor claim adds Product's market check.
 - Generated files follow their source (`website/public/**` follows
   `website/src/**`).
 - The shared layer copied into ip.nirmaan.online is owned by Design and
@@ -159,7 +157,8 @@ approval.
   founder can turn it off in the ruleset settings.
 
 Changes to the privacy notice or terms also notify the IP council chair,
-because they govern the IP site too.
+because they govern the IP site too. So do changes to the shared layer that
+ip.nirmaan.online copies (`review-teams.yml`, named file `shared-layer`).
 
 **Holding a PR.** A `hold` label tells the review script not to pass key 2.
 The founder's firm stop is converting the PR to a draft or turning auto-merge
@@ -203,6 +202,23 @@ What the script does, in order:
    body: every other copy of the block, and any lone open or close marker
    without its pair, is removed, so the only markers left are the script's
    own.
+   **Key derivation (shadow).** After classification the script also works out
+   who would hold the keys under `main`'s org chart
+   (`agents/org-chart.yml`, read by `.github/scripts/pr-review/derive.mjs`):
+   key 1 is the head of each owning unit (a vacant head rolls up to the
+   nearest active manager); key 2 is the lowest active manager above every
+   key-1 holder, never a key-1 holder and never the human founder; the
+   Orchestrator holds key 2 for founder classes A and B and for any PR that
+   touches `agents/**`, `.github/**`, `.claude/**`, `AGENTS.md` or
+   `CLAUDE.md`. It also records each derived holder's deputy from the chart
+   (none for the legal team). This is logged (`kind` `derive` in
+   `calls.jsonl`, beside the actual holders) and stated in one line of the
+   key-2 comment. It changes nothing that is posted: key 2 stays
+   `key2_role` (the Orchestrator), and no deputy reviews. Without a chart on
+   `main` the line says the derivation is not available. Every deferred key
+   also names its kind (`rate-limit`, `timeout`, `call-failed`,
+   `invalid-output`, `validation`, `missing-spec`, `missing-standard`) in
+   the loop's per-phase line.
 5. **CI first.** For each required job (`os-test`, `website-build`,
    `repo-checks`) the newest run on the head counts (by start time, then run
    id), and a run still in progress, such as a rerun, always means waiting: an
@@ -351,10 +367,10 @@ Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
 **When it stops.** The loop labels the PR `needs-founder` and comments why when:
 three fix rounds are done and a key still fails; the same finding (same key,
 team, file and wording) fails again after a fix; CI fails after a fix; the
-branch has a merge conflict; a key is deferred (rate limit, bad output,
+branch has a merge conflict; a key is deferred (bad output, a failed call,
 missing spec), or so is the Founder Proxy; the Founder Proxy returns
 `needs-founder` (until the founder's own review approves the head); the fixer
-hits a rate limit, gives no valid answer, cannot
+gives no valid answer, cannot
 fix every finding or changes nothing; a local check fails; the auto-merge
 setting cannot be read or `gh pr merge --auto` fails; the branch is behind
 `main` and the update fails; or any error (after the retries below for
@@ -366,6 +382,17 @@ gh or git error can carry them. If someone pushes while the fixer
 works, the round is dropped without a label and the new head is reviewed from
 scratch. Removing the `needs-founder` label lets the loop resume with a fresh
 round count.
+
+**Rate limits pause, they do not stop.** When a key or the Founder Proxy is
+deferred only because of a rate limit (the plan's session or usage limit,
+after its one retry), or the fixer hits one, the loop does not label the PR
+and does not stop: the key's check stays pending, nothing is pushed, and the
+whole loop makes no model call for any PR for `rate_limit_pause_minutes` (30,
+in `.github/scripts/pr-loop/config.json`). Then it reviews the same head
+again. A fixer round cut short this way does not count its findings as seen.
+No deputy takes the key: a deputy runs on the same plan and would hit the same
+limit. Any other
+deferral beside the rate limit still stops the loop.
 
 **Who fixes what.** Before a fix round the loop tags each finding as
 fixable by the loop or by the author, from the finding's path, never from the

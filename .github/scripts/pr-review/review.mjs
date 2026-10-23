@@ -53,6 +53,7 @@ import {
   VERDICT_SCHEMA, verdictCacheName, withFounderClassBlock,
 } from './lib.mjs';
 import { claudeArgs, reviewerEnv, runWithRetry } from './claude.mjs';
+import { deriveKeys, shadowNote } from './derive.mjs';
 import { appConfigFromEnv, createClient, ghToken, installationToken } from './github.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -193,6 +194,23 @@ export async function runReview(o) {
     ctx.classification = classification;
     out(`pr-review: #${o.pr} head ${headSha.slice(0, 7)}; owning teams: ${classification.teams.join(', ')}; founder classes: ${Object.keys(classification.founder).join(', ') || 'none'}`);
 
+    // Key derivation in shadow mode (derive.mjs): who would hold the keys
+    // under main's org chart, logged beside who holds them. It never changes
+    // what is posted or who reviews, and any problem with it is only logged.
+    let derived;
+    try {
+      const chartText = cfg.org_chart && existsSync(join(mainDir, cfg.org_chart)) ? readFileSync(join(mainDir, cfg.org_chart), 'utf8') : null;
+      derived = chartText === null ? { ok: false, error: `no ${cfg.org_chart ?? 'org chart'} on main` }
+        : deriveKeys(parseYaml(chartText), { teams: classification.teams, founderClasses: Object.keys(classification.founder), files: files.flatMap((f) => (f.from ? [f.from, f.path] : [f.path])) }, { noDeputyUnits: cfg.legal_teams });
+    } catch (e) { derived = { ok: false, error: `derivation failed: ${e.message}` }; }
+    logCall(o.stateDir, {
+      kind: 'derive', repo: cfg.repo, pr: o.pr, head: headSha, ok: derived.ok, error: derived.ok ? null : derived.error,
+      derived_key2: derived.ok ? derived.key2.occupant : null, derived_key2_position: derived.ok ? derived.key2.position : null, derived_reason: derived.ok ? derived.reason : null,
+      derived_key2_deputy: derived.ok ? derived.key2.deputy?.occupant ?? null : null,
+      derived_key1: derived.ok ? derived.key1.map((k) => ({ team: k.team, holder: k.occupant, position: k.position, rolled_up: k.rolledUp, deputy: k.deputy?.occupant ?? null })) : null,
+      actual_key2: cfg.key2_role, actual_key1: classification.teams.map((id) => ({ team: id, holder: (map.teams ?? []).find((t) => t.id === id)?.lead ?? null })),
+    });
+
     // The founder-class declaration in the PR body, kept by this script so a
     // PR flags its classes even when they come from content (a fixer cannot
     // edit PR text). Not edited with --no-post; the reviewers get it either way.
@@ -299,11 +317,11 @@ export async function runReview(o) {
           onAttempt: (res, attempt) => logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, role, model, reported_model: res.reportedModel ?? null, attempt, outcome: res.kind, duration_ms: res.durationMs, ...(res.tokens ?? {}), prompt_chars: system.length + user.length }),
         },
       );
-      if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, callOutcome: r.kind, model };
+      if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, callOutcome: r.kind, deferralKind: r.kind === 'rate_limit' ? 'rate-limit' : r.kind === 'timeout' ? 'timeout' : 'call-failed', model };
       let raw;
-      try { raw = r.structured ?? parseVerdictText(r.text); } catch (e) { return { status: 'deferred', reason: `the reviewer's output is not valid JSON (${e.message})`, validationError: `not valid JSON: ${e.message}`, model }; }
+      try { raw = r.structured ?? parseVerdictText(r.text); } catch (e) { return { status: 'deferred', reason: `the reviewer's output is not valid JSON (${e.message})`, validationError: `not valid JSON: ${e.message}`, deferralKind: 'invalid-output', model }; }
       const v = validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count, proxy });
-      if (!v.ok) return { status: 'deferred', reason: `the verdict failed validation: ${v.error}`, validationError: v.error, model };
+      if (!v.ok) return { status: 'deferred', reason: `the verdict failed validation: ${v.error}`, validationError: v.error, deferralKind: 'validation', model };
       const result = { status: v.verdict.verdict, verdict: v.verdict, notes: v.notes, model: r.reportedModel ?? model };
       mkdirSync(cacheDir, { recursive: true });
       writeFileSync(cacheFile, JSON.stringify(result));
@@ -323,14 +341,14 @@ export async function runReview(o) {
         const memberSpecs = classification.checklists.filter((c) => members.has(c) && c !== team.lead).map((role) => ({ role, text: memberText(role) }));
         system = key1SystemPrompt({ ...promptCtx, team, lead: team.lead, leadSpec: roleSpec(team.lead), checklists: [baseChecklist(), ...teamChecklists(teamId, team.lead)], memberSpecs });
       } catch (e) {
-        key1.push({ ...base, status: 'deferred', reason: `spec or checklist missing on main: ${e.message}` });
+        key1.push({ ...base, status: 'deferred', reason: `spec or checklist missing on main: ${e.message}`, deferralKind: 'missing-spec' });
         continue;
       }
       // A team whose standard document does not exist on main yet fails
       // closed (Design until docs/design/visual-direction.md is on main).
       const missing = (cfg.fail_closed_without?.[teamId] ?? []).filter((rel) => !existsSync(join(mainDir, rel)));
       if (missing.length) {
-        key1.push({ ...base, status: 'deferred', reason: `${missing.join(', ')} does not exist on main, so ${base.teamName} key 1 cannot review against it; no model was called` });
+        key1.push({ ...base, status: 'deferred', reason: `${missing.join(', ')} does not exist on main, so ${base.teamName} key 1 cannot review against it; no model was called`, deferralKind: 'missing-standard' });
         continue;
       }
       const user = userPrompt({ ...promptCtx, key: 1, team: teamId });
@@ -368,7 +386,7 @@ export async function runReview(o) {
       out(`pr-review: key 2 (${cfg.key2_role})...`);
       k2 = { ...k2base, ...(await review({ key: 2, team: null, role: cfg.key2_role, model: o.models.key2, system, user })) };
     } catch (e) {
-      k2 = { ...k2base, status: 'deferred', reason: `spec or checklist missing on main: ${e.message}` };
+      k2 = { ...k2base, status: 'deferred', reason: `spec or checklist missing on main: ${e.message}`, deferralKind: 'missing-spec' };
     }
 
     // The Founder Proxy (agent): founder-class PRs only, and only once key 2
@@ -381,6 +399,7 @@ export async function runReview(o) {
     if (founderClassesFound.length) k2.notes.push(`Founder classes ${founderClassesFound.join(', ')}: ${k2.status === 'pass' ? 'the Founder Proxy (agent) reviews this head next' : 'the Founder Proxy (agent) runs only after key 2 passes'}; review/executive passes only when key 2 and the proxy pass. Key 2 never substitutes for the founder.`);
     if (held) k2.notes.push(`The "${cfg.hold_label}" label is set: review/executive is not passed.`);
     if (classification.notify.length) k2.notes.push(`Notify: ${classification.notify.join(', ')}.`);
+    k2.notes.push(shadowNote(derived, cfg.key2_role));
     k2.url = await comment(renderComment(k2, ctx));
 
     let proxy = null;
@@ -397,7 +416,7 @@ export async function runReview(o) {
         out(`pr-review: Founder Proxy (${cfg.proxy_role})...`);
         proxy = { ...pbase, ...(await review({ key: 'proxy', team: null, role: cfg.proxy_role, model: o.models.proxy, system, user })) };
       } catch (e) {
-        proxy = { ...pbase, status: 'deferred', reason: `spec missing on main: ${e.message}` };
+        proxy = { ...pbase, status: 'deferred', reason: `spec missing on main: ${e.message}`, deferralKind: 'missing-spec' };
       }
       proxy.notes = [...(proxy.notes ?? [])];
       if (proxy.status === NEEDS_FOUNDER) {
@@ -440,7 +459,7 @@ export async function runReview(o) {
 // The script must be main's copy when it posts, so a PR cannot review itself
 // under a script it rewrote. Returns the files that differ.
 export function differsFromMain(repoRoot, base = 'main') {
-  const rels = ['.github/scripts/review-teams.mjs', ...readdirSync(HERE).filter((f) => !f.endsWith('.test.mjs') && f !== 'fixtures').map((f) => `.github/scripts/pr-review/${f}`)];
+  const rels = ['.github/scripts/review-teams.mjs', '.github/scripts/org-chart.mjs', ...readdirSync(HERE).filter((f) => !f.endsWith('.test.mjs') && f !== 'fixtures').map((f) => `.github/scripts/pr-review/${f}`)];
   const differ = [];
   for (const rel of rels) {
     let onMain = null;
