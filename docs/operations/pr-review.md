@@ -40,15 +40,12 @@ Each team has one lead, who holds key 1 for that team. Members' checklists run
 inside the lead's review and are cited by name; there is one key-1 verdict per
 team.
 
-| Team | Lead (key 1) | Members |
-|---|---|---|
-| Executive | orchestrator (key 2 on every PR, never key 1) | none |
-| Product | product-manager | business-analyst, market-research |
-| Brand and Content | brand-strategist | content-strategist, technical-writer, seo-specialist |
-| Design | creative-director | ux-designer, ui-designer, design-system-engineer |
-| Engineering | principal-architect | frontend-engineer, backend-engineer, database-engineer, ai-ml-engineer |
-| Platform and Quality | security-engineer | sre, devops-engineer, qa-engineer, performance-engineer |
-| Business | legal-compliance | finance-estimation, tax-accounts, legal-counsel, sales-partnerships, client-communication |
+The teams, their leads and members are listed in the team table of
+[`agents/README.md`](../../agents/README.md#teams), which is generated from the
+org chart [`agents/org-chart.yml`](../../agents/org-chart.yml). This page does
+not copy it. The orchestrator holds key 2 on every PR and never key 1. A
+repo-checks step (`node .github/scripts/org-chart.mjs`) fails when the chart,
+that table and the teams in `review-teams.yml` disagree.
 
 legal-counsel never holds a key. Role specs are in [`agents/`](../../agents/README.md).
 
@@ -62,8 +59,9 @@ This page does not copy its rules. In short:
   two owners needs both leads.
 - A file no rule matches belongs to Engineering.
 - Content rules sit beside path rules: a price, currency, discount, refund or
-  guarantee, or a client, partner or prospect name, anywhere in the diff adds
-  Business; a market or competitor claim adds Product's market check.
+  guarantee anywhere in the diff adds Commercial; a client, partner or
+  prospect name adds Commercial and Legal and Compliance; a market or
+  competitor claim adds Product's market check.
 - Generated files follow their source (`website/public/**` follows
   `website/src/**`).
 - The shared layer copied into ip.nirmaan.online is owned by Design and

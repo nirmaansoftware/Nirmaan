@@ -88,7 +88,7 @@ I lead the Brand and Content team in [`.github/review-teams.yml`](../../.github/
 - **Fails when:**
   - a claim does not trace to code, a doc or `website/src/_data/`; a claim that only got vaguer still fails (`[NEEDS SOURCE]`, technical-writer);
   - copy is off-positioning or off-voice, or makes a claim any competitor could equally make;
-  - a comparative or regulated claim appears and Business is not among the owning teams;
+  - a comparative or regulated claim appears and Legal and Compliance is not among the owning teams;
   - a client is named without a consent record;
   - information architecture, funnel stage or call to action is wrong: an orphan page, or the nav, `sitemap.njk` and `navLinks.json` disagree (content-strategist);
   - SEO on the built HTML fails (seo-specialist): a title or description not unique, canonical or `og:url` missing, unrendered `{{ }}`, the sitemap not absolute or incomplete, JSON-LD that does not parse or does not match the page, a removed page without 301s in both forms, or a new `noindex`.

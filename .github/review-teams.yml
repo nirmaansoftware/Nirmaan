@@ -64,16 +64,28 @@ teams:
     name: Platform and Quality
     lead: security-engineer
     key: 1
-    members: [sre, devops-engineer, qa-engineer, performance-engineer]
-  - id: business
-    name: Business
+    members: [sre, devops-engineer, qa-engineer, performance-engineer, appsec-engineer]
+  - id: capability
+    name: Capability
+    lead: head-of-capability
+    key: 1
+    members: [org-designer, capability-programme-manager, knowledge-quality-reviewer]
+  - id: commercial
+    name: Commercial
+    lead: head-of-commercial
+    key: 1
+    members: [finance-estimation, tax-accounts, sales-partnerships, client-communication]
+  - id: legal
+    name: Legal and Compliance
     lead: legal-compliance
     key: 1
-    members: [finance-estimation, tax-accounts, legal-counsel, sales-partnerships, client-communication]
+    members: [legal-counsel, privacy-counsel, licensing-counsel]
 
-# legal-counsel is a Business member for its checklist and comments only; it
-# never holds a key.
-no_key_roles: [legal-counsel]
+# The Legal and Compliance members draft and may comment; none holds a key or
+# is a deputy, because a pass from a drafting agent would read as "legally
+# approved"; Legal and Compliance has no deputy (a recorded exception in
+# agents/org-chart.yml).
+no_key_roles: [legal-counsel, privacy-counsel, licensing-counsel]
 
 # Every file no rule matches belongs to this team. Files on the allowlist may
 # rely on the catch-all alone; any other file must match an explicit rule, so
@@ -115,7 +127,9 @@ rules:
       - "docs/operations/pr-loop.plist"
       - "docs/company/principles.md"
       - "docs/ai/agent-responsibilities.md"
-    teams: [product]
+    # The Capability office owns how the organisation decides and reviews
+    # (decision record D2.3, point 7).
+    teams: [capability]
   - id: decision-records
     # Dated records: adding is normal; editing one fails key 1 unless the diff
     # only adds a dated "Superseded by" note.
@@ -148,7 +162,7 @@ rules:
     teams: [product]
   - id: finance-docs
     globs: ["docs/finance/**"]
-    teams: [business]
+    teams: [commercial]
     checklists: [finance-estimation, tax-accounts]
   - id: engineering-docs
     globs: ["docs/engineering/**", "docs/ai/**"]
@@ -170,8 +184,31 @@ rules:
     checklists: [design-system-engineer, ui-designer]
   - id: spending-docs
     globs: ["docs/engineering/procurement.md", "docs/ai/ai-cost-governance.md"]
-    teams: [business]
+    teams: [commercial]
     checklists: [finance-estimation]
+
+  - id: capability
+    # Records, the levels generator and levels.json (capability/README.md).
+    # Owned by the Capability office from H3 (decision record D2.1);
+    # knowledge-quality-reviewer's checklist covers the evidence rules (D6.7
+    # to D6.9).
+    globs: ["capability/**"]
+    teams: [capability]
+    checklists: [knowledge-quality-reviewer]
+  - id: capability-code
+    # The machinery (the generator, the records schema, the generated
+    # levels.json and the README that documents them) keeps Engineering and
+    # the database-engineer checklist that covered it before H3; the records
+    # themselves are the Capability office's alone.
+    globs: ["capability/tools/**", "capability/records/schema.json", "capability/levels.json", "capability/README.md"]
+    teams: [engineering]
+    checklists: [database-engineer]
+  # The skill validator is owned by Capability (decision record D6.4); its
+  # checklist is knowledge-quality-reviewer's.
+  - id: skill-validator
+    globs: [".github/scripts/skills.mjs", ".github/scripts/skills.test.mjs"]
+    teams: [capability]
+    checklists: [knowledge-quality-reviewer]
 
   # Skills (skills/README.md). Each unit's skills, skills/<unit>/**, get a
   # rule naming that unit, added with the unit's first skill (the skill
@@ -214,7 +251,7 @@ rules:
       - "os/src/lib/prospecting/outreach.ts"
       - "os/src/lib/prospecting/mailer.ts"
       - "os/src/lib/prospecting/worker.ts"
-    teams: [engineering, business]
+    teams: [engineering, legal, commercial]
     checklists: [client-communication, backend-engineer]
   - id: os-dependencies
     globs: ["os/package.json", "os/package-lock.json"]
@@ -223,11 +260,11 @@ rules:
   - id: os-finance
     # Invoices, tax, recurring billing and proposal economics.
     globs: ["os/src/lib/finance/**", "os/src/lib/proposals/**"]
-    teams: [engineering, business]
+    teams: [engineering, commercial]
     checklists: [finance-estimation, tax-accounts]
   - id: os-do-not-contact
     globs: ["os/src/app/os/prospects/do-not-contact/**"]
-    teams: [engineering, business]
+    teams: [engineering, commercial]
     checklists: [client-communication]
   - id: os-runtime-security
     # The tracked env file, security headers and the SSRF guard.
@@ -306,20 +343,20 @@ rules:
     checklists: [seo-specialist]
   - id: price-pages
     globs: ["website/src/pricing.njk", "website/src/plan.njk", "website/src/care.njk", "website/src/_includes/estimator.njk", "website/src/static/estimator.js"]
-    teams: [business]
+    teams: [commercial]
     checklists: [finance-estimation, tax-accounts]
   - id: legal-pages
     globs: ["website/src/privacy.njk", "website/src/terms.njk"]
-    teams: [business]
+    teams: [legal]
     # These pages also govern ip.nirmaan.online: the PR notifies the IP chair.
     notify: [ip-council-chair]
   - id: contact-form-data
     # Founder class D: the contact form collects personal data.
     globs: ["website/src/static/contact-form.js"]
-    teams: [business]
+    teams: [legal]
   - id: client-pages
     globs: ["website/src/projects.njk"]
-    teams: [business]
+    teams: [commercial]
     checklists: [client-communication]
   - id: site-data
     globs: ["website/src/_data/{site,navLinks,services}.json"]
@@ -330,7 +367,7 @@ rules:
 named_files:
   - id: pricing-data
     paths: ["website/src/_data/pricing.json"]
-    teams: [business, brand-content]
+    teams: [commercial, brand-content]
     checklists: [finance-estimation, tax-accounts]
   - id: products
     paths: ["website/src/_data/products.json", "website/src/products.njk", "website/src/outreach.njk"]
@@ -446,16 +483,24 @@ founder_classes:
 
 # Content rules: what a path cannot show. The review script runs each rule's
 # patterns (JavaScript regular expressions, case-insensitive) over the diff's
-# changed lines in files matching `applies_to` (every file when absent). A hit
-# adds `adds_teams` and, when set, makes the PR `founder_class`.
+# changed lines in files matching `applies_to` (every file when absent) and
+# not matching `exclude`. A hit adds `adds_teams` and, when set, makes the PR
+# `founder_class`.
 # `trigger: added_files` fires on a new file matching `applies_to` instead.
 # `examples` must each match a pattern (a test of the pattern itself);
 # `markers` name tracked files where a pattern must match today, so a rule
 # whose words drift away from the repository fails the coverage test.
 content_rules:
   - id: money
-    adds_teams: [business]
+    # Not in knowledge content (decision record D5.2, founder item 3): skill
+    # files (skills/<unit>/<id>.md), worked examples (examples/<unit>/...) and
+    # capability records and levels. The skill validator's currency check
+    # (D6.4, .github/scripts/skills.mjs) covers the skill files; nothing
+    # replaces this rule for examples or records. Folder READMEs and the skill
+    # template stay in scope.
+    adds_teams: [commercial]
     founder_class: C
+    exclude: ["skills/*/*.md", "examples/*/**", "capability/records/**", "capability/levels.json"]
     checklists: [finance-estimation, tax-accounts]
     patterns:
       - "₹\\s?\\d"
@@ -469,7 +514,7 @@ content_rules:
       - file: "website/src/_data/pricing.json"
       - file: "website/src/terms.njk"
   - id: new-spending
-    adds_teams: [business]
+    adds_teams: [commercial]
     founder_class: C
     applies_to: ["os/package.json", "website/package.json", ".github/workflows/**", "fly.toml", "Dockerfile.os"]
     patterns:
@@ -479,7 +524,7 @@ content_rules:
   - id: client-names
     # Named clients, partners and prospects that appear publicly. Add a name
     # here when consent is recorded and it first appears in the repository.
-    adds_teams: [business]
+    adds_teams: [legal, commercial]
     founder_class: E
     checklists: [client-communication, sales-partnerships]
     patterns:
@@ -489,7 +534,11 @@ content_rules:
     markers:
       - file: "website/src/projects.njk"
   - id: market-claims
+    # Not in knowledge content, the same files as `money` (D5.2, founder item
+    # 3). The skill validator's company-claim check (D6.4) covers the skill
+    # files; nothing replaces this rule for examples or records.
     adds_teams: [product]
+    exclude: ["skills/*/*.md", "examples/*/**", "capability/records/**", "capability/levels.json"]
     checklists: [market-research]
     founder_class: E
     patterns:
@@ -505,7 +554,7 @@ content_rules:
     applies_to: ["website/src/*.njk"]
     examples: []
   - id: legal-and-data
-    adds_teams: [business]
+    adds_teams: [legal]
     founder_class: D
     checklists: [legal-compliance]
     applies_to: ["website/src/**", "os/src/app/api/**"]
@@ -517,6 +566,24 @@ content_rules:
     markers:
       - file: "website/src/_includes/estimator.njk"
       - file: "website/src/privacy.njk"
+  - id: knowledge-legal
+    # Legal topics in the knowledge folders. Adds Legal and Compliance, whose lead is
+    # legal-compliance, as key 1, with no founder class (decision record
+    # D5.2): skills/**, examples/** and capability/** (D6.1).
+    adds_teams: [legal]
+    checklists: [legal-compliance]
+    applies_to: ["skills/**", "examples/**", "capability/**"]
+    patterns:
+      - "\\b(personal data|personally identifiable|pii)\\b"
+      - "\\bdatasets?\\b"
+      - "\\blicen[cs]es?\\b"
+      - "\\bmodel weights?\\b"
+      - "\\blegal advice\\b"
+      - "\\b(dpdp|gdpr|hipaa)\\b"
+      - "\\bthird[- ]party (scripts?|trackers?|cookies)\\b"
+    examples: ["trained on a public dataset", "Licence: CC BY 4.0", "model weights under a custom licence", "this is not legal advice", "consent under the DPDP Act", "GDPR erasure request", "loads a third-party script"]
+    markers:
+      - file: "skills/README.md"
   - id: deploy-switch
     adds_teams: [platform-quality]
     founder_class: B
@@ -527,7 +594,7 @@ content_rules:
       - "\\b(fly deploy|vercel deploy|flyctl deploy)\\b"
     examples: ["NIRMAAN_WORKER = \"on\"", "min_machines_running = 1", "run: fly deploy"]
   - id: send-gate-roles
-    adds_teams: [business]
+    adds_teams: [legal, commercial]
     founder_class: F
     checklists: [client-communication]
     applies_to: ["os/src/**"]
@@ -558,7 +625,7 @@ content_rules:
     # an export-control statement makes the PR founder class D, so Legal's
     # key 1 and the Founder Proxy review it. This rule only routes the PR;
     # the proxy applies its spec on main (agents/founder-proxy/agent.md).
-    adds_teams: [business]
+    adds_teams: [legal]
     founder_class: D
     checklists: [legal-compliance]
     patterns:
@@ -586,7 +653,7 @@ content_rules:
   - id: own-licence-field
     # The licence field of Nirmaan's own package manifests (Nirmaan's
     # outbound licence; gate G4 of capability-hierarchy-decisions.md).
-    adds_teams: [business]
+    adds_teams: [legal]
     founder_class: D
     checklists: [legal-compliance]
     applies_to: ["os/package.json", "website/package.json"]
