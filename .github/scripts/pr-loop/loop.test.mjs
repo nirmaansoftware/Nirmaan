@@ -1053,3 +1053,13 @@ test('ciState: the newest run of each job decides, and a rerun in progress is pe
   assert.equal(ciState(req, [run(1, '2026-10-17T00:00:00Z', 'completed', 'failure', '2026-10-17T02:00:00Z'), run(2, '2026-10-17T01:00:00Z', 'completed', 'success', '2026-10-17T01:05:00Z')]).state, 'green');
   assert.equal(ciState(req, [run(5, '2026-10-17T00:00:00Z', 'completed', 'failure', null), run(6, '2026-10-17T00:00:00Z', 'completed', 'success', null)]).state, 'green', 'same start: the higher id is newer');
 });
+
+test('every pass writes the heartbeat the health alerts read (when the pass starts and after each step)', async () => {
+  const t = setup();
+  try {
+    await t.tick();
+    const hb = JSON.parse(readFileSync(join(t.stateDir, 'loop', `heartbeat-${CONFIG.repo.replace('/', '_')}.json`), 'utf8'));
+    assert.ok(Date.now() - Date.parse(hb.at) < 60000);
+    assert.match(hb.event, /^step #\d+$/);
+  } finally { t.cleanup(); }
+});

@@ -494,7 +494,9 @@ and for a stop its reason and class. When a PR the loop armed for merge leaves
 the open list, the next pass writes one `merged` (or `closed`) line with
 GitHub's merge time. Nothing is written under the repository. Per-PR loop
 state (rounds, findings seen, the last head it pushed, lock wait) is in
-`~/.nirmaan/pr-review/loop/`.
+`~/.nirmaan/pr-review/loop/`. The needs-founder digest, the health alerts
+and the turnaround report read these records:
+[pr-loop-runbook.md](pr-loop-runbook.md).
 
 **Running it.** It runs on the founder's Mac with the Mac's own `claude` login
 (the plan) and `gh` login, so it adds no spend and no secret in GitHub
