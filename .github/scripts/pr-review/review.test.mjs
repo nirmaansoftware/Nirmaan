@@ -1152,6 +1152,83 @@ test('deferral kinds: each deferral names its kind', async () => {
   } finally { m.cleanup(); }
 });
 
+test('deputy try: the lead times out, the unit\'s deputy from main\'s chart gets one try, marked deputy on the comment and the check', async () => {
+  const withChart = (w) => write(w, 'agents/org-chart.yml', CHART_YML);
+  const t = setup({ mainExtra: withChart, responses: [{ type: 'sleep', ms: 3000 }, { type: 'sleep', ms: 3000 }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await t.run({ timeoutMs: 1500 });
+    assert.equal(r.key1[0].status, 'pass');
+    assert.equal(r.key1[0].deputy, 'database-engineer');
+    assert.equal(t.calls().length, 4, 'lead twice (retry), deputy once, key 2');
+    const dsys = t.calls()[2].argv[t.calls()[2].argv.indexOf('--system-prompt') + 1];
+    assert.match(dsys, /SPEC-MARKER-database-engineer/);
+    assert.match(dsys, /deputy for principal-architect/);
+    assert.match(t.posts.find((p) => p.type === 'comment').body, /database-engineer \(deputy for principal-architect\)[\s\S]*Deputy: principal-architect did not answer/);
+    assert.match(t.check('review/team-lead').title, /deputy/);
+    assert.equal(t.check('review/team-lead').state, 'success');
+  } finally { t.cleanup(); }
+  const b = setup({ mainExtra: withChart, responses: [{ type: 'sleep', ms: 3000 }] });
+  try {
+    const r = await b.run({ timeoutMs: 1500 });
+    assert.equal(r.key1[0].status, 'deferred', 'the deputy did not answer either');
+    assert.equal(b.calls().length, 4, 'lead twice, deputy twice, no more');
+    noSuccess(b);
+  } finally { b.cleanup(); }
+});
+
+test('deputy try: the lead\'s process fails with no output at all (twice), and the deputy answers', async () => {
+  const t = setup({ mainExtra: (w) => write(w, 'agents/org-chart.yml', CHART_YML), responses: [{ type: 'crash' }, { type: 'crash' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await t.run();
+    assert.equal(r.key1[0].status, 'pass');
+    assert.equal(r.key1[0].deputy, 'database-engineer');
+    assert.equal(r.key1[0].role, 'database-engineer (deputy for principal-architect)');
+  } finally { t.cleanup(); }
+});
+
+test('no deputy try for the legal team, or when the deputy\'s spec is missing on main', async () => {
+  const withChart = (w) => write(w, 'agents/org-chart.yml', CHART_YML);
+  const a = setup({ mainExtra: withChart, responses: [{ type: 'crash' }, { type: 'crash' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await a.run({ config: { ...CONFIG, legal_teams: ['engineering'] } });
+    assert.equal(r.key1[0].status, 'deferred');
+    assert.equal(r.key1[0].deputy, undefined);
+    assert.equal(a.calls().length, 2, 'the lead twice; no deputy for a legal team');
+  } finally { a.cleanup(); }
+  const b = setup({ mainExtra: (w) => { withChart(w); rmSync(join(w, 'agents/database-engineer/agent.md')); }, responses: [{ type: 'crash' }, { type: 'crash' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await b.run();
+    assert.equal(r.key1[0].status, 'deferred');
+    assert.equal(r.key1[0].deputy, undefined);
+    assert.equal(b.calls().length, 2, 'the lead twice; no deputy without its spec');
+    assert.match(r.key1[0].notes.join(' '), /No deputy try/);
+    noSuccess(b);
+  } finally { b.cleanup(); }
+});
+
+test('no deputy try for a rate limit, invalid output, failed validation, or without a chart on main', async () => {
+  const withChart = (w) => write(w, 'agents/org-chart.yml', CHART_YML);
+  for (const [s, n] of [
+    [{ mainExtra: withChart, responses: [{ type: 'rate_limit' }] }, 2],
+    [{ mainExtra: withChart, responses: [{ type: 'result', text: 'not json' }] }, 1],
+    // A sole bad critical citation gets the one repair run (R8), then defers.
+    [{ mainExtra: withChart, responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/nope.js', line: 1, severity: 'critical', text: 'x' }] }] }, 2],
+    [{ responses: [{ type: 'sleep', ms: 3000 }] }, 2],
+    // A process failure that produced output (an error result): no deputy.
+    [{ mainExtra: withChart, responses: [{ type: 'error' }, { type: 'error' }, { type: 'verdict', verdict: 'pass' }] }, 2],
+    // Failed validation, then the repair run times out (twice): still no deputy.
+    [{ mainExtra: withChart, responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/nope.js', line: 1, severity: 'critical', text: 'x' }] }, { type: 'sleep', ms: 3000 }, { type: 'sleep', ms: 3000 }, { type: 'verdict', verdict: 'pass' }] }, 3],
+  ]) {
+    const t = setup(s);
+    try {
+      const r = await t.run({ timeoutMs: 1500 });
+      assert.equal(r.key1[0].status, 'deferred');
+      assert.equal(r.key1[0].deputy, undefined);
+      assert.equal(t.calls().length, n);
+    } finally { t.cleanup(); }
+  }
+});
+
 test('findingsBySeverity counts every severity', () => {
   assert.deepEqual(findingsBySeverity({ findings: [{ severity: 'major' }, { severity: 'major' }, { severity: 'blocker' }, { severity: 'bogus' }] }), { blocker: 1, critical: 0, major: 2, minor: 0, info: 0 });
   assert.deepEqual(findingsBySeverity(undefined), { blocker: 0, critical: 0, major: 0, minor: 0, info: 0 });

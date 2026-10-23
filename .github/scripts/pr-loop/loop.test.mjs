@@ -992,6 +992,83 @@ test('lock_mode "calls": with model_cap 2 the two repositories review at once, n
   } finally { t.cleanup(); }
 });
 
+// ---------------------------------------------------------------- Dependabot
+
+test('the accepted authors are exactly the agents\' account and Dependabot; the review script also accepts the founder', () => {
+  assert.deepEqual(REAL_LOOP.authors, ['patel-om', 'dependabot[bot]']);
+  assert.deepEqual(REAL_LOOP.no_fixer_authors, ['dependabot[bot]']);
+  assert.deepEqual(CONFIG.allowed_authors, ['patel-om', 'nirmaansoftware', 'dependabot[bot]']);
+  for (const a of REAL_LOOP.authors) assert.ok(CONFIG.allowed_authors.includes(a), `${a} is reviewable`);
+});
+
+test('a Dependabot PR gets both keys (and the proxy on a founder class) with CI required, and merges', async () => {
+  const t = setup({ gh: { author: 'dependabot[bot]' }, change: (w) => write(w, '.github/x.yml', 'x\n') });
+  try {
+    t.g.ci = () => 'pending';
+    assert.deepEqual(outcomes(await t.tick()), ['wait'], 'CI first');
+    t.g.ci = () => 'success';
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge']);
+    assert.equal(t.calls().length, 3, 'key 1, key 2 and the Founder Proxy (.github is class A)');
+  } finally { t.cleanup(); }
+});
+
+test('a failing Dependabot PR is never pushed to: author-fix, no fixer process, nothing pushed, no needs-founder', async () => {
+  const t = setup({ gh: { author: 'dependabot[bot]' }, reviews: [fail('bad')] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['author-fix']);
+    assert.equal(t.calls().filter((c) => c.kind === 'fixes').length, 0);
+    assert.equal(t.originHead(), t.firstHead);
+    assert.ok(t.g.labels.includes('author-fix'));
+    assert.ok(!t.labeled());
+  } finally { t.cleanup(); }
+});
+
+test('a Dependabot PR behind main is never updated by the loop: it asks Dependabot to rebase, once per head, with no update-branch call', async () => {
+  const t = setup({ gh: { author: 'dependabot[bot]' } });
+  try {
+    t.advanceMain();
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.deepEqual(t.updates, [], 'no update-branch');
+    assert.equal(t.originHead(), t.firstHead, 'nothing pushed');
+    const c = t.posts.filter((p) => p.type === 'comment').pop();
+    assert.ok(c.body.startsWith('@dependabot rebase\n'), 'the command is the first line');
+    assert.deepEqual(outcomes(await t.tick()), ['wait'], 'not asked again on the same head');
+    assert.equal(t.calls().length, 0, 'no model call while behind');
+    // Not asked again later either: once per head, however long it waits.
+    const st = t.state();
+    st.updated.at = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    writeFileSync(join(t.stateDir, 'loop', `${CONFIG.repo.replace('/', '_')}-pr-1.json`), JSON.stringify(st));
+    const before = t.posts.filter((p) => p.type === 'comment').length;
+    assert.deepEqual(outcomes(await t.tick()), ['wait'], 'a day later, still waiting');
+    assert.equal(t.posts.filter((p) => p.type === 'comment').length, before, 'no second rebase comment');
+  } finally { t.cleanup(); }
+});
+
+test('a Dependabot PR whose base moves during the review is not updated by the loop at merge time either: it asks Dependabot to rebase', async () => {
+  const t = setup({ gh: { author: 'dependabot[bot]' } });
+  try {
+    let moved = false;
+    t.g.behindWhen = () => { if (!moved && t.calls().length >= 2) { moved = true; t.advanceMain(); } return false; };
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.equal(t.merges.length, 0);
+    assert.deepEqual(t.updates, [], 'no update-branch');
+    assert.equal(t.originHead(), t.firstHead, 'nothing pushed');
+    assert.ok(t.posts.filter((p) => p.type === 'comment').pop().body.startsWith('@dependabot rebase\n'));
+  } finally { t.cleanup(); }
+});
+
+test('any other author is still skipped, with no model call', async () => {
+  for (const author of ['someone-else', 'renovate[bot]', 'dependabot']) {
+    const t = setup({ gh: { author } });
+    try {
+      const r = await t.tick();
+      assert.deepEqual(outcomes(r), ['skip'], author);
+      assert.match(r[0].reason, /is not an accepted author/);
+      assert.equal(t.calls().length, 0);
+    } finally { t.cleanup(); }
+  }
+});
+
 test('phaseRecord: key 1 span over teams; null keys when not run', () => {
   const k = (team, s, e) => ({ team, role: `${team}-lead`, status: 'pass', startedAt: s, endedAt: e, verdict: { findings: [{ severity: 'minor' }, { severity: 'minor' }, { severity: 'info' }] } });
   const r = phaseRecord({ ciGreenAt: 'g', lockWaitMs: 5, startedAt: 'a', endedAt: 'b', review: { key1: [k('x', '2026-01-01T00:00:02Z', '2026-01-01T00:00:03Z'), k('y', '2026-01-01T00:00:01Z', '2026-01-01T00:00:09Z')], key2: null, proxy: null }, result: { outcome: 'fixed' } });
@@ -1052,4 +1129,14 @@ test('ciState: the newest run of each job decides, and a rerun in progress is pe
   assert.equal(ciState(req, [run(1, '2026-10-17T00:00:00Z', 'completed', 'success', '2026-10-17T02:00:00Z'), run(2, '2026-10-17T01:00:00Z', 'completed', 'failure', '2026-10-17T01:05:00Z')]).state, 'failed');
   assert.equal(ciState(req, [run(1, '2026-10-17T00:00:00Z', 'completed', 'failure', '2026-10-17T02:00:00Z'), run(2, '2026-10-17T01:00:00Z', 'completed', 'success', '2026-10-17T01:05:00Z')]).state, 'green');
   assert.equal(ciState(req, [run(5, '2026-10-17T00:00:00Z', 'completed', 'failure', null), run(6, '2026-10-17T00:00:00Z', 'completed', 'success', null)]).state, 'green', 'same start: the higher id is newer');
+});
+
+test('every pass writes the heartbeat the health alerts read (when the pass starts and after each step)', async () => {
+  const t = setup();
+  try {
+    await t.tick();
+    const hb = JSON.parse(readFileSync(join(t.stateDir, 'loop', `heartbeat-${CONFIG.repo.replace('/', '_')}.json`), 'utf8'));
+    assert.ok(Date.now() - Date.parse(hb.at) < 60000);
+    assert.match(hb.event, /^step #\d+$/);
+  } finally { t.cleanup(); }
 });
