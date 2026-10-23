@@ -17,7 +17,10 @@
 //      runs (the newest run of each job counts), "CI failed; review not run"
 //      (action_required, never green) when one finished without success.
 //   6. Key 1: one fresh `claude -p` per owning team, its lead's spec and
-//      checklists from main. Key 2: the orchestrator's spec plus every owning
+//      checklists from main (key1_mode "per-team"); or, with key1_mode
+//      "composite", one process for every owning team, given the base
+//      checklist, each lead's key 1 section and every rule-named member
+//      checklist, answering per team and per checklist. Key 2: the orchestrator's spec plus every owning
 //      lead's spec and checklist, given key 1's results. For a founder-class
 //      PR, once key 2 passed: the Founder Proxy (agent), its spec from main,
 //      given both keys' results, on the strongest model.
@@ -50,7 +53,7 @@ import { parseYaml } from '../review-teams.mjs';
 import {
   acquireLock, classify, founderClassBlock, key1SystemPrompt, markdownSection, key2SystemPrompt, logCall, NEEDS_FOUNDER, nonce, parseNameStatusZ, parseVerdictText,
   capFindings, prTextBlock, prTextDigest, proxySystemPrompt, PROXY_VERDICT_SCHEMA, renderComment, repairPrompt, requiredCi, REUSED_NOTE, statusDescription, userPrompt, validateVerdict,
-  VERDICT_SCHEMA, verdictCacheName, withFounderClassBlock,
+  VERDICT_SCHEMA, verdictCacheName, withFounderClassBlock, COMPOSITE_TEAM, COMPOSITE_VERDICT_SCHEMA, compositeKey1SystemPrompt,
 } from './lib.mjs';
 import { claudeArgs, reviewerEnv, runWithRetry } from './claude.mjs';
 import { deriveKeys, shadowNote } from './derive.mjs';
@@ -304,7 +307,7 @@ export async function runReview(o) {
       const r = await reviewCall(call);
       return { ...r, startedAt, endedAt: new Date().toISOString() };
     };
-    const reviewCall = async ({ key, team, role, model, system, user, strict = false, maxFindings = null }) => {
+    const reviewCall = async ({ key, team, role, model, system, user, strict = false, maxFindings = null, composite = null }) => {
       const proxy = key === 'proxy';
       const cacheFile = join(cacheDir, verdictCacheName({ headSha, mainSha, textDigest, key, team, role }));
       if (!o.fresh && existsSync(cacheFile)) {
@@ -312,7 +315,7 @@ export async function runReview(o) {
         logCall(o.stateDir, { repo: cfg.repo, pr: o.pr, head: headSha, key, team, role, model, attempt: 0, outcome: 'reused' });
         return { ...cached, reused: true, notes: [...(cached.notes ?? []), REUSED_NOTE] };
       }
-      const args = claudeArgs({ model, systemPrompt: system, addDirs: [mainDir], schema: proxy ? PROXY_VERDICT_SCHEMA : VERDICT_SCHEMA });
+      const args = claudeArgs({ model, systemPrompt: system, addDirs: [mainDir], schema: proxy ? PROXY_VERDICT_SCHEMA : composite ? COMPOSITE_VERDICT_SCHEMA : VERDICT_SCHEMA });
       const call = (input, phase) => runWithRetry(
         { bin: o.claudeBin, args, input, cwd: headDir, env: reviewerEnv(), timeoutMs: o.timeoutMs },
         {
@@ -321,7 +324,7 @@ export async function runReview(o) {
         },
       );
       const parse = (r) => { try { return { raw: r.structured ?? parseVerdictText(r.text) }; } catch (e) { return { error: e.message }; } };
-      const validate = (raw) => validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count, proxy, strict });
+      const validate = (raw) => validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count, proxy, strict, ...(composite ? { composite } : {}) });
       let r = await call(user, null);
       if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, callOutcome: r.kind, deferralKind: r.kind === 'rate_limit' ? 'rate-limit' : r.kind === 'timeout' ? 'timeout' : 'call-failed', model };
       let p = parse(r);
@@ -366,9 +369,14 @@ export async function runReview(o) {
     const strictKey1 = (teamId) => strictCfg.teams.includes(teamId) || classification.checklists.some((c) => strictCfg.checklists.includes(c) && new Set([teamsById.get(teamId)?.lead, ...(teamsById.get(teamId)?.members ?? [])]).has(c));
     const strictAny = classification.teams.some(strictKey1);
 
-    // 6. Key 1, one process per owning team.
+    // 6. Key 1: one process per owning team (key1_mode "per-team", the
+    // setting today), or one composite process for every owning team
+    // (key1_mode "composite").
     const key1 = [];
-    for (const teamId of classification.teams) {
+    const plan = (cfg.key1_mode ?? 'per-team') === 'composite' && classification.teams.length ? compositePlan() : null;
+    if (plan?.tooBig) out(`pr-review: ${plan.tooBig}; key 1 runs per team on this head.`);
+    if (plan && !plan.tooBig) key1.push(await compositeKey1(plan));
+    else for (const teamId of classification.teams) {
       const team = teamsById.get(teamId);
       const base = { key: 1, team: teamId, teamName: team?.name ?? teamId, role: team?.lead ?? 'unknown', checkName: cfg.check_names.key1, legal: cfg.legal_teams.includes(teamId) };
       let system;
@@ -418,6 +426,61 @@ export async function runReview(o) {
       key1.push(res);
     }
 
+    // The composite key 1's inputs: the base checklist once, each owning
+    // team's lead "Key 1 review" section (or the team's skill checklist), and
+    // every member checklist the map's rules name, whichever team the role is
+    // in. Each checklist knows its team, for strictness and fix routing.
+    function compositePlan() {
+      const teams = [...classification.teams].sort();
+      const roleTeam = (role) => (map.teams ?? []).find((t) => t.lead === role || (t.members ?? []).includes(role));
+      try {
+        const plan = { teams: [], members: [], base: baseChecklist(), team: new Map() };
+        for (const id of teams) {
+          const team = teamsById.get(id);
+          if (!team) throw new Error(`team ${id} is not in main's map`);
+          const section = markdownSection(roleSpec(team.lead), cfg.lead_section);
+          const c = section ? { name: team.lead, text: section } : { name: id, text: checklist(id).text };
+          plan.teams.push({ id, name: team.name ?? id, lead: team.lead, checklist: c });
+          plan.team.set(c.name, id);
+        }
+        const leadsGiven = new Set(plan.teams.map((t) => t.lead));
+        for (const role of [...classification.checklists].sort()) {
+          if (leadsGiven.has(role)) continue; // its key 1 section is already in
+          const t = roleTeam(role);
+          const text = t?.lead === role ? (markdownSection(roleSpec(role), cfg.lead_section) ?? roleSpec(role)) : memberText(role);
+          plan.members.push({ name: role, team: t?.id ?? null, text });
+          plan.team.set(role, t?.id ?? null);
+        }
+        plan.names = [plan.base.name, ...plan.teams.map((t) => t.checklist.name), ...plan.members.map((m) => m.name)];
+        const max = cfg.key1_composite_max_checklists;
+        if (Number.isInteger(max) && plan.names.length > max) return { tooBig: `${plan.names.length} checklists, over key1_composite_max_checklists (${max})` };
+        return plan;
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+    async function compositeKey1(p) {
+      const ids = [...classification.teams].sort();
+      const named = ids.map((id) => teamsById.get(id)?.name ?? id);
+      const base = { key: 1, team: COMPOSITE_TEAM, composite: true, teams: ids, teamName: named.join(', '), role: ids.map((id) => teamsById.get(id)?.lead ?? 'unknown').join(', '), checkName: cfg.check_names.key1, legal: ids.some((id) => cfg.legal_teams.includes(id)) };
+      if (p.error) return { ...base, status: 'deferred', reason: `spec or checklist missing on main: ${p.error}` };
+      const missing = ids.flatMap((id) => (cfg.fail_closed_without?.[id] ?? []).filter((rel) => !existsSync(join(mainDir, rel))));
+      if (missing.length) return { ...base, status: 'deferred', reason: `${missing.join(', ')} does not exist on main, so the composite key 1 cannot review against it; no model was called` };
+      const system = compositeKey1SystemPrompt({ ...promptCtx, teams: p.teams, base: p.base, members: p.members });
+      const user = userPrompt({ ...promptCtx, key: 1, composite: true });
+      // Strictness per finding, by its checklist: a strict checklist, a
+      // checklist of a strict team, or the base checklist when any owning
+      // team is strict.
+      const strictTeamAny = ids.some((id) => strictCfg.teams.includes(id));
+      const strict = (f) => strictCfg.checklists.includes(f.checklist) || strictCfg.teams.includes(p.team.get(f.checklist)) || (f.checklist === p.base.name && strictTeamAny);
+      out(`pr-review: key 1, composite for ${base.teamName}...`);
+      const r = await review({ key: 1, team: COMPOSITE_TEAM, role: base.role, model: o.models.key1, system, user, strict, composite: { teams: ids, checklists: p.names } });
+      // Each finding carries its checklist's team, for the loop's fix routing.
+      if (r.verdict) r.verdict = { ...r.verdict, findings: r.verdict.findings.map((f) => ({ ...f, team: p.team.get(f.checklist) ?? null })) };
+      return { ...base, ...r };
+    }
+    const failedTeamNames = (r) => (r.composite && r.verdict ? `composite: ${(r.verdict.teams ?? []).filter((t) => t.verdict === 'fail').map((t) => teamsById.get(t.team)?.name ?? t.team).join(', ') || 'see findings'}` : r.teamName);
+
     // Post key 1.
     for (const r of key1) r.url = await comment(renderComment(r, ctx));
     const k1fail = key1.filter((r) => r.status === 'fail'), k1def = key1.filter((r) => r.status === 'deferred');
@@ -425,7 +488,7 @@ export async function runReview(o) {
     const who = key1.length === 1 ? key1[0].role : `${key1.length} team leads${key1.some((r) => r.deputy) ? ', with a deputy' : ''}`;
     const k1url = (k1fail[0] ?? k1def[0] ?? key1[0])?.url;
     if (key1.length === 0) await check('key1', 'pending', `review deferred: no owning team computed for ${sha7}`);
-    else if (k1fail.length) await check('key1', 'failure', `agent review (${who}), head ${sha7}: fail (${k1fail.map((r) => r.teamName).join(', ')})`, k1url);
+    else if (k1fail.length) await check('key1', 'failure', `agent review (${who}), head ${sha7}: fail (${k1fail.map(failedTeamNames).join(', ')})`, k1url);
     else if (k1def.length) await check('key1', 'pending', `agent review (${who}), head ${sha7}: review deferred (${k1def.map((r) => r.teamName).join(', ')})`, k1url);
     else await check('key1', 'success', `agent review (${who}), head ${sha7}: pass`, k1url);
 
@@ -433,7 +496,7 @@ export async function runReview(o) {
     const k2base = { key: 2, team: null, teamName: cfg.key2_name, role: cfg.key2_role, checkName: cfg.check_names.key2, legal: key1.some((r) => r.legal) };
     if (key1.length === 0 || k1fail.length || k1def.length) {
       await check('key2', 'pending', `not run: key 1 did not pass on ${sha7}`);
-      return { exit: EXIT.ok, key1, key2: null, posted };
+      return { exit: EXIT.ok, key1, key2: null, posted, classification };
     }
     let k2;
     try {

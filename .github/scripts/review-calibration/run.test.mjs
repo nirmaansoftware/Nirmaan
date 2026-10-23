@@ -129,6 +129,18 @@ test('production mode: two seeds and one control give catch, miss, false fail, d
   } finally { t.cleanup(); delete process.env.GH_TOKEN; delete process.env.NIRMAAN_REVIEW_APP_ID; }
 });
 
+test('key1-alone mode with --key1-mode composite: one composite key-1 call is scored per checklist; key 2 and the proxy are stubs', async () => {
+  const t = setup({ seeds: [SEED_A], responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/app.js', line: 2, severity: 'blocker', text: 'Unsupported claim: "always correct" has no test.', checklist: 'engineering' }], extra: { teams: [{ team: 'engineering', verdict: 'fail' }], checklists: [{ name: 'key1-base', result: 'checked' }, { name: 'engineering', result: 'checked' }] } }] });
+  try {
+    const r = await t.run({ mode: 'key1-alone', key1Mode: 'composite' });
+    assert.equal(t.calls().length, 1, 'only key 1 reaches a model');
+    assert.deepEqual(r.rows.map((x) => [x.holder, x.outcome]), [['key1:composite', 'catch']]);
+    assert.ok(r.resultsDir.endsWith('-key1-alone-composite'));
+    assert.equal(JSON.parse(readFileSync(join(r.resultsDir, 'summary.json'), 'utf8')).key1_mode, 'composite');
+    await assert.rejects(t.run({ key1Mode: 'fast' }), /--key1-mode must be one of per-team, composite/);
+  } finally { t.cleanup(); }
+});
+
 test('key2-alone mode: key 1 is a stub pass (no model call, not scored), so key 2 runs on every seed', async () => {
   const t = setup({ seeds: [SEED_A], responses: [{ type: 'verdict', verdict: 'fail', findings: [{ file: 'os/app.js', line: 2, severity: 'blocker', text: 'Claim with nothing behind it.' }] }] });
   try {
@@ -198,6 +210,8 @@ test('modes, measured holders, token stripping, summary and paths', () => {
   assert.deepEqual(measured('production', review).map((m) => m.holder), ['key1:web', 'key2', 'proxy']);
   assert.deepEqual(measured('key2-alone', review).map((m) => m.holder), ['key2', 'proxy']);
   assert.deepEqual(measured('proxy-alone', review).map((m) => m.holder), ['proxy']);
+  assert.deepEqual(modelsFor('key1-alone', { key1: 'a', key2: 'b', proxy: 'c' }), { key1: 'a', key2: STUB_MODEL, proxy: STUB_MODEL });
+  assert.deepEqual(measured('key1-alone', review).map((m) => m.holder), ['key1:web']);
   const env = { GH_TOKEN: 'x', GITHUB_TOKEN: 'y', NIRMAAN_REVIEW_APP_PRIVATE_KEY_FILE: 'z', PATH: '/bin' };
   assert.deepEqual(stripTokens(env), { PATH: '/bin' });
   const groups = summarize([{ id: 's', run: 1, kind: 'seed', checklist: 'c', holder: 'key2', outcome: 'catch', citation: 'valid' }]);

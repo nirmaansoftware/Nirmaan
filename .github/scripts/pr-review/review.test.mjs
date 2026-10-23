@@ -11,6 +11,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runReview, EXIT } from './review.mjs';
+import { compositeKey1SystemPrompt, key1SystemPrompt, userPrompt, COMPOSITE_VERDICT_SCHEMA } from './lib.mjs';
+import { findingsToFix } from '../pr-loop/fixer.mjs';
+import { GOLDEN_CTX } from './fixtures/key1-golden-ctx.mjs';
 import { acquireLock, capFindings, classify, findingsBySeverity, founderClassBlock, verdictCacheName, withFounderClassBlock, FOUNDER_BLOCK_OPEN, FOUNDER_BLOCK_CLOSE, parseNameStatusZ, parseVerdictText, prTextBlock, PROXY_DELEGATION, renderComment, validateVerdict, PR_TEXT_FILE } from './lib.mjs';
 import { claudeArgs, interpret, reviewerEnv } from './claude.mjs';
 import { appJwt, appConfigFromEnv } from './github.mjs';
@@ -1383,4 +1386,174 @@ test('App JWT is RS256 over iss=app id; App config needs an id and a key source'
   assert.deepEqual(JSON.parse(Buffer.from(p, 'base64url')), { iat: 999940, exp: 1000540, iss: '12345' });
   assert.equal(appConfigFromEnv({ NIRMAAN_REVIEW_APP_ID: '1' }), null);
   assert.equal(appConfigFromEnv({ NIRMAAN_REVIEW_APP_ID: '1', NIRMAAN_REVIEW_APP_PRIVATE_KEY_FILE: '/k' }).keyFile, '/k');
+});
+
+// ---------------------------------------------------------------- composite key 1 (key1_mode, L6)
+
+const COMPOSITE = { ...CONFIG, key1_mode: 'composite' };
+// A composite verdict answering for `teams` and `lists`.
+const comp = (teams, lists, { verdict = 'pass', findings = [], teamVerdicts = {} } = {}) => ({ type: 'verdict', verdict, findings, extra: { teams: teams.map((team) => ({ team, verdict: teamVerdicts[team] ?? 'pass' })), checklists: lists.map((name) => ({ name, result: 'checked' })) } });
+// os/app.js (Engineering), a workflow (Platform and Quality, class A) and a
+// Prisma file with a price (Engineering with the database-engineer member
+// checklist; the money rule adds Legal and Compliance and class C).
+const threeTeams = (w) => { write(w, 'os/app.js', 'x\n'); write(w, '.github/workflows/x.yml', 'name: x\n'); write(w, 'os/prisma/schema.prisma', 'model A {}\n// the price\n'); };
+const TEAMS3 = ['engineering', 'legal', 'platform-quality'];
+const LISTS3 = ['key1-base', 'engineering', 'legal', 'platform-quality', 'database-engineer'];
+
+test('key1_mode "per-team" is the setting and reproduces the earlier key-1 prompts byte for byte', async () => {
+  assert.equal(CONFIG.key1_mode, 'per-team');
+  const golden = readFileSync(join(HERE, 'fixtures', 'key1-per-team.golden.txt'), 'utf8');
+  assert.equal(`${key1SystemPrompt(GOLDEN_CTX)}\n=====USER=====\n${userPrompt({ ...GOLDEN_CTX, team: 'engineering' })}`, golden);
+  // Through the script: no key1_mode and "per-team" build the same prompts.
+  const prompts = async (config) => {
+    const t = setup({ change: threeTeams, responses: [{ type: 'verdict', verdict: 'fail', findings: [{ ...GOOD_BLOCKER, line: 1 }] }] });
+    try {
+      await t.run({ config });
+      // Only the run's own temp folders, commit SHAs and nonce differ.
+      return t.calls().map((c) => [sysOf(c), c.stdin].map((x) => x.split(t.tmp).join('T').replace(/worktrees\/[^/]+\//g, 'worktrees/W/').replace(/[0-9a-f]{40}/g, 'S').replace(/COMMIT [0-9a-f]{7}/g, 'COMMIT C').replace(/[0-9a-f]{24}/g, 'N')));
+    } finally { t.cleanup(); }
+  };
+  const { key1_mode: _, ...without } = CONFIG;
+  const a = await prompts(without), b = await prompts(CONFIG);
+  assert.equal(a.length, 3, 'one key-1 process per owning team');
+  assert.deepEqual(a, b);
+});
+
+test('composite: one key-1 process for every owning team, base checklist once, every lead checklist and member checklist; one comment, the same check names', async () => {
+  const t = setup({ change: threeTeams, responses: [comp(TEAMS3, LISTS3), { type: 'verdict', verdict: 'pass' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await t.run({ config: COMPOSITE });
+    const calls = t.calls();
+    assert.equal(calls.length, 3, 'composite key 1, key 2, the Founder Proxy');
+    const k1 = sysOf(calls[0]);
+    assert.equal(k1.match(/CHECKLIST-MARKER-key1-base/g).length, 1, 'the base checklist once');
+    for (const m of ['CHECKLIST-MARKER-legal', 'CHECKLIST-MARKER-engineering', 'CHECKLIST-MARKER-platform-quality', 'SPEC-MARKER-database-engineer']) assert.match(k1, new RegExp(m));
+    // The stable part in a fixed order: base, then teams by id, then members.
+    const at = (m) => k1.indexOf(m);
+    assert.ok(at('CHECKLIST-MARKER-key1-base') < at('CHECKLIST-MARKER-engineering') && at('CHECKLIST-MARKER-engineering') < at('CHECKLIST-MARKER-legal') && at('CHECKLIST-MARKER-legal') < at('CHECKLIST-MARKER-platform-quality') && at('CHECKLIST-MARKER-platform-quality') < at('SPEC-MARKER-database-engineer'));
+    assert.doesNotMatch(k1, /UNTRUSTED-DATA-[0-9a-f]{24} name="diff">>>/, 'the diff and PR text are in the user prompt, after the stable part');
+    assert.match(calls[0].stdin, /Key: 1 \(composite: every owning team\)/);
+    const schema = JSON.parse(calls[0].argv[calls[0].argv.indexOf('--json-schema') + 1]);
+    assert.deepEqual(schema, COMPOSITE_VERDICT_SCHEMA);
+    assert.equal(r.key1.length, 1);
+    assert.equal(r.key1[0].team, 'composite');
+    const comments = t.posts.filter((p) => p.type === 'comment');
+    assert.equal(comments.filter((c) => /key=1 /.test(c.body)).length, 1, 'one key-1 comment');
+    assert.match(comments[0].body, /<!-- nirmaan-pr-review key=1 team=composite head=/);
+    assert.match(comments[0].body, /### Agent review: key 1, composite \(Engineering, Legal and Compliance, Platform and Quality\)/);
+    assert.match(comments[0].body, /#### Teams/);
+    assert.equal(t.check('review/team-lead').state, 'success');
+    assert.equal(t.check('review/executive').state, 'success');
+    assert.match(calls[1].stdin, /"team": "composite"/, 'key 2 gets the composite result');
+  } finally { t.cleanup(); }
+});
+
+test('composite: a verdict missing a team or a checklist entry gets one repair run, then defers (never success)', async () => {
+  for (const [teams, lists, err] of [[TEAMS3.slice(1), LISTS3, /no entry for owning team engineering/], [TEAMS3, LISTS3.slice(0, -1), /no entry for checklist database-engineer/]]) {
+    const t = setup({ change: threeTeams, responses: [comp(teams, lists)] });
+    try {
+      const r = await t.run({ config: COMPOSITE });
+      assert.equal(t.calls().length, 2, 'the first run and exactly one repair run; key 2 not run');
+      assert.match(t.calls()[1].stdin, err);
+      assert.equal(r.key1[0].status, 'deferred');
+      assert.match(r.key1[0].reason, /after one repair run/);
+      assert.equal(t.check('review/team-lead').state, 'pending');
+      noSuccess(t);
+    } finally { t.cleanup(); }
+  }
+});
+
+test('composite: a finding without a checklist is rejected (deferred, no repair run); one naming a checklist not given repairs', async () => {
+  const t = setup({ change: threeTeams, responses: [comp(TEAMS3, LISTS3, { verdict: 'fail', findings: [GOOD_BLOCKER] })] });
+  try {
+    const r = await t.run({ config: COMPOSITE });
+    assert.equal(t.calls().length, 1);
+    assert.equal(r.key1[0].status, 'deferred');
+    assert.match(r.key1[0].reason, /finding 1: checklist missing/);
+    noSuccess(t);
+  } finally { t.cleanup(); }
+  const u = setup({ change: threeTeams, responses: [comp(TEAMS3, LISTS3, { verdict: 'fail', findings: [{ ...GOOD_BLOCKER, checklist: 'design' }] })] });
+  try {
+    await u.run({ config: COMPOSITE });
+    assert.equal(u.calls().length, 2);
+    assert.match(u.calls()[1].stdin, /checklist "design" was not given to this review/);
+    noSuccess(u);
+  } finally { u.cleanup(); }
+});
+
+test('composite: a fail names the failing teams; each finding goes to its checklist\'s team for the fixer; a failed team never passes', async () => {
+  const f = { file: 'os/app.js', line: 1, severity: 'blocker', text: 'broken', checklist: 'database-engineer' };
+  const t = setup({ change: threeTeams, responses: [comp(TEAMS3, LISTS3, { verdict: 'fail', findings: [f], teamVerdicts: { engineering: 'fail' } })] });
+  try {
+    const r = await t.run({ config: COMPOSITE });
+    assert.equal(r.key1[0].status, 'fail');
+    assert.equal(r.key1[0].verdict.findings[0].team, 'engineering');
+    assert.match(t.check('review/team-lead').title, /fail \(composite: Engineering\)/);
+    const fix = findingsToFix(r);
+    assert.equal(fix.length, 1);
+    assert.equal(fix[0].team, 'engineering');
+    assert.match(t.posts.find((p) => p.type === 'comment').body, /\| blocker \| `os\/app\.js:1` \| database-engineer \| broken \|/);
+  } finally { t.cleanup(); }
+  // A team said fail with no blocker: the script records fail.
+  const u = setup({ change: threeTeams, responses: [comp(TEAMS3, LISTS3, { teamVerdicts: { legal: 'fail' } })] });
+  try {
+    const r = await u.run({ config: COMPOSITE });
+    assert.equal(r.key1[0].status, 'fail');
+    noSuccess(u);
+  } finally { u.cleanup(); }
+});
+
+test('composite: citation strictness follows the finding\'s checklist (a bad minor cite from Legal and Compliance repairs; from Engineering it is dropped)', async () => {
+  const bad = (checklist) => ({ file: 'os/app.js', line: 99, severity: 'minor', text: 'x', checklist });
+  const t = setup({ change: threeTeams, responses: [comp(TEAMS3, LISTS3, { findings: [bad('legal')] })] });
+  try {
+    await t.run({ config: COMPOSITE });
+    assert.equal(t.calls().length, 2, 'one repair run');
+    noSuccess(t);
+  } finally { t.cleanup(); }
+  const u = setup({ change: threeTeams, responses: [comp(TEAMS3, LISTS3, { findings: [bad('engineering')] }), { type: 'verdict', verdict: 'pass' }, { type: 'verdict', verdict: 'pass' }] });
+  try {
+    const r = await u.run({ config: COMPOSITE });
+    assert.equal(r.key1[0].status, 'pass');
+    assert.deepEqual(r.key1[0].verdict.findings, []);
+    assert.equal(u.calls().length, 3, 'no repair run: key 1, key 2, the proxy');
+  } finally { u.cleanup(); }
+});
+
+test('composite: over key1_composite_max_checklists, key 1 runs per team on that head', async () => {
+  const t = setup({ change: threeTeams, responses: [{ type: 'verdict', verdict: 'fail', findings: [GOOD_BLOCKER] }] });
+  try {
+    const r = await t.run({ config: { ...COMPOSITE, key1_composite_max_checklists: 4 } });
+    assert.equal(r.key1.length, 3);
+    assert.ok(r.key1.every((k) => k.team !== 'composite'));
+  } finally { t.cleanup(); }
+});
+
+test('composite with the real map and specs: a page, a script and a price put every owning lead\'s key 1 section and every rule-named checklist in one prompt (frontend-engineer, brand, content and SEO included)', async () => {
+  const ROOT = join(HERE, '..', '..', '..');
+  const copy = (w, rel) => { const src = join(ROOT, rel); if (!existsSync(src)) return; for (const f of execFileSync('git', ['ls-files', '-z', '--', rel], { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean)) write(w, f, readFileSync(join(ROOT, f), 'utf8')); };
+  const t = setup({
+    mainExtra: (w) => { for (const rel of ['.github/review-teams.yml', 'agents', '.claude/skills/pr-review/checklists', 'docs/design/visual-direction.md', 'website/src/index.njk', 'website/src/_includes/base.njk']) copy(w, rel); },
+    change: (w) => {
+      write(w, 'website/src/index.njk', `${readFileSync(join(ROOT, 'website/src/index.njk'), 'utf8')}\n<p>New line.</p>\n`);
+      write(w, 'website/src/_includes/base.njk', `${readFileSync(join(ROOT, 'website/src/_includes/base.njk'), 'utf8')}\n<!-- meta -->\n`);
+      write(w, '.github/scripts/x.mjs', '// the price is 5000 rupees\n');
+    },
+    responses: [{ type: 'result', text: 'not json' }],
+  });
+  try {
+    const r = await t.run({ config: { ...COMPOSITE, key1_composite_max_checklists: 99 } });
+    const c = r.classification;
+    for (const team of ['brand-content', 'design', 'engineering', 'platform-quality', 'commercial']) assert.ok(c.teams.includes(team), team);
+    for (const role of ['frontend-engineer', 'content-strategist', 'seo-specialist']) assert.ok(c.checklists.includes(role), role);
+    assert.equal(t.calls().length, 1, 'one key-1 process');
+    const sys = sysOf(t.calls()[0]);
+    const map = parseYaml(readFileSync(join(ROOT, '.github/review-teams.yml'), 'utf8'));
+    for (const id of c.teams) {
+      const lead = map.teams.find((x) => x.id === id).lead;
+      assert.match(sys, new RegExp(`## Checklist: ${lead} \\(team [^)]*, id ${id}: the key 1 review of its lead ${lead}`), `${id} lead section`);
+    }
+    for (const role of c.checklists) assert.ok(sys.includes(`## Checklist: ${role} (`), `member checklist ${role}`);
+    assert.ok(sys.includes('## Checklist: brand-strategist ('), 'brand: the Brand and Content lead\'s key 1 section');
+  } finally { t.cleanup(); }
 });

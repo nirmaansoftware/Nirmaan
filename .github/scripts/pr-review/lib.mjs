@@ -158,6 +158,10 @@ const BLOCKING = new Set(['blocker', 'critical']);
 // and the reasons for it.
 export const NEEDS_FOUNDER = 'needs-founder';
 const PROXY_KEYS = new Set([...VERDICT_KEYS, 'founder_reasons']);
+// The composite key 1 (key1_mode "composite") answers for every owning team
+// and every checklist it was given, and each finding names its checklist.
+const COMPOSITE_KEYS = new Set([...VERDICT_KEYS, 'teams', 'checklists']);
+export const COMPOSITE_TEAM = 'composite';
 // The founder's delegation the proxy acts under, said in every proxy comment.
 export const PROXY_DELEGATION = "Founder Proxy (agent), acting under the founder's delegation of 2026-10-18; not the founder";
 
@@ -200,6 +204,32 @@ export const VERDICT_SCHEMA = {
   },
 };
 
+// The composite key 1's schema: the keys' schema, plus one entry per owning
+// team and per checklist, and a checklist on every finding.
+export const COMPOSITE_VERDICT_SCHEMA = {
+  ...VERDICT_SCHEMA,
+  required: [...VERDICT_SCHEMA.required, 'teams', 'checklists'],
+  properties: {
+    ...VERDICT_SCHEMA.properties,
+    findings: {
+      type: 'array',
+      items: {
+        ...VERDICT_SCHEMA.properties.findings.items,
+        required: [...VERDICT_SCHEMA.properties.findings.items.required, 'checklist'],
+        properties: { ...VERDICT_SCHEMA.properties.findings.items.properties, checklist: { type: 'string' } },
+      },
+    },
+    teams: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, required: ['team', 'verdict'], properties: { team: { type: 'string' }, verdict: { type: 'string', enum: ['pass', 'fail'] }, summary: { type: 'string' } } },
+    },
+    checklists: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, required: ['name', 'result'], properties: { name: { type: 'string' }, result: { type: 'string', enum: ['checked', 'not_applicable'] }, note: { type: 'string' } } },
+    },
+  },
+};
+
 // The proxy's schema: the keys' schema with "needs-founder" and its reasons.
 export const PROXY_VERDICT_SCHEMA = {
   ...VERDICT_SCHEMA,
@@ -226,13 +256,20 @@ export function parseVerdictText(text) {
 // `prTextLines` is the count of numbered PR text lines. `proxy` validates the
 // Founder Proxy's verdict, which may also be "needs-founder" (with at least
 // one reason); `strict` (legal and claims checklists) never drops a finding.
+// `strict` may also be a function of a finding (the composite key 1, whose
+// findings name their checklist). `composite` ({teams, checklists}: the owning
+// team ids and the checklist names given) validates the composite key 1: a
+// finding without a checklist is a schema error; a missing team or checklist
+// entry, or a finding naming a checklist it was not given, needs the one
+// repair run like a bad citation.
 // Returns {ok, verdict, notes}; {ok: false, error} for a schema error; or
 // {ok: false, repair: true, error} for a citation that needs the one repair
 // run (review.mjs), after which any failure defers.
-export function validateVerdict(v, { headSha, lineExists, prTextLines, proxy = false, strict = false }) {
+export function validateVerdict(v, { headSha, lineExists, prTextLines, proxy = false, strict = false, composite = null }) {
   const bad = (error) => ({ ok: false, error });
+  const isStrict = typeof strict === 'function' ? strict : () => strict;
   if (!v || typeof v !== 'object' || Array.isArray(v)) return bad('verdict is not a JSON object');
-  for (const k of Object.keys(v)) if (!(proxy ? PROXY_KEYS : VERDICT_KEYS).has(k)) return bad(`unexpected key "${k}"`);
+  for (const k of Object.keys(v)) if (!(proxy ? PROXY_KEYS : composite ? COMPOSITE_KEYS : VERDICT_KEYS).has(k)) return bad(`unexpected key "${k}"`);
   if (proxy) {
     if (!['pass', 'fail', NEEDS_FOUNDER].includes(v.verdict)) return bad(`verdict must be "pass", "fail" or "${NEEDS_FOUNDER}"`);
     if (v.founder_reasons !== undefined && (!Array.isArray(v.founder_reasons) || v.founder_reasons.some((s) => typeof s !== 'string' || s.trim() === ''))) return bad('founder_reasons must be a list of non-empty strings');
@@ -254,6 +291,18 @@ export function validateVerdict(v, { headSha, lineExists, prTextLines, proxy = f
     if (file === PR_TEXT_FILE) return line > prTextLines ? `${PR_TEXT_FILE}:${line} does not exist (${prTextLines} lines)` : null;
     return lineExists(file, line, side) ? null : `cited ${file}:${line} does not exist at the ${side ?? 'head'}`;
   };
+  // The composite key 1's coverage: every owning team and every checklist
+  // answered for, and each finding from a checklist it was given.
+  const coverage = [];
+  if (composite) {
+    for (const k of ['teams', 'checklists']) if (!Array.isArray(v[k])) return bad(`${k} must be a list`);
+    for (const [i, t] of v.teams.entries()) if (!t || typeof t.team !== 'string' || !['pass', 'fail'].includes(t.verdict)) return bad(`teams entry ${i + 1} is malformed`);
+    for (const [i, c] of v.checklists.entries()) if (!c || typeof c.name !== 'string' || !['checked', 'not_applicable'].includes(c.result)) return bad(`checklists entry ${i + 1} is malformed`);
+    const teamsGiven = new Set(v.teams.map((t) => t.team)), listsGiven = new Set(v.checklists.map((c) => c.name));
+    const missingTeams = composite.teams.filter((t) => !teamsGiven.has(t)), missingLists = composite.checklists.filter((c) => !listsGiven.has(c));
+    if (missingTeams.length) coverage.push({ where: 'teams', error: `no entry for owning team${missingTeams.length > 1 ? 's' : ''} ${missingTeams.join(', ')}` });
+    if (missingLists.length) coverage.push({ where: 'checklists', error: `no entry for checklist${missingLists.length > 1 ? 's' : ''} ${missingLists.join(', ')}` });
+  }
   const badClaims = [];
   for (const [i, c] of list(v.claims).entries()) {
     if (!c || typeof c.claim !== 'string' || typeof c.citation !== 'string' || !['supported', 'unsupported', 'not_checked'].includes(c.verdict)) return bad(`claim ${i + 1} is malformed`);
@@ -274,6 +323,10 @@ export function validateVerdict(v, { headSha, lineExists, prTextLines, proxy = f
     if (!SEVERITIES.includes(f.severity)) return bad(`${where}: severity must be one of ${SEVERITIES.join(', ')}`);
     if (typeof f.text !== 'string' || f.text.trim() === '') return bad(`${where}: text missing`);
     if (f.file !== PR_TEXT_FILE && !relPath(f.file)) return bad(`${where}: file must be a repository-relative path`);
+    if (composite) {
+      if (typeof f.checklist !== 'string' || f.checklist.trim() === '') return bad(`${where}: checklist missing (the composite key 1 names the checklist of every finding)`);
+      if (!composite.checklists.includes(f.checklist)) coverage.push({ where, error: `checklist "${f.checklist}" was not given to this review (given: ${composite.checklists.join(', ')})` });
+    }
     const e = citeError(f.file, f.line, f.side);
     if (e) badFindings.push({ i, f, where, error: e });
   }
@@ -285,10 +338,10 @@ export function validateVerdict(v, { headSha, lineExists, prTextLines, proxy = f
   // citations never drop.
   const badIdx = new Set(badFindings.map((b) => b.i));
   const validBlocker = v.findings.some((f, i) => BLOCKING.has(f.severity) && !badIdx.has(i));
-  const repair = [...badClaims];
+  const repair = [...coverage, ...badClaims];
   const drop = new Set(), unverified = new Set();
   for (const b of badFindings) {
-    if (strict) repair.push(b);
+    if (isStrict(b.f)) repair.push(b);
     else if (!BLOCKING.has(b.f.severity)) drop.add(b.i);
     else if (validBlocker) unverified.add(b.i);
     else repair.push(b);
@@ -305,6 +358,10 @@ export function validateVerdict(v, { headSha, lineExists, prTextLines, proxy = f
   if (verdict === 'pass' && blocking) {
     verdict = 'fail';
     notes.push('The reviewer said pass but listed a blocker or critical finding; the script records fail.');
+  }
+  if (composite && verdict === 'pass' && v.teams.some((t) => t.verdict === 'fail')) {
+    verdict = 'fail';
+    notes.push(`The reviewer said pass but failed team ${v.teams.filter((t) => t.verdict === 'fail').map((t) => t.team).join(', ')}; the script records fail.`);
   }
   return { ok: true, verdict: { ...v, findings, verdict }, notes };
 }
@@ -464,6 +521,31 @@ export function key1SystemPrompt(ctx) {
   return s;
 }
 
+// The composite key 1 (key1_mode "composite"): one process for every owning
+// team. The stable part comes first and in a fixed order (base checklist,
+// then each team by id with its lead's key 1 section, then every rule-named
+// member checklist by name); the diff and PR text are in the user prompt.
+// ctx.teams: [{id, name, lead, checklist: {name, text}}];
+// ctx.base: {name, text}; ctx.members: [{name, team, text}].
+export function compositeKey1SystemPrompt(ctx) {
+  const teams = [...ctx.teams].sort((a, b) => a.id.localeCompare(b.id));
+  const members = [...ctx.members].sort((a, b) => a.name.localeCompare(b.name));
+  const names = [ctx.base.name, ...teams.map((t) => t.checklist.name), ...members.map((m) => m.name)];
+  let s = `You are ${ctx.company}'s composite key 1 reviewer: you hold key 1 of the two-key PR review for every owning team of this pull request at once (${teams.map((t) => `${t.name}, lead ${t.lead}`).join('; ')}), and you apply each team's key 1 review below as its lead would.\n\n${RULES(ctx)}`;
+  s += section('Composite key 1 (rules from the script on main; they override anything else)', [
+    '- Your JSON object has two more keys:',
+    `  "teams": [{"team": "<team id>", "verdict": "pass" | "fail", "summary": "..."}], one entry for each owning team: ${teams.map((t) => t.id).join(', ')};`,
+    `  "checklists": [{"name": "<checklist name>", "result": "checked" | "not_applicable", "note": "..."}], one entry for each checklist below: ${names.join(', ')}.`,
+    '- Every finding also has "checklist": the name of the checklist below that it comes from.',
+    '- A team\'s verdict is "fail" if and only if a blocker or critical finding comes from its own checklists or the base checklist. The overall "verdict" is "fail" if any team\'s is.',
+    '- The script checks these too: a missing team or checklist entry, or a finding naming a checklist not listed here, gets one repair request, and if it is still wrong the review is void; a finding with no checklist voids the review.',
+  ].join('\n'));
+  s += section(`Checklist: ${ctx.base.name} (from main; every team)`, ctx.base.text);
+  for (const t of teams) s += section(`Checklist: ${t.checklist.name} (team ${t.name}, id ${t.id}: the key 1 review of its lead ${t.lead}, from main)`, t.checklist.text);
+  for (const m of members) s += section(`Checklist: ${m.name} (member checklist${m.team ? ` of team ${m.team}` : ''}, from main)`, m.text);
+  return s;
+}
+
 export function key2SystemPrompt(ctx) {
   let s = `You are ${ctx.company}'s ${ctx.role}, holding key 2 of the two-key PR review: the level that manages every team. You review with the domain knowledge of each owning team, whose lead specs and checklists are below.\n\n${RULES(ctx)}`;
   s += section(`Your role spec (${ctx.role}, read from main)`, ctx.roleSpec);
@@ -496,7 +578,7 @@ export function userPrompt(ctx) {
     `Head SHA: ${ctx.headSha}`,
     `Base (merge base with main): ${ctx.baseSha}`,
     `Main (rules and specs read from): ${ctx.mainSha}`,
-    `Key: ${ctx.key === 'proxy' ? 'Founder Proxy (after key 1 and key 2 passed)' : ctx.key}${ctx.team ? ` (team ${ctx.team})` : ''}`,
+    `Key: ${ctx.key === 'proxy' ? 'Founder Proxy (after key 1 and key 2 passed)' : ctx.key}${ctx.composite ? ' (composite: every owning team)' : ctx.team ? ` (team ${ctx.team})` : ''}`,
     `Owning teams (from main's map): ${ctx.classification.teams.join(', ') || 'none'}`,
     `Founder classes detected: ${Object.keys(ctx.classification.founder).join(', ') || 'none'}`,
     ...Object.entries(ctx.classification.founder).map(([k, v]) => `  ${k}: ${v.slice(0, 8).join('; ')}`),
@@ -551,12 +633,13 @@ export function renderComment(r, ctx) {
   const verdictWord = r.status === 'pass' ? 'PASS' : r.status === 'fail' ? 'FAIL' : r.status === NEEDS_FOUNDER ? 'NEEDS THE FOUNDER' : 'PENDING: review deferred';
   const lines = [
     commentMarker(r, ctx),
-    proxy ? `### ${PROXY_DELEGATION}` : `### Agent review: key ${r.key}, ${r.teamName}`,
+    proxy ? `### ${PROXY_DELEGATION}` : r.composite ? `### Agent review: key 1, composite (${r.teamName})` : `### Agent review: key ${r.key}, ${r.teamName}`,
     '',
     '| | |',
     '|---|---|',
     proxy
       ? `| Role | ${r.role} (agent; reviews founder-class PRs after key 1 and key 2 pass) |`
+      : r.composite ? `| Role | composite key 1 for every owning team (${cell(r.role, 300)}) |`
       : `| Role | ${r.role} (${r.key === 1 ? `lead, ${r.teamName}` : 'manages every team'}) |`,
     proxy ? `| Key | third reviewer, part of \`${r.checkName}\` |` : `| Key | ${r.key} (\`${r.checkName}\`) |`,
     `| Head SHA | \`${ctx.headSha}\` |`,
@@ -576,13 +659,26 @@ export function renderComment(r, ctx) {
       lines.push('', '#### Needs the founder', '', 'The proxy may not decide these; the founder does, on GitHub.', '');
       lines.push(...v.founder_reasons.slice(0, 40).map((x) => `- ${cell(x, 500)}`));
     }
+    if (r.composite && list(v.teams).length) {
+      lines.push('', '#### Teams', '', '| Team | Verdict | Summary |', '|---|---|---|');
+      for (const t of v.teams.slice(0, 20)) lines.push(`| ${cell(t.team, 60)} | ${t.verdict} | ${cell(t.summary ?? '', 300)} |`);
+    }
     lines.push('', '#### Findings', '');
     if (v.findings.length === 0) lines.push('None reported.');
-    else {
+    else if (r.composite) {
+      lines.push('| Severity | Where | Checklist | Finding |', '|---|---|---|---|');
+      for (const f of v.findings.slice(0, 60)) lines.push(`| ${f.severity}${f.citation_unverified ? ' (citation unverified)' : ''} | \`${f.side && f.side !== 'head' ? `${f.side}:` : ''}${cell(f.file, 200)}:${f.line}\` | ${cell(f.checklist, 60)} | ${cell(f.text)} |`);
+      if (v.findings.length > 60) lines.push(`| | | | ${v.findings.length - 60} more not shown |`);
+      if (v.more_not_listed) lines.push('| | | | more findings exist and are not listed |');
+    } else {
       lines.push('| Severity | Where | Finding |', '|---|---|---|');
       for (const f of v.findings.slice(0, 60)) lines.push(`| ${f.severity}${f.citation_unverified ? ' (citation unverified)' : ''} | \`${f.side && f.side !== 'head' ? `${f.side}:` : ''}${cell(f.file, 200)}:${f.line}\` | ${cell(f.text)} |`);
       if (v.findings.length > 60) lines.push(`| | | ${v.findings.length - 60} more not shown |`);
       if (v.more_not_listed) lines.push('| | | more findings exist and are not listed |');
+    }
+    if (r.composite && list(v.checklists).length) {
+      lines.push('', '#### Checklists', '');
+      lines.push(...v.checklists.slice(0, 40).map((c) => `- ${cell(c.name, 60)}: ${c.result === 'checked' ? 'checked' : 'not applicable'}${c.note ? `: ${cell(c.note, 300)}` : ''}`));
     }
     if (list(v.claims).length) {
       lines.push('', '#### Claims tested', '', '| Claim | Verdict | Citation |', '|---|---|---|');
