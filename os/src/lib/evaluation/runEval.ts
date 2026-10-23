@@ -66,7 +66,7 @@ export interface RecordOptions extends Omit<RecordContext, "commit"> {
 }
 
 /**
- * Runs a whole set of eval cases in sequence (not parallel — they share the same test-fixture project directory and could race on file writes otherwise) and returns all results.
+ * Runs a whole set of eval cases in sequence (not parallel: they share the same test-fixture project directory and could race on file writes otherwise) and returns all results.
  * With `record`, the runs of cases that loaded a skill are also appended to capability/records as `eval_run` lines (records.ts), failures included.
  */
 export async function runEvalSuite(cases: EvalCase[], options: { projectId: string; provider?: ModelProvider; record?: RecordOptions }): Promise<EvalRunResult[]> {
