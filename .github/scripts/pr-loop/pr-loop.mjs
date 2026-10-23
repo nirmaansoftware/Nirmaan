@@ -403,7 +403,8 @@ async function updateBehind(o, { n, head, st, say, stop, log, out, author }) {
   const sha7 = head.slice(0, 7);
   if (o.post === 'none') { out(`pr-loop: #${n} is behind main; not updated (--no-post)`); return null; }
   const bot = (lc.no_fixer_authors ?? []).includes(author);
-  if (st.updated?.from === head && Date.now() - Date.parse(st.updated.at) < UPDATE_WAIT_MS) {
+  // A bot is asked once per head, with no repeat: it rebases when it can.
+  if (st.updated?.from === head && (bot || Date.now() - Date.parse(st.updated.at) < UPDATE_WAIT_MS)) {
     out(`pr-loop: #${n} waiting for ${bot ? author : 'GitHub'} to update the branch (head ${sha7})`);
     return { outcome: 'wait', reason: `waiting for ${bot ? author : 'GitHub'} to update the branch` };
   }
@@ -439,7 +440,7 @@ async function mergePath(o, { n, head, st, r, say, stop, log, out }) {
   if (now.labels.includes(cfg.hold_label)) { log('held'); return { outcome: 'skip', reason: 'hold label set during the review' }; }
   // main moved during the review: this head cannot merge, so update it rather
   // than ask GitHub to merge it.
-  if (now.mergeableState === 'behind' && o.post !== 'none') return await updateBehind(o, { n, head, st, say, stop, log, out });
+  if (now.mergeableState === 'behind' && o.post !== 'none') return await updateBehind(o, { n, head, st, say, stop, log, out, author: now.author });
   // The repository's "Allow auto-merge" setting decides between auto-merge
   // and "ready": read with the gh login (`allow_auto_merge`, a field, never
   // the wording of an error). Off: ready. On: `gh pr merge --auto`, and any

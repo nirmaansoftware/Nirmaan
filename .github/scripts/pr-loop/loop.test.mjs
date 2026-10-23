@@ -1034,6 +1034,26 @@ test('a Dependabot PR behind main is never updated by the loop: it asks Dependab
     assert.ok(c.body.startsWith('@dependabot rebase\n'), 'the command is the first line');
     assert.deepEqual(outcomes(await t.tick()), ['wait'], 'not asked again on the same head');
     assert.equal(t.calls().length, 0, 'no model call while behind');
+    // Not asked again later either: once per head, however long it waits.
+    const st = t.state();
+    st.updated.at = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    writeFileSync(join(t.stateDir, 'loop', `${CONFIG.repo.replace('/', '_')}-pr-1.json`), JSON.stringify(st));
+    const before = t.posts.filter((p) => p.type === 'comment').length;
+    assert.deepEqual(outcomes(await t.tick()), ['wait'], 'a day later, still waiting');
+    assert.equal(t.posts.filter((p) => p.type === 'comment').length, before, 'no second rebase comment');
+  } finally { t.cleanup(); }
+});
+
+test('a Dependabot PR whose base moves during the review is not updated by the loop at merge time either: it asks Dependabot to rebase', async () => {
+  const t = setup({ gh: { author: 'dependabot[bot]' } });
+  try {
+    let moved = false;
+    t.g.behindWhen = () => { if (!moved && t.calls().length >= 2) { moved = true; t.advanceMain(); } return false; };
+    assert.deepEqual(outcomes(await t.tick()), ['updated']);
+    assert.equal(t.merges.length, 0);
+    assert.deepEqual(t.updates, [], 'no update-branch');
+    assert.equal(t.originHead(), t.firstHead, 'nothing pushed');
+    assert.ok(t.posts.filter((p) => p.type === 'comment').pop().body.startsWith('@dependabot rebase\n'));
   } finally { t.cleanup(); }
 });
 

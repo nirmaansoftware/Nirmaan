@@ -348,9 +348,10 @@ the agents' account (`patel-om`) or Dependabot (`dependabot[bot]`): the list
 tested. A Dependabot PR gets the same review (CI first, both keys, the
 Founder Proxy on a founder class), but the loop never pushes to its branch
 (`no_fixer_authors`): a failing Dependabot PR gets `author-fix`, and an agent
-recreates or closes it. Behind `main`, such a PR is not updated by
-update-branch either: the loop comments Dependabot's own rebase command
-(`rebase_commands`) once per head and waits for the new head.
+recreates or closes it. Behind `main`, before its review or because `main`
+moved during it, such a PR is not updated by update-branch either: the loop
+comments Dependabot's own rebase command (`rebase_commands`) once per head,
+never again on that head, and waits for the new head.
 Drafts, PRs labelled `hold` and PRs labelled `needs-founder` are skipped.
 
 **Each step, per PR:**
