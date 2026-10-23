@@ -155,7 +155,10 @@ approval.
   worker or any sending. Since the founder's record of 2026-10-20
   ([2026-10-20-founder-proxy-widened.md](2026-10-20-founder-proxy-widened.md))
   the proxy decides everything else itself, including the open founder items
-  it names. A change that weakens a review gate (removes or skips a key, a
+  it names. When a change could be read either way, it decides on the merits:
+  `needs-founder` only when the change is clearly one of these items, or when
+  it cannot tell whether a change adds spending
+  ([agents/founder-proxy/agent.md](../../agents/founder-proxy/agent.md)). A change that weakens a review gate (removes or skips a key, a
   required CI job or a required check; lets a check pass by default, on a
   timeout or on a deferred review; reads rules from the pull request instead
   of `main`; or lets the loop merge without both keys and the proxy) is a
@@ -228,9 +231,22 @@ What the script does, in order:
    `CLAUDE.md`. It also records each derived holder's deputy from the chart
    (none for the legal team). This is logged (`kind` `derive` in
    `calls.jsonl`, beside the actual holders) and stated in one line of the
-   key-2 comment. It changes nothing that is posted: key 2 stays
-   `key2_role` (the Orchestrator), and no deputy reviews. Without a chart on
-   `main` the line says the derivation is not available. Every deferred key
+   key-2 comment. It does not change who holds key 2: that stays
+   `key2_role` (the Orchestrator). Without a chart on `main` the line says
+   the derivation is not available.
+   **Deputy try** (decision D4.4 in
+   [capability-hierarchy-decisions.md](capability-hierarchy-decisions.md)).
+   When a key-1 lead's call times out, or its process fails with no output
+   at all (after its one retry), the unit's deputy named in `main`'s chart
+   gets one try with the deputy's own spec and the lead's checklists; the
+   comment and the `review/team-lead` check name the deputy. There is no
+   deputy try for a rate limit (the deputy runs on the same plan), for a
+   failure that produced output (an error result, invalid output or failed
+   validation, even when a repair run then times out: PR text can cause
+   those), for a missing spec, for the legal team (Legal and Compliance has
+   no deputy), or without a chart on `main`; key 2 has none today (above the
+   Orchestrator is only the founder). If the deputy does not answer either,
+   the key is deferred and the loop stops as before. Every deferred key
    also names its kind (`rate-limit`, `timeout`, `call-failed`,
    `invalid-output`, `validation`, `missing-spec`, `missing-standard`) in
    the loop's per-phase line.
@@ -486,7 +502,9 @@ and for a stop its reason and class. When a PR the loop armed for merge leaves
 the open list, the next pass writes one `merged` (or `closed`) line with
 GitHub's merge time. Nothing is written under the repository. Per-PR loop
 state (rounds, findings seen, the last head it pushed, lock wait) is in
-`~/.nirmaan/pr-review/loop/`.
+`~/.nirmaan/pr-review/loop/`. The needs-founder digest, the health alerts
+and the turnaround report read these records:
+[pr-loop-runbook.md](pr-loop-runbook.md).
 
 **Author-side usage.** Author pipelines that run `claude -p` steps (a
 writer, a checker, an eval) can run each step through

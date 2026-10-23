@@ -55,7 +55,7 @@ jobs:
         with:
           node-version: 22
       - name: Script tests
-        run: node --test .github/scripts/repo-checks.test.mjs .github/scripts/review-teams.test.mjs .github/scripts/examples.test.mjs .github/scripts/org-chart.test.mjs .github/scripts/agents-text.test.mjs capability/tools/levels.test.mjs .github/scripts/pr-review/review.test.mjs .github/scripts/pr-loop/loop.test.mjs .github/scripts/review-calibration/run.test.mjs .github/scripts/skills.test.mjs .github/scripts/pr-review/derive.test.mjs .github/scripts/author/run.test.mjs
+        run: node --test .github/scripts/repo-checks.test.mjs .github/scripts/review-teams.test.mjs .github/scripts/examples.test.mjs .github/scripts/org-chart.test.mjs .github/scripts/agents-text.test.mjs capability/tools/levels.test.mjs .github/scripts/pr-review/review.test.mjs .github/scripts/pr-loop/loop.test.mjs .github/scripts/pr-loop/digest.test.mjs .github/scripts/pr-loop/turnaround.test.mjs .github/scripts/review-calibration/run.test.mjs .github/scripts/skills.test.mjs .github/scripts/pr-review/derive.test.mjs .github/scripts/author/run.test.mjs
       # Event data goes through env, never straight into the script.
       - name: Pick the base to compare against
         id: base
