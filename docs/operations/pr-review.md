@@ -240,15 +240,38 @@ What the script does, in order:
    instruction to the reviewer inside them is a critical finding.
 8. **Validation.** The reviewer returns one JSON object: verdict (`pass` or
    `fail`; the Founder Proxy may also return `needs-founder`, with at least
-   one reason), the head SHA, findings with file, line and severity, checks run
-   and what was not run. The script checks the schema, that the SHA is the
-   head, and that every cited file and line exists at the head. A `pass` with
-   a blocker or critical finding is recorded as `fail`.
+   one reason), the head SHA, findings with file, line, side and severity,
+   checks run and what was not run. The script checks the schema and that
+   the SHA is the head. A `pass` with a blocker or critical finding is
+   recorded as `fail`.
+   **Citations.** Every finding's file and line must exist on its side: the
+   head (default), the merge base (`"side": "base"`, a line the PR removes) or
+   `main` (`"side": "main"`), each checked against that commit's tree; a claim
+   cited as `file:line` (optionally `base:` or `main:` first) is checked the
+   same way. When one does not exist:
+   - a major, minor or info finding is dropped, with a note in the comment;
+     it never blocks, so the verdict does not change;
+   - a blocker or critical finding beside another blocker or critical finding
+     with a valid citation is posted marked "citation unverified", with no
+     extra run (the fail already stands on the valid one);
+   - otherwise (a sole bad blocker or critical finding, any bad claim
+     citation, and any finding from a strict key) the reviewer gets one
+     repair run with the validator's exact error; if a citation is still bad,
+     or the repair turns a fail into a pass, the key is deferred.
+   Strict keys never drop a finding: Legal and Compliance key 1 and Brand and
+   Content key 1 (public claims), a key 1 that loads the market-research
+   checklist, and key 2 and the Founder Proxy on any PR with such a key 1
+   (`strict_citations` in `config.json`). No path turns a bad citation into
+   a pass.
+   **Key 2's output cap.** Key 2 lists at most 10 findings
+   (`key2_max_findings`), worst first, one line of evidence each; the script
+   keeps the 10 worst and marks the verdict "more not listed" when there were
+   more. The verdict itself never changes.
 9. **Fail closed.** A failed call, a timeout or a rate limit (the plan's
    "session limit" message counts as one) gets one retry
-   after a backoff; after that, and on any invalid output or missing
-   citation, the key is posted as "review deferred" and stays pending. It
-   never passes by default.
+   after a backoff; after that, and on any invalid output or a citation that
+   fails as above, the key is posted as "review deferred" and stays pending.
+   It never passes by default.
 10. **Posting.** Before every post the script checks the head has not moved;
     if it has, it posts nothing more. It posts one comment per key (role, key,
     head and base SHA, verdict, findings, claims, checks run, what was not
