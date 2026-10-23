@@ -78,6 +78,8 @@ database location.
 | `DATABASE_URL` | SQLite file. Local: relative to `prisma/` (set in `.env`). Fly: `file:/data/nirmaan.db`. |
 | `PROJECTS_ROOT` | Where project folders are written. Default `../projects` (the repo's `projects/`). Fly: `/data/projects`. |
 | `AGENTS_ROOT` | Agent specs. Default `../agents`. |
+| `SKILLS_ROOT` | Skill files, loaded only when a caller names them. Default `../skills`. Fly: `/srv/skills`. |
+| `CAPABILITY_ROOT` | Where eval runs append capability records (`records/*.jsonl`). Default `../capability`. |
 | `CLAUDE_CODE_EXECPATH` | The `claude` CLI the OS calls for model work. Default: `claude` on `PATH`. |
 | `AGENCY_OS_MODEL_<TASKTYPE>_PROVIDER` / `_ID` | Model routing overrides, e.g. `AGENCY_OS_MODEL_REQUIREMENTS_PROVIDER=mock` to run discovery without a model. |
 | `AGENCY_OS_DISABLE_COMPLEXITY_ROUTING` | `1` switches off per-task model up- and down-tiering. |
