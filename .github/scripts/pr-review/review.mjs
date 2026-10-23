@@ -459,7 +459,7 @@ export async function runReview(o) {
 // The script must be main's copy when it posts, so a PR cannot review itself
 // under a script it rewrote. Returns the files that differ.
 export function differsFromMain(repoRoot, base = 'main') {
-  const rels = ['.github/scripts/review-teams.mjs', ...readdirSync(HERE).filter((f) => !f.endsWith('.test.mjs') && f !== 'fixtures').map((f) => `.github/scripts/pr-review/${f}`)];
+  const rels = ['.github/scripts/review-teams.mjs', '.github/scripts/org-chart.mjs', ...readdirSync(HERE).filter((f) => !f.endsWith('.test.mjs') && f !== 'fixtures').map((f) => `.github/scripts/pr-review/${f}`)];
   const differ = [];
   for (const rel of rels) {
     let onMain = null;

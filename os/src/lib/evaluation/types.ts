@@ -11,14 +11,35 @@ export type EvalCategory = "capability" | "regression" | "hallucination" | "adve
 
 /**
  * A checker inspects an agent's actual RunAgentResult and decides pass/
- * fail with a human-readable reason. Deliberately synchronous and cheap —
- * these are structural/heuristic checks (keyword presence, confidence
- * level, risks list non-empty), not a second model call grading the
- * first. That's a real limitation: a checker can confirm an agent MENTIONED
- * a risk, not that its reasoning about the risk was actually good. See
- * README for what this harness does and doesn't prove.
+ * fail with a human-readable reason. Deliberately synchronous, and never a
+ * second model call grading the first. The checkers in checkers.ts are
+ * structural/heuristic checks (keyword presence, confidence level, risks
+ * list non-empty), labelled "heuristic": a checker can confirm an agent
+ * MENTIONED a risk, not that its reasoning about the risk was actually good.
+ * A tool judge (toolJudge.ts) runs a hidden test suite or a command against
+ * the agent's output instead, and is labelled "tool".
  */
-export type Checker = (result: RunAgentResult) => { passed: boolean; reason: string };
+export type Checker = ((result: RunAgentResult) => CheckResult) & {
+  /** How the verdict is reached. Unlabelled checkers count as "heuristic". */
+  judge?: Judge;
+};
+
+/**
+ * How a checker reaches its verdict, in the words of capability/records:
+ * "tool" runs a test suite or a command and passes on exit code 0 (the only
+ * judge that can count toward a skill's Tested level); "heuristic" is a
+ * keyword or structure check like the ones in checkers.ts, recorded but never
+ * counted (decision record D6.9).
+ */
+export type Judge = "tool" | "heuristic";
+
+export interface CheckResult {
+  passed: boolean;
+  reason: string;
+  /** Tool judge only: the command that ran, and its exit code. */
+  command?: string;
+  exitCode?: number;
+}
 
 export interface EvalCase {
   id: string;
@@ -31,6 +52,8 @@ export interface EvalCase {
   outputRelativePath: string;
   expectedOutcome: string;
   checker: Checker;
+  /** Skill ids to load into the run (at most 3, each held by the agent). The run's records are written per loaded skill. */
+  skills?: string[];
 }
 
 export interface EvalRunResult {
@@ -38,4 +61,11 @@ export interface EvalRunResult {
   passed: boolean;
   reason: string;
   rawOutput: string;
+  judge: Judge;
+  command?: string;
+  exitCode?: number;
+  model: string;
+  provider: string;
+  /** The skills the run loaded, as `id@sha` (from the handoff metadata). */
+  skills: string[];
 }

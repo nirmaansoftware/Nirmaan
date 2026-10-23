@@ -12,7 +12,7 @@
 //   - a generated file under website/public/ has no tracked source, or its
 //     founder class differs from its source's;
 //   - a content rule's pattern does not compile, an example does not match,
-//     or a marker file no longer contains a match;
+//     or a marker file no longer contains a match or is excluded;
 //   - .github/CODEOWNERS exists. The founder's delegation of 2026-10-18 made
 //     the Founder Proxy (agent) the third reviewer of founder classes in place
 //     of the founder's code-owner review, so a CODEOWNERS file would bring
@@ -260,6 +260,7 @@ export function contentHits(map, file, line, { addedFile = false } = {}) {
   const hits = [];
   for (const rule of list(map.content_rules)) {
     if (rule.applies_to && !anyMatch(rule.applies_to, file)) continue;
+    if (anyMatch(rule.exclude, file)) continue;
     if (rule.trigger === 'added_files') {
       if (addedFile) hits.push(rule.id);
       continue;
@@ -373,6 +374,8 @@ export function checkMap(map, files, { roleExists, readFile }) {
     checkEntryTeams(where, r);
     if (r.founder_class != null && !classIds.has(r.founder_class)) p(`${where}: unknown founder class ${r.founder_class}`);
     list(r.applies_to).forEach((g) => deadGlob(`${where} applies_to`, g));
+    // A content rule's exclude may name a folder that does not exist yet:
+    // excluding nothing narrows nothing, so it is not checked as a dead rule.
     if (r.trigger === 'added_files') {
       if (!r.applies_to) p(`${where}: an added_files trigger needs applies_to`);
       continue;
@@ -386,6 +389,7 @@ export function checkMap(map, files, { roleExists, readFile }) {
     for (const m of list(r.markers)) {
       if (!tracked.has(m.file)) { p(`${where}: marker file ${m.file} is not tracked`); continue; }
       if (r.applies_to && !anyMatch(r.applies_to, m.file)) p(`${where}: marker file ${m.file} is outside applies_to`);
+      if (anyMatch(r.exclude, m.file)) p(`${where}: marker file ${m.file} is excluded`);
       const lines = readFile(m.file).split('\n');
       if (!lines.some((l) => patterns.some((re) => re.test(l)))) p(`${where}: marker ${m.file} no longer contains a match`);
     }

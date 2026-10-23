@@ -4,7 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseYaml } from './review-teams.mjs';
@@ -12,6 +13,7 @@ import {
   checkChart, teamTable, readmeTable, writeReadmeTable, repositoryContext, constList, roleLabels,
   reviewedBy, memberSentence, CHART_PATH, README_PATH, TABLE_START, TABLE_END,
 } from './org-chart.mjs';
+import { differsFromMain } from './pr-review/review.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -332,8 +334,39 @@ test('repository: every agent spec holds exactly one position, except the unplac
   assert.deepEqual(unplaced, ['founder-proxy']);
 });
 
+test('review script: differsFromMain covers org-chart.mjs', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'org-chart-test-'));
+  try {
+    const sh = (...args) => execFileSync('git', args, { cwd: tmp, encoding: 'utf8' });
+    sh('init', '-q', '-b', 'main');
+    mkdirSync(join(tmp, '.github/scripts/pr-review'), { recursive: true });
+    for (const f of ['review-teams.mjs', 'org-chart.mjs']) cpSync(join(ROOT, '.github/scripts', f), join(tmp, '.github/scripts', f));
+    for (const f of readdirSync(join(ROOT, '.github/scripts/pr-review'))) {
+      if (f.endsWith('.test.mjs') || f === 'fixtures') continue;
+      cpSync(join(ROOT, '.github/scripts/pr-review', f), join(tmp, '.github/scripts/pr-review', f));
+    }
+    sh('add', '-A');
+    sh('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-q', '-m', 'x');
+    sh('update-ref', 'refs/pr-review/main', 'HEAD');
+    assert.deepEqual(differsFromMain(tmp), []);
+    writeFileSync(join(tmp, '.github/scripts/org-chart.mjs'), '// changed\n', { flag: 'a' });
+    assert.deepEqual(differsFromMain(tmp), ['.github/scripts/org-chart.mjs']);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('repository: README_PATH and CHART_PATH are tracked', () => {
   const { files } = real();
   assert.ok(files.includes(README_PATH));
   assert.ok(files.includes(CHART_PATH));
+});
+
+test('repository: the key-1 deputy derived for Platform and Quality is appsec-engineer (hire H1, decision record D2.2)', async () => {
+  const { deriveKeys } = await import('./pr-review/derive.mjs');
+  const { chart } = real();
+  const d = deriveKeys(chart, { teams: ['platform-quality'] });
+  assert.ok(d.ok, d.error);
+  assert.equal(d.key1[0].occupant, 'security-engineer');
+  assert.equal(d.key1[0].deputy?.occupant, 'appsec-engineer');
 });

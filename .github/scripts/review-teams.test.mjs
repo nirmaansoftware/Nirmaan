@@ -361,6 +361,59 @@ test('repository: no tracked file is owned by more than three teams (a PR with m
   assert.deepEqual(over, []);
 });
 
+test('content rules: exclude skips files; an exclude may name a folder not yet tracked; a marker may not be excluded', () => {
+  const map = fixture();
+  map.content_rules[0].exclude = ['docs/**'];
+  assert.deepEqual(contentHits(map, 'docs/x.md', 'costs ₹5'), []);
+  assert.deepEqual(contentHits(map, 'src/a.js', 'costs ₹5'), ['money']);
+  map.content_rules[0].exclude = ['not-yet/**'];
+  assert.deepEqual(run(map), []);
+  map.content_rules[0].exclude = ['docs/**'];
+  map.content_rules[0].markers = [{ file: 'docs/x.md' }];
+  assert.match(run(map).join('\n'), /content rule money: marker file docs\/x\.md is excluded/);
+});
+
+test('classification: in skill files, examples and capability records, "payments", "GST" or "versus" is not founder class C or E; elsewhere it still is', () => {
+  const { map } = realMap();
+  for (const line of ['Card payments go through the gateway.', 'Invoices show GST separately.', 'REST versus GraphQL for this API.']) {
+    for (const file of ['skills/web/form-validation.md', 'examples/web/form-validation/README.md', 'capability/records/a.jsonl', 'capability/levels.json']) {
+      const hits = contentHits(map, file, line);
+      assert.ok(!hits.includes('money') && !hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
+    }
+    // Folder READMEs, the skill template, nested skill files and the tools stay in scope.
+    for (const file of ['docs/product/x.md', 'skills/README.md', 'skills/_template.md', 'skills/web/notes/x.md', 'examples/README.md', 'capability/README.md', 'capability/tools/levels.mjs']) {
+      const hits = contentHits(map, file, line);
+      assert.ok(hits.includes('money') || hits.includes('market-claims'), `${file}: ${line}: ${hits}`);
+    }
+  }
+});
+
+test('classification: capability/** is Capability with the knowledge-quality-reviewer checklist; its machinery keeps Engineering and database-engineer', () => {
+  const { map, tracked } = realMap();
+  const record = owners(map, 'capability/records/2026-10.jsonl', new Set([...tracked, 'capability/records/2026-10.jsonl']));
+  assert.deepEqual(record.teams, ['capability']);
+  assert.deepEqual(record.checklists, ['knowledge-quality-reviewer']);
+  for (const file of ['capability/README.md', 'capability/levels.json', 'capability/tools/levels.mjs', 'capability/records/schema.json']) {
+    const o = owners(map, file, tracked);
+    assert.deepEqual([...o.teams].sort(), ['capability', 'engineering'], file);
+    assert.deepEqual([...o.checklists].sort(), ['database-engineer', 'knowledge-quality-reviewer'], file);
+  }
+});
+
+test('classification: knowledge-legal adds Legal and Compliance (legal-compliance) with no founder class, only in the knowledge folders', () => {
+  const { map } = realMap();
+  const rule = map.content_rules.find((r) => r.id === 'knowledge-legal');
+  assert.deepEqual(rule.adds_teams, ['legal']);
+  assert.equal(rule.founder_class, undefined);
+  for (const line of ['Check the dataset licence first.', 'Model weights are not copied.', 'This is not legal advice.', 'Erasure under GDPR and the DPDP Act.']) {
+    assert.ok(contentHits(map, 'capability/records/a.jsonl', line).includes('knowledge-legal'), line);
+    assert.ok(contentHits(map, 'skills/web/form-validation.md', line).includes('knowledge-legal'), line);
+    assert.ok(contentHits(map, 'examples/web/form-validation/README.md', line).includes('knowledge-legal'), line);
+  }
+  assert.ok(!contentHits(map, 'docs/engineering/testing.md', 'Check the dataset licence.').includes('knowledge-legal'));
+  assert.ok(!contentHits(map, 'capability/README.md', 'Levels are computed from records.').includes('knowledge-legal'));
+});
+
 test('classification: internal-org on a site page adds Brand and Content as founder class E', () => {
   const { map } = realMap();
   const rule = map.content_rules.find((r) => r.id === 'internal-org');
@@ -401,7 +454,7 @@ test('classification: licence text, licence fields, restrictive dependency licen
   for (const [file, added, opts] of cases) {
     const c = cls(file, added, opts);
     assert.ok(c.founder.D, `${file}: founder class D`);
-    assert.ok(c.teams.includes('business'), `${file}: Business (Legal) key 1`);
+    assert.ok(c.teams.includes('legal'), `${file}: Legal and Compliance key 1`);
     assert.ok(c.checklists.includes('legal-compliance'), `${file}: legal-compliance checklist`);
   }
   // Not every mention: a routine lockfile bump, a permissive dependency, and prose about licences are not founder class D.
