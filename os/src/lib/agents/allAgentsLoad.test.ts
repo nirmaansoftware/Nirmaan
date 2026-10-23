@@ -10,6 +10,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadAgent, listAgentSlugs } from "./loadAgent";
 import { AGENT_TASK_TYPES, AGENT_OUTPUT_PATHS, AGENT_ARTIFACT_TYPES } from "../orchestrator/agentConfig";
+import { chartSlugs, managerOnlySlugs } from "./orgChart";
 
 const REQUIRED_SECTIONS = [
   "## Mission",
@@ -86,10 +87,17 @@ test("only DevOps Engineer declares deploy permission", () => {
   }
 });
 
-test("every agent on disk is configured for dispatch: task type, output path and artifact type", () => {
+test("every agent on disk is in the org chart: it occupies an active position or is listed as unplaced", () => {
+  assert.deepEqual(chartSlugs(), [...listAgentSlugs()].sort());
+});
+
+test("every agent that can own a task is configured for dispatch: task type, output path and artifact type", () => {
   // agentConfig.ts is explicit by design; this keeps a new agent.md from
-  // shipping without the three decisions it needs.
+  // shipping without the three decisions it needs. Managers never own tasks
+  // (agents/org-chart.yml), so a manager-only spec needs no entry.
+  const managers = new Set(managerOnlySlugs());
   for (const slug of listAgentSlugs()) {
+    if (managers.has(slug)) continue;
     assert.ok(AGENT_TASK_TYPES[slug], `${slug}: no entry in AGENT_TASK_TYPES`);
     assert.ok(AGENT_OUTPUT_PATHS[slug], `${slug}: no entry in AGENT_OUTPUT_PATHS`);
     assert.ok(AGENT_ARTIFACT_TYPES[slug], `${slug}: no entry in AGENT_ARTIFACT_TYPES`);

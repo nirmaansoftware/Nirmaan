@@ -1,7 +1,9 @@
-# Only the OS (os/) and the agent specs go into the image.
+# Only the OS (os/), the agent specs (with the org chart) and the skill files go
+# into the image.
 *
 !os
 !agents
+!skills
 !Dockerfile.os
 os/node_modules
 os/.next

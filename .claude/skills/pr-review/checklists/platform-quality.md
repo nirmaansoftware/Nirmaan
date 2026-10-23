@@ -1,4 +1,4 @@
-# Platform and Quality (lead: security-engineer; members sre, devops-engineer, qa-engineer, performance-engineer)
+# Platform and Quality
 
 FAIL when: a secret appears; a dependency or lockfile change is unexplained;
 auth or input handling is weakened; headers or CSP in vercel.json change
