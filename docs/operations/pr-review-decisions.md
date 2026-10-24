@@ -187,6 +187,15 @@ network and no tokens for the model; a JSON verdict that a script validates
 it; same-repository branches only; one review at a time; and fail closed: if a
 review cannot finish, the check stays pending, never passes.
 
+*Superseded in part 2026-10-24 ("one review at a time"):* under decision R5.5
+of [2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md),
+`.github/scripts/pr-loop/config.json` sets `lock_mode` to `calls` and
+`model_cap` to 2: at most 2 reviews run at once across both repositories, one
+at a time per repository ([pr-review.md](pr-review.md), "Locks"). The founder
+approved this change on GitHub on 2026-10-22 and chose to merge it; the
+rate-limit measurement R5.5 asks for is in the pull request's text. The way
+back is `step` and cap 1 in `config.json`.
+
 ## 6. Rollout
 
 1. This record and the mechanism doc, marked PLANNED.
