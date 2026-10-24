@@ -98,9 +98,10 @@ checklist; a missing entry gets one repair request and then defers, and a
 finding with no checklist defers. It posts one key-1 comment (`team=composite`)
 under the same check name; a fix goes to the team of the finding's checklist.
 Over `key1_composite_max_checklists` checklists, key 1 runs per team on that
-head. The setting today is `per-team`, which builds exactly the earlier
-prompts; it is switched on only after an internal A/B with the calibration
-runner shows the composite catches at least as much.
+head. The setting today is `per-team`, whose prompts are fixed by a golden
+file in the tests (a prompt change rewrites it on purpose); the composite is
+switched on only after an internal A/B with the calibration runner shows it
+catches at least as much.
 
 **Key 2 (orchestrator).** Confirms key 1 ran for every owning team on this
 commit and findings were answered; checks cross-team effects (shared layer,
@@ -285,7 +286,14 @@ What the script does, in order:
    head (default), the merge base (`"side": "base"`, a line the PR removes) or
    `main` (`"side": "main"`), each checked against that commit's tree; a claim
    cited as `file:line` (optionally `base:` or `main:` first) is checked the
-   same way. When one does not exist:
+   same way. A finding may also quote a few words of its cited line
+   (`"quote"`); the quote must be on that line or within `quote_window` (3)
+   lines of it on the same side (spacing and case ignored), or the citation
+   counts as bad. Quotes on the PR text are not checked. The quote is
+   optional for now: a first step towards R8.6 of
+   [2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md),
+   which asks for a required quote. When a citation does not exist, or its
+   quote is not there:
    - a major, minor or info finding is dropped, with a note in the comment;
      it never blocks, so the verdict does not change;
    - a blocker or critical finding beside another blocker or critical finding

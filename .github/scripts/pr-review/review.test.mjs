@@ -1591,3 +1591,47 @@ test('composite with the real map and specs: a page, a script and a price put ev
     assert.ok(sys.includes('## Checklist: brand-strategist ('), 'brand: the Brand and Content lead\'s key 1 section');
   } finally { t.cleanup(); }
 });
+
+// ---------------------------------------------------------------- quoted-snippet citations (L14)
+
+test('a quoted snippet near its cited line passes, also a few lines off; a quote that is not there is a bad citation (dropped when minor)', async () => {
+  // os/app.js at the head: "line one", "line two changed", "line three", "line four".
+  const near = { file: 'os/app.js', line: 1, severity: 'minor', text: 'x', quote: 'LINE   three' };
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'pass', findings: [near] }] });
+  try {
+    const r = await t.run();
+    assert.equal(r.key1[0].verdict.findings.length, 1, 'two lines off, case and spacing ignored: kept');
+  } finally { t.cleanup(); }
+  const far = { file: 'os/app.js', line: 1, severity: 'minor', text: 'x', quote: 'not in the file' };
+  const u = setup({ responses: [{ type: 'verdict', verdict: 'pass', findings: [far] }] });
+  try {
+    const r = await u.run();
+    assert.deepEqual(r.key1[0].verdict.findings, []);
+    assert.match(u.posts.find((p) => p.type === 'comment').body, /Dropped finding 1 \(minor\): the quote "not in the file" is not within 3 lines of os\/app\.js:1 at the head/);
+  } finally { u.cleanup(); }
+});
+
+test('a sole blocker whose quote is not there gets the one repair run, then defers; never a pass', async () => {
+  const t = setup({ responses: [{ type: 'verdict', verdict: 'fail', findings: [{ ...GOOD_BLOCKER, quote: 'made-up words' }] }] });
+  try {
+    const r = await t.run();
+    assert.equal(t.calls().length, 2);
+    assert.match(t.calls()[1].stdin, /the quote "made-up words" is not within 3 lines/);
+    assert.equal(r.key1[0].status, 'deferred');
+    noSuccess(t);
+  } finally { t.cleanup(); }
+});
+
+test('validateVerdict: quote window and tiers', () => {
+  const lines = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'target here', 'i'];
+  const opts = { headSha: SHA, lineExists: (f, l) => l <= lines.length, prTextLines: 3, linesText: (f, from, to) => lines.slice(Math.max(0, from - 1), Math.max(0, to)).join('\n'), quoteWindow: 3 };
+  const v = (f) => validateVerdict({ verdict: f.severity === 'blocker' ? 'fail' : 'pass', sha: SHA, findings: [{ file: 'x.js', text: 't', ...f }], checks_run: [], not_run: [] }, opts);
+  assert.equal(v({ line: 5, severity: 'minor', quote: 'target here' }).verdict.findings.length, 1, '3 lines off: inside the window');
+  assert.equal(v({ line: 4, severity: 'minor', quote: 'target here' }).verdict.findings.length, 0, '4 lines off: dropped');
+  assert.equal(v({ line: 4, severity: 'blocker', quote: 'target here' }).repair, true);
+  assert.equal(v({ line: 4, severity: 'minor' }).verdict.findings.length, 1, 'no quote: only the line is checked');
+  assert.equal(v({ file: PR_TEXT_FILE, line: 1, severity: 'minor', quote: 'anything' }).verdict.findings.length, 1, 'PR text quotes are not checked');
+  assert.match(v({ line: 4, severity: 'minor', quote: 7 }).error, /quote must be a string/);
+  // Without linesText (an older caller), quotes are not checked.
+  assert.equal(validateVerdict({ verdict: 'pass', sha: SHA, findings: [{ file: 'x.js', line: 1, severity: 'minor', text: 't', quote: 'zzz' }], checks_run: [], not_run: [] }, { headSha: SHA, lineExists: () => true, prTextLines: 1 }).verdict.findings.length, 1);
+});
