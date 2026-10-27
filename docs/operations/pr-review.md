@@ -34,6 +34,15 @@ engineering sign-off or a release decision.
 A new push to the PR voids both keys and the proxy; they run again on the new
 head commit.
 
+**Author pre-check.** Before opening a PR, or pushing a fix to one, an author
+session runs Claude's code review on its own diff (Claude Code's built-in
+`code-review` skill, effort `low`) and fixes the findings. It fixes the code and
+does not paste the review into the PR text. This catches plain bugs before the
+keys spend review calls on them. The loop's fixer is exempt (it cannot run a
+skill). It is not a gate: nothing enforces it, no reviewer checks whether it ran,
+and it never counts as a review of the PR. Decision:
+[2026-10-27-author-precheck-decisions.md](2026-10-27-author-precheck-decisions.md).
+
 ## Teams and leads
 
 Each team has one lead, who holds key 1 for that team. Members' checklists run
@@ -194,8 +203,10 @@ session has the PR's branch checked out.
 
 What the script does, in order:
 
-1. **One review at a time.** It takes a lock shared with ip-nirmaan, so only
-   one review runs across both repositories. The lock is a folder
+1. **A shared lock.** Run by hand, it takes the lock shared with ip-nirmaan
+   (`review.lock`); run by the automated loop, it uses the model slot the
+   loop already holds ("Locks" below), so at most 2 reviews run across both
+   repositories. The lock is a folder
    (`review.lock`) with an owner file written whole (a temporary file renamed
    inside it). A lock whose process is gone is cleared, and so is one with no
    readable owner file that is older than 30 minutes.
@@ -483,20 +494,23 @@ for that PR to merge (GitHub then retargets it to `main`); it is never
 reviewed against the other PR's branch.
 
 **Locks.** `lock_mode` in `.github/scripts/pr-loop/config.json` chooses how
-reviews share the plan. `step` (the setting today): one review lock, shared
-with ip-nirmaan, held for a whole review and fix round, as below. `calls`:
-each repository has its own lock, and every model call takes one of
-`model_cap` model slots shared by both loops (the shared review lock is slot
-one, so the ip-nirmaan loop always counts); the review holds its slot only for
-the review, the fixer only for its call, and the local checks and pushes hold
-nothing. With `model_cap` 1 that is still one model call at a time; raising
-it lets the two repositories review at once, never more than the cap.
+reviews share the plan. The setting is `calls` with `model_cap` 2: this
+repository has its own lock, and every model call takes one of 2 model slots
+shared by both loops. The shared review lock (`review.lock`) is one slot, so
+the ip-nirmaan loop, which still holds that lock for a whole review and fix
+round, always counts; this loop tries its other slot first, so it leaves the
+shared lock free for ip-nirmaan whenever it can. The review holds its slot
+only for the review, the fixer only for its call, and the local checks and
+pushes hold nothing. So the two repositories can review at once, and never
+more than 2 model processes run. Every lock is taken with a try, never a
+wait, so the two loops cannot deadlock; a loop that finds no slot free is
+"busy" and tries again next pass. `step` (the earlier setting): one review
+lock, shared with ip-nirmaan, held for a whole review and fix round.
 
-**One review at a time, every PR each pass.** The loop holds the review lock
-(shared with ip-nirmaan) for a whole review and fix round. Each pass takes one
+**One review at a time per repository, every PR each pass.** Each pass takes one
 step on every open PR, a PR the loop is fixing first, then by number, so a PR
 waiting for CI, or one that just ran a review or a fix, never holds up the
-others; the steps run one after another, so reviews still run one at a time.
+others; the steps run one after another, so this loop runs one review at a time.
 Before each step the loop reads main's tip again (`git ls-remote`); if any
 merge has moved it since the pass began (the loop's own, the founder's, the
 ip-nirmaan loop's), or main cannot be read, the pass ends there. A step that

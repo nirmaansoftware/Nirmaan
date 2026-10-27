@@ -762,10 +762,15 @@ export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS
 
 // One of `cap` model slots shared by both repositories' loops. Slot 0 is the
 // shared review lock itself, so a loop that only knows that lock (the
-// ip-nirmaan loop, or this one with lock_mode "step") holds one slot.
+// ip-nirmaan loop, or this one with lock_mode "step") holds one slot. The
+// other slots are tried first, so a loop still on the shared-lock protocol
+// finds that lock free whenever another slot is. Every acquire is a try: no
+// loop ever waits holding one lock for another, so nothing can deadlock.
 export function acquireSlot(stateDir, owner, cap = 1) {
+  const n = Math.max(1, cap);
+  const order = [...Array.from({ length: n - 1 }, (_, i) => i + 1), 0];
   let last = { ok: false, holder: null };
-  for (let i = 0; i < Math.max(1, cap); i++) {
+  for (const i of order) {
     last = acquireLock(stateDir, owner, { name: i === 0 ? 'review.lock' : `model-slot-${i}.lock` });
     if (last.ok) return last;
   }
