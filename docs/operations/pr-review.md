@@ -34,12 +34,14 @@ engineering sign-off or a release decision.
 A new push to the PR voids both keys and the proxy; they run again on the new
 head commit.
 
-**Author pre-check.** Before opening a PR, or pushing a fix to one, the author
-session runs Claude's code review on its own diff (the `code-review` skill,
-effort `low`) and fixes the findings. It fixes the code and does not paste the
-review into the PR text. This catches plain bugs before the keys spend review
-calls on them. It is the author's own check, not a key: it never counts as a
-review of the PR.
+**Author pre-check.** Before opening a PR, or pushing a fix to one, an author
+session runs Claude's code review on its own diff (Claude Code's built-in
+`code-review` skill, effort `low`) and fixes the findings. It fixes the code and
+does not paste the review into the PR text. This catches plain bugs before the
+keys spend review calls on them. The loop's fixer is exempt (it cannot run a
+skill). It is not a gate: nothing enforces it, no reviewer checks whether it ran,
+and it never counts as a review of the PR. Decision:
+[2026-10-27-author-precheck-decisions.md](2026-10-27-author-precheck-decisions.md).
 
 ## Teams and leads
 
