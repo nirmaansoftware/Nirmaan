@@ -20,7 +20,9 @@ Read [README.md](README.md) for the map. This file adds the rules and commands.
   delegation of 2026-10-18, and what only the founder decides waits for the founder
   (`needs-founder`). Reviews run through the `pr-review` skill and the automated loop.
   Never review a PR your own session wrote. The ruleset on `main` requires both keys'
-  checks before merge.
+  checks before merge. Before opening a PR or pushing a fix to one, the author session
+  runs Claude's code review on its own diff (the `code-review` skill, effort `low`) and
+  fixes the findings first.
 - **The OS must pass its checks before merge:** `typecheck`, `lint`, `test` and
   `next build`. Tests sit beside the code as `*.test.ts`.
 
