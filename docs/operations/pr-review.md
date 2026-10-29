@@ -47,7 +47,8 @@ and it never counts as a review of the PR. Decision:
 
 Each team has one lead, who holds key 1 for that team. Members' checklists run
 inside the lead's review and are cited by name; there is one key-1 verdict per
-team.
+team (with the composite key 1 below, one process answers for every owning
+team, with one entry per team).
 
 The teams, their leads and members are listed in the team table of
 [`agents/README.md`](../../agents/README.md#teams), which is generated from the
@@ -107,12 +108,11 @@ checklist; a missing entry gets one repair request and then defers, and a
 finding with no checklist defers. It posts one key-1 comment (`team=composite`)
 under the same check name; a fix goes to the team of the finding's checklist.
 Over `key1_composite_max_checklists` checklists, key 1 runs per team on that
-head. The setting is `composite`, switched on after an internal A/B with the
-calibration runner (gate R-G2 in
-[2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md))
-found the composite catching, per checklist, as much as per-team key 1, with no
-more false fails. Setting `key1_mode` back to `per-team` returns to one
-reviewer per team, with the prompts fixed by the golden file.
+head. The setting is `composite`, switched on under gate R-G2 in
+[2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md)
+after the calibration A/B (results in the internal minutes). Setting
+`key1_mode` back to `per-team` returns to one reviewer per team, with the
+prompts fixed by the golden file.
 
 **Key 2 (orchestrator).** Confirms key 1 ran for every owning team on this
 commit and findings were answered; checks cross-team effects (shared layer,
@@ -275,7 +275,8 @@ What the script does, in order:
    required check is satisfied only by success, neutral or skipped). No model
    is called in either case.
 6. **Key 1, then key 2.** Key 1 is one fresh `claude -p` process per owning
-   team, with that team's lead spec, the base and team checklists, and the
+   team (or, with `key1_mode` `composite`, one process for all of them; see
+   "Composite key 1" above), with that team's lead spec, the base and team checklists, and the
    specs of any member checklists the map requires. Key 2 runs only when every
    key 1 passed: the orchestrator's spec plus every owning lead's spec and
    checklist, so it reviews with each team's domain knowledge, given key 1's
@@ -522,7 +523,8 @@ reviewed, fixed, ready, auto-merge, stopped) is a line in
 `local-check`; the list is `STOP_CLASSES` in `pr-loop.mjs`). Each review step
 also writes one per-phase line (`kind` `phase`): when required CI went green
 on the head (the latest completion among the required jobs), how long the PR
-waited for the review lock, each key's start and end (key 1 per team), its
+waited for the review lock, each key's start and end (key 1 per team, or once
+for the composite), its
 verdict, findings by severity and validation error if any, the step's outcome,
 and for a stop its reason and class. When a PR the loop armed for merge leaves
 the open list, the next pass writes one `merged` (or `closed`) line with
