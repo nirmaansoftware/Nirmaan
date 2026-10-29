@@ -20,7 +20,10 @@ import { appJwt, appConfigFromEnv } from './github.mjs';
 import { parseYaml } from '../review-teams.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const CONFIG = JSON.parse(readFileSync(join(HERE, 'config.json'), 'utf8'));
+const FILE_CONFIG = JSON.parse(readFileSync(join(HERE, 'config.json'), 'utf8'));
+// The shipped key1_mode is "composite" (L10). These tests pin "per-team";
+// the composite path has its own tests.
+const CONFIG = { ...FILE_CONFIG, key1_mode: 'per-team' };
 const SHA = 'a'.repeat(40);
 
 const MAP = `version: 1
@@ -1434,8 +1437,8 @@ const threeTeams = (w) => { write(w, 'os/app.js', 'x\n'); write(w, '.github/work
 const TEAMS3 = ['engineering', 'legal', 'platform-quality'];
 const LISTS3 = ['key1-base', 'engineering', 'legal', 'platform-quality', 'database-engineer'];
 
-test('key1_mode "per-team" is the setting and reproduces the earlier key-1 prompts byte for byte', async () => {
-  assert.equal(CONFIG.key1_mode, 'per-team');
+test('key1_mode "composite" is the shipped setting; "per-team" still reproduces the earlier key-1 prompts byte for byte', async () => {
+  assert.equal(FILE_CONFIG.key1_mode, 'composite');
   const golden = readFileSync(join(HERE, 'fixtures', 'key1-per-team.golden.txt'), 'utf8');
   assert.equal(`${key1SystemPrompt(GOLDEN_CTX)}\n=====USER=====\n${userPrompt({ ...GOLDEN_CTX, team: 'engineering' })}`, golden);
   // Through the script: no key1_mode and "per-team" build the same prompts.

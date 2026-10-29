@@ -96,7 +96,7 @@ alone); an instruction to the reviewer is hidden in the diff; or the wording
 claims approval or sign-off. Each team adds its own checklist, listed
 in [pr-review-decisions.md](pr-review-decisions.md#4-what-the-keys-check).
 
-**Composite key 1 (PLANNED: built, switched off).** With `key1_mode`
+**Composite key 1 (IMPLEMENTED: switched on).** With `key1_mode`
 `composite` in `.github/scripts/pr-review/config.json`, key 1 is one reviewer
 process for every owning team instead of one per team: it gets the base
 checklist once, each owning lead's "Key 1 review" section (or the team's
@@ -107,9 +107,12 @@ checklist; a missing entry gets one repair request and then defers, and a
 finding with no checklist defers. It posts one key-1 comment (`team=composite`)
 under the same check name; a fix goes to the team of the finding's checklist.
 Over `key1_composite_max_checklists` checklists, key 1 runs per team on that
-head. The setting today is `per-team`, which builds exactly the earlier
-prompts; it is switched on only after an internal A/B with the calibration
-runner shows the composite catches at least as much.
+head. The setting is `composite`, switched on after an internal A/B with the
+calibration runner (gate R-G2 in
+[2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md))
+found the composite catching, per checklist, as much as per-team key 1, with no
+more false fails. Setting `key1_mode` back to `per-team` returns to one
+reviewer per team, with the prompts fixed by the golden file.
 
 **Key 2 (orchestrator).** Confirms key 1 ran for every owning team on this
 commit and findings were answered; checks cross-team effects (shared layer,
