@@ -12,7 +12,9 @@ import { fileURLToPath } from 'node:url';
 import { formatSummary, isInside, loadCorpus, measured, modelsFor, runCalibration, scoreResult, STUB_MODEL, stripTokens, summarize } from './run.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const CONFIG = JSON.parse(readFileSync(join(HERE, '..', 'pr-review', 'config.json'), 'utf8'));
+// The shipped key1_mode is "composite" (L10). These tests pin "per-team";
+// the composite path has its own tests.
+const CONFIG = { ...JSON.parse(readFileSync(join(HERE, '..', 'pr-review', 'config.json'), 'utf8')), key1_mode: 'per-team' };
 
 const MAP = `version: 1
 teams:
