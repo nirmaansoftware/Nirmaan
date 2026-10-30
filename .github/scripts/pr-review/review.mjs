@@ -257,19 +257,23 @@ export async function runReview(o) {
     const diffTruncated = Buffer.byteLength(diff) > cfg.max_diff_bytes;
     const diffForPrompt = diffTruncated ? Buffer.from(diff).subarray(0, cfg.max_diff_bytes).toString('utf8') : diff;
     const deleted = new Set(files.filter((f) => f.status === 'D').map((f) => f.path).concat(files.filter((f) => f.from).map((f) => f.from)));
-    const lineCounts = new Map();
+    const fileLines = new Map();
     // A finding names the side its line is on (head, base or main); without
     // one, the head, or the base for a file the PR deletes.
     const sideSha = { head: headSha, base: baseSha, main: mainSha };
-    const lineExists = (file, line, side) => {
+    // The lines of a file on a side, read once (empty when it is absent).
+    const linesOf = (file, side) => {
       const ref = side ? sideSha[side] : trackedHead.has(file) ? headSha : deleted.has(file) ? baseSha : null;
-      if (!ref) return false;
+      if (!ref) return [];
       const key = `${ref}:${file}`;
-      if (!lineCounts.has(key)) {
-        try { const t = git(o.repoRoot, ['show', `${ref}:${file}`]); lineCounts.set(key, t.split('\n').length - (t.endsWith('\n') ? 1 : 0)); } catch { lineCounts.set(key, 0); }
+      if (!fileLines.has(key)) {
+        try { const t = git(o.repoRoot, ['show', `${ref}:${file}`]); const l = t.split('\n'); if (t.endsWith('\n')) l.pop(); fileLines.set(key, l); } catch { fileLines.set(key, []); }
       }
-      return line <= lineCounts.get(key);
+      return fileLines.get(key);
     };
+    const lineExists = (file, line, side) => line <= linesOf(file, side).length;
+    // Text of lines from..to (1-based, clipped) on a side, for the quoted-snippet check.
+    const linesText = (file, from, to, side) => linesOf(file, side).slice(Math.max(0, from - 1), Math.max(0, to)).join('\n');
     // Checklists, all from main. Where the specs carry them (agents/README.md
     // "Every key 1 (base checklist)", a lead's "Key 1 review", the key-2
     // role's "Key 2 review", a member's "Checklist for my team lead"), the
@@ -324,7 +328,7 @@ export async function runReview(o) {
         },
       );
       const parse = (r) => { try { return { raw: r.structured ?? parseVerdictText(r.text) }; } catch (e) { return { error: e.message }; } };
-      const validate = (raw) => validateVerdict(raw, { headSha, lineExists, prTextLines: prText.count, proxy, strict, ...(composite ? { composite } : {}) });
+      const validate = (raw) => validateVerdict(raw, { headSha, lineExists, linesText, quoteWindow: cfg.quote_window, prTextLines: prText.count, proxy, strict, ...(composite ? { composite } : {}) });
       let r = await call(user, null);
       if (r.kind !== 'ok') return { status: 'deferred', reason: `${r.kind}: ${r.error} (after one backoff retry)`, callOutcome: r.kind, deferralKind: r.kind === 'rate_limit' ? 'rate-limit' : r.kind === 'timeout' ? 'timeout' : 'call-failed', ...(r.noOutput ? { noOutput: true } : {}), model };
       let p = parse(r);

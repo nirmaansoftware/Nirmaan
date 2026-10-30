@@ -1,7 +1,8 @@
 // A fixed per-team key-1 context. review.test.mjs builds today's key-1
 // prompts from it and compares them byte for byte with key1-per-team.golden.txt,
-// written before the composite key 1 existed, so key1_mode "per-team" is
-// shown to reproduce the earlier prompts exactly.
+// so key1_mode "per-team" is shown to build exactly the per-team prompts. A PR
+// that changes the prompts on purpose rewrites the golden file in the same
+// diff (the quoted-snippet rule did), so the change is visible to review.
 export const GOLDEN_CTX = {
   repo: 'nirmaansoftware/Nirmaan', pr: 7, company: 'Nirmaan',
   headSha: 'a'.repeat(40), baseSha: 'b'.repeat(40), mainSha: 'c'.repeat(40), mainDir: '/tmp/main',

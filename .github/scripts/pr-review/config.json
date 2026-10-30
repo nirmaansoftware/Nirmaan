@@ -26,6 +26,7 @@
   "org_chart": "agents/org-chart.yml",
   "strict_citations": { "teams": ["legal", "brand-content"], "checklists": ["market-research"] },
   "key2_max_findings": 10,
+  "quote_window": 3,
   "key1_mode": "per-team",
   "key1_composite_max_checklists": 12
 }
