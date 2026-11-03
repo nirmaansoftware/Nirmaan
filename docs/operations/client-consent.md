@@ -13,4 +13,4 @@ When a name is added here, it is also added to the `client-names` rule in [`.git
 
 ## Founder decision, 2026-11-03
 
-The founder holds this decision (public names and clients, class E). For Khel Shiksha and Sudaangeo, the consent the client gave on the call is sufficient, and no written follow-up is required. Under [decision-meetings.md](decision-meetings.md) ("the founder can overrule, and the record says so"), this overrides the written-consent requirement that the key 1 reviews applied to PR #167. The decision was merged to `main` in PR #167 with the founder's approval. Later entries record whatever form of consent the founder takes.
+The founder holds this decision (public names and clients, class E). For Khel Shiksha, the consent the client gave on the call is sufficient, and no written follow-up is required. Under [decision-meetings.md](decision-meetings.md) ("the founder can overrule, and the record says so"), this overrides the written-consent requirement that the key 1 reviews applied to PR #167. The decision was merged to `main` in PR #167 with the founder's approval. Later entries record whatever form of consent the founder takes.
