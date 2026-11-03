@@ -1081,6 +1081,8 @@
   .proof__roster { display: grid; gap: 0.5rem; }
   .proof__roster li { display: flex; align-items: center; gap: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--line); font-weight: 600; }
   .proof__roster li::before { content: ""; width: 0.5rem; height: 0.5rem; background: var(--blue); }
+  .proof__roster li { flex-wrap: wrap; }
+  .proof__roster a { white-space: nowrap; }
   @media (max-width: 56rem) { .proof { grid-template-columns: 1fr; } }
 
   /* ============ CONTACT page ============ */
