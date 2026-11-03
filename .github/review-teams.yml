@@ -158,6 +158,11 @@ rules:
   - id: operations-process
     globs: ["docs/operations/{lead-to-project,project-lifecycle,change-requests,client-handover,maintenance}.md"]
     teams: [product]
+  - id: client-consent
+    # The register of client consent to be named publicly (client-names below).
+    globs: ["docs/operations/client-consent.md"]
+    teams: [commercial, legal]
+    checklists: [client-communication]
   - id: company-brand
     globs: ["docs/company/{positioning,mission,vision}.md"]
     teams: [brand-content]
@@ -479,6 +484,7 @@ founder_classes:
       - "website/public/products.html"
       - "website/public/products/**"
       - "website/public/projects.html"
+      - "docs/operations/client-consent.md"
   - id: F
     name: The human send gate
     paths:
