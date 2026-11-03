@@ -540,9 +540,9 @@ content_rules:
     founder_class: E
     checklists: [client-communication, sales-partnerships]
     patterns:
-      - "\\bsudaangeo\\b"
-      # Khel Shiksha: consent recorded in docs/operations/client-consent.md
+      # Consent for both names is recorded in docs/operations/client-consent.md
       # (2026-11-03, given to the founder; founder decision on its form).
+      - "\\bsudaangeo\\b"
       - "\\bkhel ?shiksha\\b"
       - "\\b(client|partner|prospect|case study)\\s*[:·]"
     examples: ["Client · Sudaangeo.in", "Case study: Acme"]
