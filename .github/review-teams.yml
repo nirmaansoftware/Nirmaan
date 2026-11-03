@@ -534,6 +534,10 @@ content_rules:
     checklists: [client-communication, sales-partnerships]
     patterns:
       - "\\bsudaangeo\\b"
+      # Khel Shiksha: the client agreed to be named on nirmaan.online on a
+      # phone call with the founder on 2026-11-03 (spoken; reported by the
+      # founder in PR #167). No copy of the call is kept in this public repo.
+      - "\\bkhel ?shiksha\\b"
       - "\\b(client|partner|prospect|case study)\\s*[:·]"
     examples: ["Client · Sudaangeo.in", "Case study: Acme"]
     markers:
