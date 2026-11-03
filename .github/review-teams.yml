@@ -528,15 +528,15 @@ content_rules:
     examples: ["runs-on: macos-14-xlarge", "a paid plan per month"]
   - id: client-names
     # Named clients, partners and prospects that appear publicly. Add a name
-    # here when consent is recorded and it first appears in the repository.
+    # here when consent is recorded (docs/operations/client-consent.md) and it
+    # first appears in the repository.
     adds_teams: [legal, commercial]
     founder_class: E
     checklists: [client-communication, sales-partnerships]
     patterns:
       - "\\bsudaangeo\\b"
-      # Khel Shiksha: the client agreed to be named on nirmaan.online on a
-      # phone call with the founder on 2026-11-03 (spoken; reported by the
-      # founder in PR #167). No copy of the call is kept in this public repo.
+      # Khel Shiksha: consent recorded in docs/operations/client-consent.md
+      # (2026-11-03, given to the founder; founder decision on its form).
       - "\\bkhel ?shiksha\\b"
       - "\\b(client|partner|prospect|case study)\\s*[:·]"
     examples: ["Client · Sudaangeo.in", "Case study: Acme"]
