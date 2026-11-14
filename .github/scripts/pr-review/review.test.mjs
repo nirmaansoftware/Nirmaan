@@ -1350,6 +1350,49 @@ test('interpret: success, error and rate-limit results', () => {
   assert.equal(interpret({ code: 1, stdout: '', stderr: "You've hit your session limit · resets 3:10am" }).kind, 'rate_limit');
 });
 
+// Claude 2.1.325's own wordings: its limit names (5-hour, weekly, Opus,
+// Sonnet, Fable, usage credit) and its overloaded-model messages. The 5-hour
+// one is what stopped ip#165 on 2026-11-03.
+const LIMIT_WORDINGS = [
+  "You've hit your 5-hour limit · resets 2:40pm (Asia/Calcutta)",
+  "You've hit your weekly limit · resets Nov 17, 9am (Asia/Calcutta)",
+  "You've hit your Opus limit · resets Nov 17, 9am (Asia/Calcutta)",
+  "You've hit your Sonnet limit · resets Nov 17, 9am (Asia/Calcutta)",
+  "You've hit your Fable limit · resets Nov 17, 9am (Asia/Calcutta)",
+  "You've hit your usage credit limit",
+  "You've hit your limit",
+  "You've reached your Fable limit",
+  'Fable limit reached · continuing on Sonnet uses usage credits · Claude stopped here',
+  'Server is temporarily limiting requests (not your usage limit)',
+  'API Error: Request rejected (429) · this may be a temporary capacity issue.',
+  'API Error: Repeated 529 Overloaded errors',
+  'Opus is experiencing high load. Switch to Sonnet.',
+  'Fable is experiencing high load, please use /model to switch to Sonnet',
+];
+
+test('interpret: every wording of the plan limit and an overloaded model is a rate limit, in JSON and as plain text', () => {
+  for (const text of LIMIT_WORDINGS) {
+    assert.equal(interpret({ code: 1, stdout: JSON.stringify({ subtype: 'success', is_error: true, result: text }), stderr: '' }).kind, 'rate_limit', text);
+    assert.equal(interpret({ code: 1, stdout: '', stderr: text }).kind, 'rate_limit', text);
+  }
+});
+
+test('interpret: api_error_status 429 or 529 is a rate limit whatever the wording; another status goes by the text', () => {
+  // Not the exit code: 2.1.317 and later exit 1 on more failures.
+  for (const status of [429, 529]) {
+    assert.equal(interpret({ code: 1, stdout: JSON.stringify({ subtype: 'success', is_error: true, api_error_status: status, result: 'API Error: a wording no pattern knows' }), stderr: '' }).kind, 'rate_limit');
+  }
+  for (const status of [400, 401, 500, null]) {
+    assert.equal(interpret({ code: 1, stdout: JSON.stringify({ subtype: 'success', is_error: true, api_error_status: status, result: 'API Error: bad request' }), stderr: '' }).kind, 'error');
+  }
+});
+
+test('interpret: text that is not a limit stays an error', () => {
+  for (const text of ['the process crashed', "You've hit a snag", 'limits of the design are not tested']) {
+    assert.equal(interpret({ code: 1, stdout: JSON.stringify({ subtype: 'error_during_execution', is_error: true, result: text }), stderr: '' }).kind, 'error', text);
+  }
+});
+
 test('reviewerEnv drops every token-bearing variable', () => {
   const env = reviewerEnv({ HOME: '/h', PATH: '/p', GH_TOKEN: 'x', GITHUB_TOKEN: 'x', NIRMAAN_REVIEW_APP_ID: '1', NIRMAAN_REVIEW_APP_PRIVATE_KEY_FILE: '/k', ANTHROPIC_API_KEY: 'x', CLAUDECODE: '1' });
   assert.deepEqual(Object.keys(env).sort(), ['HOME', 'PATH']);

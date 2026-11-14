@@ -43,7 +43,14 @@ export function claudeArgs({ model, systemPrompt, addDirs = [], schema }) {
 
 // A plan's session limit ("You've hit your session limit · resets 3:10am")
 // is a rate limit too, even when claude reports it as subtype "success".
-const RATE_LIMIT = /rate.?limit|usage limit|session limit|too many requests|\b429\b|overloaded|limit reached|try again later/i;
+// Claude 2.1.312 and later name each limit: "You've hit your 5-hour limit",
+// "weekly limit", "Opus limit", "Sonnet limit", "Fable limit", "usage credit
+// limit", or "You've reached your Fable limit"; "Opus is experiencing high
+// load" is an overloaded model (a 529, like "overloaded").
+const RATE_LIMIT = /rate.?limit|usage limit|session limit|weekly limit|(?:hit|reached) your (?:[\w-]+ ){0,3}limit|too many requests|\b429\b|overloaded|high load|limit reached|try again later/i;
+// The HTTP status of the API error that ended the call (the JSON result's
+// api_error_status): a 429 or a 529 is a rate limit whatever its wording.
+const RATE_LIMIT_STATUS = new Set([429, 529]);
 
 // Classify one finished process. Returns {kind: ok|rate_limit|error, ...}.
 export function interpret({ code, stdout, stderr }) {
@@ -64,7 +71,8 @@ export function interpret({ code, stdout, stderr }) {
   const reportedModel = Object.keys(data.modelUsage || {})[0] ?? null;
   if (data.is_error || data.subtype !== 'success') {
     const text = String(data.result ?? data.error ?? data.subtype ?? 'error');
-    return { kind: RATE_LIMIT.test(text) ? 'rate_limit' : 'error', error: `claude reported ${data.subtype || 'an error'}: ${text.slice(0, 300)}`, tokens, reportedModel };
+    const limited = RATE_LIMIT_STATUS.has(data.api_error_status) || RATE_LIMIT.test(text);
+    return { kind: limited ? 'rate_limit' : 'error', error: `claude reported ${data.subtype || 'an error'}: ${text.slice(0, 300)}`, tokens, reportedModel };
   }
   return { kind: 'ok', text: typeof data.result === 'string' ? data.result : '', structured: data.structured_output ?? null, tokens, reportedModel };
 }

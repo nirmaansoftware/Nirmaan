@@ -6,7 +6,7 @@
 //
 // scenario.json: { reviews: [response...], fixes: [fix...] }, each list used
 // in order (the last entry repeats).
-//   review response: { verdict, findings?, sha?, extra? } or { type: 'rate_limit' }
+//   review response: { verdict, findings?, sha?, extra? } or { type: 'rate_limit', text?, subtype?, code? }
 //     (extra adds keys, such as the Founder Proxy's founder_reasons)
 //   fix: { status?, edits?: {path: text}, notAddressed?: [{id, reason}],
 //          humanMove?: {gitDir, ref, sha}, type?: 'rate_limit' | 'garbage' | 'crash' }
@@ -36,7 +36,7 @@ process.stdin.on('end', () => {
   appendFileSync(join(here, 'calls.jsonl'), `${JSON.stringify({ kind, argv, cwd: process.cwd(), env: Object.keys(process.env), stdin, locks })}\n`);
   const out = (o) => process.stdout.write(JSON.stringify(o));
   const ok = (structured) => out({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(structured), structured_output: structured, usage: { input_tokens: 100, output_tokens: 20 }, modelUsage: { 'fake-model': {} } });
-  if (r.type === 'rate_limit') { out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'API Error: 429 rate limit exceeded' }); return; }
+  if (r.type === 'rate_limit') { out({ type: 'result', subtype: r.subtype ?? 'error_during_execution', is_error: true, result: r.text ?? 'API Error: 429 rate limit exceeded' }); process.exitCode = r.code ?? 0; return; }
   if (!isFixer) {
     const head = /Head SHA: ([0-9a-f]{40})/.exec(stdin)?.[1];
     ok({ verdict: r.verdict ?? 'pass', sha: r.sha ?? head, findings: r.findings ?? [], checks_run: ['read the diff'], not_run: ['tests (no command tools)'], ...(r.extra ?? {}) });
