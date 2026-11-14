@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Ago, useSnapshot } from "./_components/Live";
-import { Blocks, LaneBadge, Light, ModelChip, StagePipe } from "./_components/ui";
-import { SampleNote } from "./_components/SampleNote";
+import { Ago, useSnapshot } from "@/app/_components/Live";
+import { Blocks, LaneBadge, Light, ModelChip, StagePipe } from "@/app/_components/ui";
+import { SampleNote } from "@/app/_components/SampleNote";
 
 const KIND_LABEL = { approval: "approve", usage: "usage", setup: "set up", decision: "decide" } as const;
 

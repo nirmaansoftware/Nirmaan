@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AgentsView } from "../_views/AgentsView";
+import { AgentsView } from "@/app/_views/AgentsView";
 
 export const metadata: Metadata = { title: "Live agents" };
 

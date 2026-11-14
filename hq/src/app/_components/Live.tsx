@@ -5,6 +5,8 @@ import type { Snapshot } from "@/lib/snapshot";
 
 /** How often the open page asks for a new snapshot (the publisher writes every ~15 s). */
 export const REFRESH_MS = 10_000;
+/** No snapshot for this long = the publisher (or the Mac it runs on) is down. */
+export const QUIET_MS = 10 * 60_000;
 
 type Connection = "live" | "stale" | "offline";
 
@@ -125,8 +127,10 @@ export function LiveStamp() {
   const { snapshot, receivedAt, connection, revision } = useLive();
   const now = useNow(1000);
   const sample = snapshot.source === "sample";
-  const tone = sample ? "warn" : connection === "live" ? "good" : connection === "stale" ? "warn" : "bad";
-  const text = sample ? "sample data" : connection;
+  // The publisher pushes at least every 5 minutes; silence past 10 means it (or the Mac) is down.
+  const quiet = !sample && now - Date.parse(snapshot.generatedAt) > QUIET_MS;
+  const tone = sample ? "warn" : quiet ? "bad" : connection === "live" ? "good" : connection === "stale" ? "warn" : "bad";
+  const text = sample ? "sample data" : quiet ? "publisher quiet" : connection;
   return (
     <span className="live-stamp" aria-live="polite">
       {/* Re-keyed on every new snapshot so the flash replays once. */}
@@ -134,7 +138,7 @@ export function LiveStamp() {
         {text}
       </span>
       <span className="faint mono" suppressHydrationWarning>
-        updated {ago(receivedAt, now)}
+        {quiet ? `last snapshot ${ago(snapshot.generatedAt, now)}` : `updated ${ago(receivedAt, now)}`}
       </span>
     </span>
   );

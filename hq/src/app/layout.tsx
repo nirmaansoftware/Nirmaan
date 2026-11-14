@@ -1,12 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
 import localFont from "next/font/local";
 import "./os-system.css";
 import "./hq.css";
-import { getSnapshot } from "@/lib/data";
-import { LiveProvider, LiveStamp } from "./_components/Live";
-import { Logo } from "./_components/Logo";
-import { HqNav } from "./_components/HqNav";
 
 // Same self-hosted fonts and settings as the OS (os/src/app/layout.tsx).
 const archivo = localFont({
@@ -53,33 +48,10 @@ export const viewport: Viewport = {
   ],
 };
 
-// Every request renders the latest snapshot; the browser then keeps it live.
-export const dynamic = "force-dynamic";
-
-export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const initial = await getSnapshot();
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en-IN" className={`${archivo.variable} ${hanken.variable} ${jetbrains.variable}`}>
-      <body>
-        <LiveProvider initial={initial}>
-          <div className="shell">
-            <aside className="side">
-              <Link className="brand" href="/">
-                <Logo />
-                <b>Nirmaan</b>
-                <span>HQ</span>
-              </Link>
-              <HqNav />
-              <div className="side-foot">
-                <LiveStamp />
-              </div>
-            </aside>
-            <main className="main" id="main">
-              {children}
-            </main>
-          </div>
-        </LiveProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

@@ -97,10 +97,6 @@ const calls = section("call log", () => {
 function ageStatus(ms, okMs, warnMs) {
   return ms < okMs ? "ok" : ms < warnMs ? "warn" : "down";
 }
-function ago(ms) {
-  const s = Math.round(ms / 1000);
-  return s < 90 ? `${s} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`;
-}
 
 const resumeHead = section("resume", () => readFileSync(join(CFG.internal, "RESUME.md"), "utf8").split("\n").slice(0, 6).join("\n"), "");
 const paused = /PAUSED BY FOUNDER/.test(resumeHead);
@@ -138,7 +134,7 @@ section("health: loops", () => {
     }
     const t = mtime(l.file);
     const status = pausedUntil > now ? "paused" : ageStatus(now - t, 3 * 60_000, 15 * 60_000);
-    const detail = pausedUntil > now ? `rate-limit pause until ${new Date(pausedUntil).toLocaleTimeString("en-IN")}` : `last pass ${ago(now - t)}`;
+    const detail = pausedUntil > now ? `rate-limit pause until ${new Date(pausedUntil).toLocaleTimeString("en-IN")}` : status === "ok" ? "heartbeat fresh" : "heartbeat late";
     health.push({ id: l.id, label: l.label, status, detail, since: iso(t) });
   }
 });
@@ -373,6 +369,18 @@ const staff = section("staff: ip", () =>
   ),
 []);
 
+// ---------- stable times: unchanged rows keep the previous snapshot's `since` ----------
+section("stable times", () => {
+  if (!existsSync(CFG.out)) return;
+  const prev = new Map((readJson(CFG.out).health ?? []).map((h) => [h.id, h]));
+  for (const h of health) {
+    const p = prev.get(h.id);
+    if (p && p.status === h.status && p.detail === h.detail && !["loop-ip", "loop-nirmaan"].includes(h.id)) h.since = p.since;
+    // Loops: `since` is the status start, not the heartbeat, once the status holds.
+    if (p && ["loop-ip", "loop-nirmaan"].includes(h.id) && p.status === h.status) h.since = p.since;
+  }
+});
+
 // ---------- assemble, check, write ----------
 for (const [name, msg] of problems) health.push({ id: `publisher-${name}`, label: `Publisher: ${name}`, status: "warn", detail: msg, since: iso(now) });
 
@@ -418,4 +426,43 @@ if (process.argv.includes("--print")) {
   writeFileSync(tmp, body);
   renameSync(tmp, CFG.out); // atomic: hq never reads a half-written file
   writeFileSync(`${CFG.out}.digest`, digest);
+  await pushToStore(body, digest);
+}
+
+/**
+ * Push to the store (Upstash Redis REST) when the content changed, or every 5 minutes
+ * as a heartbeat so hq can tell "quiet" from "publisher down". Credentials come from
+ * the environment or ~/.nirmaan/hq/upstash.env (never from this repository).
+ * No credentials: local-only mode, nothing is sent.
+ */
+async function pushToStore(payload, digest) {
+  const creds = { ...readEnvFile(join(dirname(CFG.out), "upstash.env")), ...env };
+  const url = creds.UPSTASH_REDIS_REST_URL;
+  const token = creds.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+  const mark = `${CFG.out}.pushed`;
+  const last = existsSync(mark) ? readFileSync(mark, "utf8").split(" ") : [];
+  const fresh = last[0] === digest && now - Number(last[1] ?? 0) < 5 * 60_000;
+  if (fresh) return;
+  const res = await fetch(`${url.replace(/\/$/, "")}/set/hq:snapshot`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: payload,
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    console.error(`hq publisher: store push failed (${res.status})`);
+    return;
+  }
+  writeFileSync(mark, `${digest} ${now}`);
+}
+
+function readEnvFile(path) {
+  if (!existsSync(path)) return {};
+  const out = {};
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
+    if (m) out[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  }
+  return out;
 }
