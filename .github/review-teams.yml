@@ -280,6 +280,29 @@ rules:
     globs: ["os/.env", "os/next.config.ts", "os/src/lib/prospecting/safeFetch.ts"]
     teams: [engineering, platform-quality]
     checklists: [security-engineer]
+  - id: hq-app
+    # hq.nirmaan.online screens and components (hq/README.md); its styles are
+    # a verbatim copy of the OS design system. Route handlers stay with `hq`.
+    globs: ["hq/src/app/**"]
+    exclude: ["hq/src/app/api/**"]
+    teams: [engineering, design]
+    checklists: [ux-designer, frontend-engineer]
+  - id: hq
+    # The rest of hq/: top-level config and docs, the snapshot contract and
+    # data access, route handlers, public files and the publisher. A new
+    # top-level folder under hq/ needs a rule.
+    globs: ["hq/*", "hq/src/*", "hq/src/lib/**", "hq/src/app/api/**", "hq/public/**", "hq/publisher/**"]
+    teams: [engineering]
+  - id: hq-auth-security
+    # The login gate, sessions, security headers, the forbidden-field list and
+    # the publisher (it reads private sources and writes the store).
+    globs: ["hq/src/proxy.ts", "hq/src/lib/session.ts", "hq/src/lib/session.test.ts", "hq/src/app/api/auth/**", "hq/next.config.ts", "hq/src/lib/forbidden.json", "hq/publisher/**"]
+    teams: [engineering, platform-quality]
+    checklists: [security-engineer, backend-engineer]
+  - id: hq-dependencies
+    globs: ["hq/package.json", "hq/package-lock.json"]
+    teams: [engineering, platform-quality]
+    checklists: [performance-engineer]
   - id: os-start
     # Started by Dockerfile.os; holds the worker switch.
     globs: ["os/scripts/start.sh"]
