@@ -9,6 +9,8 @@
  * field test (snapshot.test.ts) fails if any of those names appear.
  */
 
+import forbidden from "./forbidden.json";
+
 export const SNAPSHOT_VERSION = 1;
 
 export type Org = "ip" | "nirmaan";
@@ -157,11 +159,8 @@ export function modelLabel(model: string): string {
   return m[3] ? `${name} ${m[2]}.${m[3]}` : `${name} ${m[2]}`;
 }
 
-/** Field names that must never reach hq (see the contract above). */
-export const FORBIDDEN_FIELDS = [
-  "token", "secret", "password", "apiKey", "api_key", "privateKey", "private_key", "pem",
-  "price", "cost", "costUsd", "cost_usd", "margin", "rate", "invoice", "salary", "email", "phone",
-];
+/** Field names that must never reach hq; shared with the publisher (publisher/publish.mjs). */
+export const FORBIDDEN_FIELDS: string[] = forbidden;
 
 /** Every key in a JSON value, recursively. */
 export function allKeys(value: unknown, out: Set<string> = new Set()): Set<string> {
