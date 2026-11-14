@@ -27,8 +27,9 @@ sources are private and live on the founder's Mac. This adds a new deployable
 ## Alternatives considered
 
 - **Vercel password protection / Deployment Protection.** Shared password, no
-  per-person identity, no allow-list by GitHub login, and the password feature
-  is a paid plan add-on. Rejected.
+  per-person identity, no allow-list by GitHub login. Rejected on that ground
+  alone. ASSUMPTION (unverified, no dated primary source yet): the password
+  feature may need a paid plan add-on; it does not drive the decision.
 - **Cloudflare Access.** Good identity gate, but adds a second vendor and DNS
   move for one user; the domain is at Hostinger. Rejected for now; it can
   replace the login later without changing the snapshot.
@@ -39,7 +40,8 @@ sources are private and live on the founder's Mac. This adds a new deployable
   OS schema and migrations, and exposes OS credentials to the Mac publisher.
   Rejected.
 - **Redis REST (Upstash).** Chosen: HTTP-only (fits serverless), separate
-  read-only and write tokens, free tier, no schema.
+  read-only and write tokens, no schema. Plan and price: see the labelled
+  assumptions under "Cost and triggers".
 
 ## Data-sharing consequences
 
@@ -55,8 +57,16 @@ sources are private and live on the founder's Mac. This adds a new deployable
 
 ## Cost and triggers
 
-- Upstash free tier and Vercel hobby/current plan cover one user: polling is
-  every 10 s while a tab is visible, publishing on change plus a heartbeat.
-- Revisit if Upstash commands approach the free daily limit, if a second
+- ASSUMPTION (unverified; no dated primary source recorded): an Upstash free
+  tier and the current Vercel plan cover one user. Before go-live, the founder
+  step is to check Upstash and Vercel pricing pages, record the URL and date
+  here, and confirm the plan terms allow this use.
+- INFERENCE (rough, from the design, not measured): one user polling every
+  10 s while a tab is visible is at most about 8,640 reads a day per open
+  tab-day (the 5 s cache cuts store reads further); publishing is on change
+  plus a 5-minute heartbeat, about 288 writes a day at minimum, more when the
+  snapshot changes. Compare these with the verified free limit at go-live.
+- Revisit if Upstash commands approach the free daily limit (to be confirmed
+  from the source above), if a second
   person needs access (allow-list and plan), or if the snapshot needs fields
   outside the contract. Any such change gets a new ADR.
