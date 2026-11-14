@@ -6,11 +6,14 @@ import { SNAPSHOT_VERSION, type Snapshot } from "./snapshot";
  * usage figures, nothing from the private tracker beyond lane ids.
  * Times are relative to `now` so the page always looks current.
  */
+/** Fixed for the life of the server, so polling the sample never looks like new data. */
+const SAMPLE_GENERATED_AT = new Date().toISOString();
+
 export function sampleSnapshot(now: Date = new Date()): Snapshot {
   const t = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000).toISOString();
   return {
     version: SNAPSHOT_VERSION,
-    generatedAt: t(0),
+    generatedAt: SAMPLE_GENERATED_AT,
     source: "sample",
     health: [
       { id: "orchestrator", label: "Orchestrator", status: "ok", detail: "3 lanes running", since: t(52) },

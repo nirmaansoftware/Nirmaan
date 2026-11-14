@@ -32,3 +32,7 @@ test("model names map to families and labels", () => {
   assert.equal(modelLabel("claude-fable-5-2"), "Fable 5.2");
   assert.equal(modelLabel("opus"), "opus");
 });
+
+test("polling the sample never looks like a new snapshot", () => {
+  assert.equal(sampleSnapshot().generatedAt, sampleSnapshot(new Date(Date.now() + 60_000)).generatedAt);
+});
