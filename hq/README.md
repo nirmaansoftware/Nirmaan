@@ -4,10 +4,34 @@ The founder's live view of the Nirmaan ecosystem: progress, live agents and the 
 uses, reviews, eval batches, staff (roles, skills, levels) and what waits on the founder.
 Internal and login-only. Never indexed.
 
-**Status: LOCAL.** The publisher builds real snapshots on the founder's Mac every 15 s and hq
-serves them locally (`HQ_SNAPSHOT_FILE`). Without it, every screen shows a labelled sample
-(`src/lib/sample.ts`). Not deployed. Still to do: the store, the GitHub login, and the Vercel
-project with its DNS record.
+**Status: BUILT, NOT DEPLOYED.** The publisher builds real snapshots on the founder's Mac every
+15 s. Locally hq reads that file (`HQ_SNAPSHOT_FILE`); deployed, it reads the store. With
+neither, every screen shows a labelled sample (`src/lib/sample.ts`). Still to do: the store
+account, the GitHub OAuth app, and the Vercel project with its DNS record (founder steps below).
+
+## Security
+
+- `src/proxy.ts` gates every page and API route: a signed session cookie (HMAC, 7 days,
+  `src/lib/session.ts`) for a login in `HQ_ALLOWED_LOGINS`. No database; the GitHub token is
+  read once at sign-in and dropped. **It fails closed:** missing settings serve 503.
+  `HQ_AUTH=off` exists only for running on the founder's Mac and is never set on Vercel.
+- The login page renders no data: the screens live in the `(hq)` route group, whose layout
+  loads the snapshot, and `/login` is outside it.
+- The site reads the store with a read-only token, server-side only. The publisher holds the
+  write token in `~/.nirmaan/hq/upstash.env`, outside the repository.
+- Snapshots are sanitised by contract; the publisher refuses to write a forbidden field and
+  the site refuses to serve one.
+
+## Settings (Vercel, Production only)
+
+| Variable | What |
+| --- | --- |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the "Nirmaan HQ" OAuth app under nirmaansoftware; callback `https://hq.nirmaan.online/api/auth/callback` |
+| `HQ_SESSION_SECRET` | 32+ random characters (`openssl rand -hex 32`) |
+| `HQ_ALLOWED_LOGINS` | `nirmaansoftware,patel-om` |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_READONLY_TOKEN` | the store (read-only token) |
+
+Production only: preview deployments get no settings, so they fail closed.
 
 ## How it works
 
