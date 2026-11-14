@@ -5,6 +5,12 @@ import { compact, ModelChip } from "../_components/ui";
 import { SampleNote } from "../_components/SampleNote";
 import { modelFamily, modelLabel, type ModelFamily } from "@/lib/snapshot";
 
+/** A share as a percentage; anything above zero shows as at least "<1%". */
+function pct(n: number, total: number): string {
+  const p = (n / total) * 100;
+  return n > 0 && p < 1 ? "<1%" : `${Math.round(p)}%`;
+}
+
 const FAMILIES: ModelFamily[] = ["fable", "opus", "sonnet", "haiku", "other"];
 const FAMILY_LABEL: Record<ModelFamily, string> = { fable: "Fable", opus: "Opus", sonnet: "Sonnet", haiku: "Haiku", other: "Other" };
 /** What each family is meant for (R8 routing), shown beside the numbers. */
@@ -23,8 +29,10 @@ export function ModelsView() {
     const rows = s.models.filter((u) => modelFamily(u.model) === f);
     return { f, calls: rows.reduce((n, u) => n + u.calls, 0), tokens: rows.reduce((n, u) => n + tokens(u), 0) };
   }).filter((x) => x.calls > 0);
-  const allTokens = byFamily.reduce((n, x) => n + x.tokens, 0) || 1;
-  const maxTokens = Math.max(1, ...byFamily.map((x) => x.tokens));
+  // Share of responses: which model does the work. Token totals are dominated by cached
+  // input (billions of cheap cache reads), so they would hide everything but the top model.
+  const allCalls = byFamily.reduce((n, x) => n + x.calls, 0) || 1;
+  const maxCalls = Math.max(1, ...byFamily.map((x) => x.calls));
   const rows = [...s.models].sort((a, b) => tokens(b) - tokens(a));
 
   return (
@@ -39,12 +47,12 @@ export function ModelsView() {
 
       <section className="panel" aria-labelledby="share-h">
         <div className="panel-head">
-          <h2 id="share-h">Share of tokens</h2>
-          <span className="label">input + output</span>
+          <h2 id="share-h">Share of responses</h2>
+          <span className="label">last 7 days · every session, loop and eval</span>
         </div>
-        <div className="strip" role="img" aria-label={byFamily.map((x) => `${FAMILY_LABEL[x.f]} ${Math.round((x.tokens / allTokens) * 100)}%`).join(", ")}>
+        <div className="strip" role="img" aria-label={byFamily.map((x) => `${FAMILY_LABEL[x.f]} ${pct(x.calls, allCalls)}`).join(", ")}>
           {byFamily.map((x) => (
-            <span key={x.f} className={`bar-fill m-${x.f}`} style={{ width: `${(x.tokens / allTokens) * 100}%` }} />
+            <span key={x.f} className={`bar-fill m-${x.f}`} style={{ width: `${(x.calls / allCalls) * 100}%` }} />
           ))}
         </div>
         <div className="bars">
@@ -56,10 +64,10 @@ export function ModelsView() {
                 <small className="faint">{FAMILY_ROLE[x.f]}</small>
               </span>
               <span className="bar-track">
-                <span className={`bar-fill m-${x.f}`} style={{ width: `${(x.tokens / maxTokens) * 100}%`, display: "block" }} />
+                <span className={`bar-fill m-${x.f}`} style={{ width: `${(x.calls / maxCalls) * 100}%`, display: "block" }} />
               </span>
               <span className="num mono">
-                {Math.round((x.tokens / allTokens) * 100)}% · {compact(x.calls)} calls
+                {pct(x.calls, allCalls)} · {compact(x.calls)}
               </span>
             </div>
           ))}
@@ -76,7 +84,7 @@ export function ModelsView() {
               <tr>
                 <th>Role</th>
                 <th>Model</th>
-                <th>Calls</th>
+                <th>Responses</th>
                 <th>Input</th>
                 <th>Output</th>
               </tr>

@@ -62,7 +62,7 @@ one broken source shows as a warning row and never blanks the page:
 | Waiting on you | `waiting.json` + open PRs labelled `needs-founder` |
 | Live agents | `lanes.json` (written by the orchestrator when a lane starts or ends) |
 | Feed | the tracker's last 40 lines + loop merges of the last 24 h |
-| Models | the review-loop call log (7 days) + live-eval record totals |
+| Models | the review-loop call log (7 days), live-eval record totals, and every Claude Code session on the machine (model and token counts only, from `~/.claude/projects` transcripts; cached 10 min) |
 | Reviews | open PRs (`gh`) + their latest loop events |
 | Evals | live-eval records in ip-nirmaan and its worktrees; another harness = stale |
 | Staff | IP: `publisher/ip_staff.py` (departments holding skills with a level) |

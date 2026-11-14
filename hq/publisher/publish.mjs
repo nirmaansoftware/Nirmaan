@@ -28,6 +28,7 @@ const CFG = {
   worktrees: env.HQ_WORKTREES ?? join(HOME, "Nirmaan/.worktrees"),
   repos: (env.HQ_REPOS ?? "nirmaansoftware/Nirmaan,nirmaansoftware/ip-nirmaan").split(","),
   out: env.HQ_OUT ?? join(HOME, ".nirmaan/hq/snapshot.json"),
+  sessions: env.HQ_SESSIONS ?? join(HOME, ".claude/projects"),
   cacheDir: env.HQ_CACHE ?? join(HOME, ".nirmaan/hq/cache"),
   gh: env.HQ_GH ?? "gh",
 };
@@ -360,6 +361,50 @@ section("models: evals", () => {
     row.inputTokens += Number(t.input_tokens ?? 0);
     row.outputTokens += Number(t.output_tokens ?? 0);
   }
+});
+
+// Every Claude Code session on this machine (orchestrator, lanes, their sub-agents, side
+// sessions), from Claude Code's own transcripts: the only place Haiku and Fable sub-agents
+// show up. Only the model name and token counts are read; nothing else leaves the file.
+// Role "agent sessions". Review-loop and eval calls run without session files, so nothing
+// is counted twice. Cached 10 minutes: the scan reads a week of transcripts.
+section("models: sessions", () => {
+  const rows = cached("sessions-7d", 10 * 60_000, () => {
+    const since = now - 7 * 24 * 3600_000;
+    const acc = new Map();
+    const walk = (dir, depth) => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        const st = statSync(p);
+        if (st.isDirectory()) {
+          if (depth < 4) walk(p, depth + 1);
+        } else if (name.endsWith(".jsonl") && st.mtimeMs >= since) {
+          for (const line of readFileSync(p, "utf8").split("\n")) {
+            if (!line.includes('"usage"') || !line.includes('"model"')) continue;
+            let r;
+            try {
+              r = JSON.parse(line);
+            } catch {
+              continue;
+            }
+            const t = Date.parse(r.timestamp ?? "");
+            if (t && t < since) continue;
+            const m = r.message ?? {};
+            if (typeof m.model !== "string" || m.model.startsWith("<")) continue;
+            const u = m.usage ?? {};
+            const row = acc.get(m.model) ?? { model: m.model, role: "agent sessions", calls: 0, inputTokens: 0, outputTokens: 0 };
+            row.calls += 1;
+            row.inputTokens += Number(u.input_tokens ?? 0) + Number(u.cache_read_input_tokens ?? 0) + Number(u.cache_creation_input_tokens ?? 0);
+            row.outputTokens += Number(u.output_tokens ?? 0);
+            acc.set(m.model, row);
+          }
+        }
+      }
+    };
+    if (existsSync(CFG.sessions)) walk(CFG.sessions, 0);
+    return [...acc.values()];
+  });
+  models.push(...rows);
 });
 
 // ---------- staff ----------
