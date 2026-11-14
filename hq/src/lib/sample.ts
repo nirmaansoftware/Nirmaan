@@ -36,10 +36,10 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
       { id: "w3", kind: "usage", title: "Usage share for H3 harness variants (about 70 trials)", where: "orchestrator session", since: t(900) },
     ],
     lanes: [
-      { id: "IP-P3-L1", org: "ip", task: "First recorded live batch, 7 cases", model: "claude-opus-5-5", status: "working", repo: "ip-nirmaan", branch: "evals/p3-l1-live-2", startedAt: t(95), lastActivityAt: t(1) },
-      { id: "IP-P3-K3", org: "ip", task: "Knowledge docs: rtl_microarchitecture, rtl_lint, synthesis_awareness, reset_design", model: "claude-sonnet-5-5", status: "waiting", repo: "ip-nirmaan", pr: 189, startedAt: t(70), lastActivityAt: t(6), note: "in review, key 2" },
-      { id: "IP-W2-T1", org: "ip", task: "eqy wrapper for equivalence checks", model: "claude-opus-5-5", status: "working", repo: "ip-nirmaan", branch: "tools/eqy", startedAt: t(40), lastActivityAt: t(2) },
-      { id: "HQ", org: "nirmaan", task: "hq.nirmaan.online", model: "claude-opus-5-5", status: "working", repo: "Nirmaan", branch: "hq/scaffold", startedAt: t(20), lastActivityAt: t(0) },
+      { id: "IP-P3-L1", org: "ip", role: "ai-engineer", task: "First recorded live batch, 7 cases", model: "claude-opus-5-5", status: "working", repo: "ip-nirmaan", branch: "evals/p3-l1-live-2", startedAt: t(95), lastActivityAt: t(1) },
+      { id: "IP-P3-K3", org: "ip", role: "qa-evidence", task: "Knowledge docs: rtl_microarchitecture, rtl_lint, synthesis_awareness, reset_design", model: "claude-sonnet-5-5", status: "waiting", repo: "ip-nirmaan", pr: 189, startedAt: t(70), lastActivityAt: t(6), note: "in review, key 2" },
+      { id: "IP-W2-T1", org: "ip", role: "eda-tooling", task: "eqy wrapper for equivalence checks", model: "claude-opus-5-5", status: "working", repo: "ip-nirmaan", branch: "tools/eqy", startedAt: t(40), lastActivityAt: t(2) },
+      { id: "HQ", org: "nirmaan", role: "frontend-engineer", task: "hq.nirmaan.online", model: "claude-opus-5-5", status: "working", repo: "Nirmaan", branch: "hq/scaffold", startedAt: t(20), lastActivityAt: t(0) },
     ],
     events: [
       { at: t(0), kind: "note", text: "hq scaffold building", lane: "HQ" },
@@ -90,6 +90,20 @@ export function sampleSnapshot(now: Date = new Date()): Snapshot {
           { id: "accessible-ui", level: "none" },
         ],
       },
+    ],
+    people: [
+      { org: "nirmaan", id: "orchestrator", title: "Orchestrator", team: "Executive", head: true },
+      { org: "nirmaan", id: "principal-architect", title: "Head of Engineering", team: "Engineering", head: true },
+      { org: "nirmaan", id: "frontend-engineer", title: "Frontend Engineer", team: "Engineering", head: false },
+      { org: "nirmaan", id: "backend-engineer", title: "Backend Engineer", team: "Engineering", head: false },
+      { org: "nirmaan", id: "creative-director", title: "Head of Design", team: "Design", head: true },
+      { org: "nirmaan", id: "ux-designer", title: "UX Designer", team: "Design", head: false },
+      { org: "ip", id: "chair", title: "Council Chair", team: "Council chair", head: true, about: "Chairs round 2 and decides" },
+      { org: "ip", id: "design-architect", title: "Design Architect", team: "Council", head: false, about: "RTL, microarchitecture, protocols, IP blocks" },
+      { org: "ip", id: "verification-lead", title: "Verification Lead", team: "Council", head: false, about: "Regression debug, coverage, formal" },
+      { org: "ip", id: "ai-engineer", title: "AI Engineer", team: "Council", head: false, about: "Model seats, providers, evaluation" },
+      { org: "ip", id: "eda-tooling", title: "EDA Tooling", team: "Council", head: false, about: "The open-source EDA flow and CI" },
+      { org: "ip", id: "qa-evidence", title: "QA Evidence", team: "Council", head: false, about: "Every claim against the code and evidence" },
     ],
     evals: [
       {

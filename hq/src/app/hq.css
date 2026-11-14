@@ -83,3 +83,122 @@
     .feed > li { grid-template-columns: 1fr; }
   }
 }
+
+/* ------------------------------------------------------------------
+   The organisation view: friendlier parts for Today, Team, Work,
+   Needs you and Goals. OS tokens only; square corners; blue = working.
+------------------------------------------------------------------ */
+@layer components {
+  .more { font-size: 0.8125rem; color: var(--ink-2); text-decoration: none; }
+  .more:hover { color: var(--blue); }
+
+  /* Today: the one-sentence hero and the company status. */
+  .hero { display: grid; gap: 0.6rem; padding: 0.5rem 0 0.25rem; }
+  .hero-hello { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+  .hero h1 { font-size: clamp(1.8rem, 1.2rem + 2.4vw, 3rem); max-width: 22ch; }
+  .hero-sub { color: var(--ink-2); font-size: 1rem; }
+  .status-pill { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.6rem 0.85rem; border-left: 3px solid; background: var(--panel); justify-self: start; max-width: 100%; }
+  .status-pill.good { border-color: var(--good); }
+  .status-pill.warn { border-color: var(--warn); }
+  .status-pill.bad { border-color: var(--bad); }
+  .status-pill.info { border-color: var(--blue); }
+  .status-dot { width: 0.6rem; height: 0.6rem; background: currentColor; }
+  .status-pill.good .status-dot { color: var(--good); }
+  .status-pill.warn .status-dot { color: var(--warn); }
+  .status-pill.bad .status-dot { color: var(--bad); }
+  .status-pill.info .status-dot { color: var(--blue); }
+  .status-detail { color: var(--ink-2); font-size: 0.8125rem; }
+
+  /* Avatars: the logo grid as a face. */
+  .avatar { display: inline-grid; place-items: center; flex: none; background: var(--panel-2); color: var(--ink); }
+  .avatar svg { width: 70%; height: 70%; fill: currentColor; }
+  .avatar-sm { width: 1.75rem; height: 1.75rem; }
+  .avatar-md { width: 3rem; height: 3rem; }
+  .avatar-lg { width: 3.5rem; height: 3.5rem; }
+  .avatar.busy { background: var(--blue-wash); color: var(--blue); }
+
+  /* Working right now. */
+  .now-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .now-list > li { display: flex; gap: 0.85rem; align-items: start; background: var(--panel); padding: 0.9rem 1rem; }
+  .now-list p { margin-top: 0.2rem; }
+
+  /* Needs you (short list on Today, full list on its page). */
+  .todo { display: grid; gap: 0.6rem; }
+  .todo > li { display: flex; gap: 0.6rem; align-items: baseline; }
+  .todo-kind { flex: none; font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.1rem 0.45rem; background: var(--warn-wash); color: var(--warn); }
+  .todo-kind.k-approval { background: var(--blue-wash); color: var(--blue); }
+  .todo-kind.k-setup { background: var(--panel-2); color: var(--ink-2); }
+  .needs { display: grid; gap: 0.75rem; }
+  .need { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); gap: 1rem; background: var(--panel); border: 1px solid var(--line); padding: 1rem 1.2rem; }
+  .need h2 { margin: 0.35rem 0 0.25rem; font-size: 1.05rem; }
+  .need-n { font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; color: var(--ink-3); line-height: 1; }
+  .need.k-approval { border-left: 3px solid var(--blue); }
+
+  /* Goals: a simple meter on Today, blocks on the Goals page. */
+  .goal { display: grid; gap: 0.35rem; }
+  .goal-head { display: flex; justify-content: space-between; gap: 0.75rem; }
+  .meter { display: flex; height: 0.6rem; background: var(--panel-2); }
+  .meter > span { background: var(--ink); transition: width 400ms ease-out; }
+  .meter > .meter-active { background: var(--blue); }
+  .goal-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
+  .goal-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
+  .goal-pct { font-family: var(--font-display); font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+
+  /* Just finished. */
+  .done-list { display: grid; gap: 0.55rem; }
+  .done-list > li { display: grid; grid-template-columns: 0.9rem minmax(0, 1fr) auto; gap: 0.6rem; align-items: baseline; }
+  .done-tick { width: 0.6rem; height: 0.6rem; background: var(--good); }
+
+  /* Team: org → team → people. */
+  .seg { display: inline-flex; border: 1px solid var(--line-2); }
+  .seg button { border: 0; background: transparent; padding: 0.45rem 0.8rem; cursor: pointer; font-size: 0.875rem; color: var(--ink-2); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .org { display: grid; gap: 1.25rem; }
+  .org-head { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; border-bottom: 1px solid var(--line-2); padding-bottom: 0.5rem; }
+  .org-head h2 { font-size: 1.5rem; }
+  .team { display: grid; gap: 0.6rem; }
+  .team-name { font-size: 0.8125rem; font-family: var(--font-mono); font-weight: 400; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+  .people { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: 0.75rem; }
+  .person { display: flex; gap: 0.85rem; align-items: start; background: var(--panel); border: 1px solid var(--line); padding: 0.9rem; }
+  .person.is-busy { border-color: var(--blue); }
+  .person-body { display: grid; gap: 0.2rem; min-width: 0; }
+  .person h3 { font-size: 0.975rem; }
+  .person-team { font-size: 0.8125rem; color: var(--ink-3); }
+  .person-now { display: flex; gap: 0.45rem; align-items: baseline; font-size: 0.875rem; margin-top: 0.25rem; }
+  .now-dot { flex: none; width: 0.45rem; height: 0.45rem; background: var(--blue); }
+  .person-free { font-size: 0.8125rem; color: var(--ink-2); margin-top: 0.25rem; }
+  .brain { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.75rem; font-family: var(--font-mono); margin-top: 0.2rem; }
+  .brain::before { content: ""; width: 0.5rem; height: 0.5rem; background: var(--m-other); }
+  .brain.m-fable::before { background: var(--m-fable); }
+  .brain.m-opus::before { background: var(--m-opus); }
+  .brain.m-sonnet::before { background: var(--m-sonnet); }
+  .brain.m-haiku::before { background: var(--m-haiku); }
+
+  /* Work: the board. */
+  .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+  .col { display: grid; gap: 0.6rem; background: var(--panel-2); padding: 0.75rem; min-height: 10rem; }
+  .col h2 { font-size: 0.9rem; display: flex; justify-content: space-between; align-items: baseline; }
+  .col-count { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-3); }
+  .col ul { display: grid; gap: 0.6rem; }
+  .card { background: var(--panel); border: 1px solid var(--line); padding: 0.8rem; display: grid; gap: 0.55rem; }
+  .col-doing .card { border-top: 3px solid var(--blue); }
+  .card-you { border-top: 3px solid var(--bad); }
+  .card-done { opacity: 0.85; }
+  .card-title { font-weight: 500; line-height: 1.4; }
+  .card-meta { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.8125rem; }
+  .col-empty { color: var(--ink-3); font-size: 0.8125rem; padding: 0.5rem 0.25rem; }
+  .who { display: flex; gap: 0.55rem; align-items: center; font-size: 0.8125rem; }
+  .stage-chip { justify-self: start; font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.04em; padding: 0.15rem 0.45rem; background: var(--blue-wash); color: var(--blue); }
+  .stage-chip.s-needs-founder { background: var(--bad-wash); color: var(--bad); }
+  .stage-chip.s-fix { background: var(--warn-wash); color: var(--warn); }
+  .stage-chip.s-ready { background: var(--good-wash); color: var(--good); }
+
+  @media (max-width: 64rem) {
+    .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 48rem) {
+    .board { grid-template-columns: 1fr; }
+    .col { min-height: 0; }
+    .need { grid-template-columns: 1.5rem minmax(0, 1fr); gap: 0.6rem; padding: 0.85rem; }
+  }
+}

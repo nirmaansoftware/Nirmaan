@@ -55,6 +55,8 @@ export type LaneStatus = "working" | "waiting" | "paused" | "done" | "failed";
 export interface Lane {
   id: string; // tracker lane id, e.g. IP-P3-L1
   org: Org;
+  /** The staff member doing it: an agent slug (Nirmaan agents/) or IP council seat. Optional. */
+  role?: string;
   task: string;
   model: string; // as reported, e.g. claude-opus-5-5
   status: LaneStatus;
@@ -114,6 +116,16 @@ export interface StaffRole {
   skills: StaffSkill[];
 }
 
+/** A member of staff: a Nirmaan agent role or an IP Nirmaan council seat. */
+export interface Person {
+  org: Org;
+  id: string; // slug: agents/<id>/ or council/<id>.md
+  title: string; // plain job title, e.g. "Frontend Engineer"
+  team: string; // e.g. "Engineering", "Council"
+  head: boolean; // leads the team
+  about?: string; // one line on what they do
+}
+
 export type FailureCause = "model" | "harness" | "case";
 
 export interface EvalBatch {
@@ -143,6 +155,8 @@ export interface Snapshot {
   reviews: Review[];
   staff: StaffRole[];
   evals: EvalBatch[];
+  /** Everyone on staff (optional for older snapshots). */
+  people?: Person[];
 }
 
 export function modelFamily(model: string): ModelFamily {

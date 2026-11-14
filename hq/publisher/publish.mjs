@@ -25,6 +25,7 @@ const CFG = {
   internal: env.HQ_INTERNAL ?? join(HOME, "Nirmaan-internal/2026-10-18-capability-buildout"),
   loopDir: env.HQ_LOOP_DIR ?? join(HOME, ".nirmaan/pr-review"),
   ipRepo: env.HQ_IP_REPO ?? join(HOME, "Nirmaan/ip-nirmaan"),
+  nirmaanRepo: env.HQ_NIRMAAN_REPO ?? join(HOME, "Nirmaan/Nirmaan"),
   worktrees: env.HQ_WORKTREES ?? join(HOME, "Nirmaan/.worktrees"),
   repos: (env.HQ_REPOS ?? "nirmaansoftware/Nirmaan,nirmaansoftware/ip-nirmaan").split(","),
   out: env.HQ_OUT ?? join(HOME, ".nirmaan/hq/snapshot.json"),
@@ -104,6 +105,23 @@ const paused = /PAUSED BY FOUNDER/.test(resumeHead);
 
 const lanesFile = join(CFG.internal, "lanes.json");
 const lanes = section("lanes", () => (existsSync(lanesFile) ? readJson(lanesFile).lanes ?? [] : []), []);
+
+// Who does a lane, when lanes.json does not say (the orchestrator is asked to fill `role`).
+// A best guess from the lane's id and task; unmatched lanes stay with the orchestrator.
+const ROLE_GUESSES = [
+  [/live batch|eval run|ablation|-L[12]\b/i, "ai-engineer"],
+  [/review loop|actions|runner|\bR7\b|ci\b/i, "eda-tooling"],
+  [/verification|testbench|formal|coverage|W2-E/i, "verification-lead"],
+  [/knowledge doc|check record|-K\d|-C\d/i, "qa-evidence"],
+  [/rtl|microarchitecture|block|protocol/i, "design-architect"],
+  [/firmware|driver/i, "firmware-engineer"],
+  [/hq\b|dashboard|website|site/i, "frontend-engineer"],
+];
+for (const l of lanes) {
+  if (l.role) continue;
+  const hit = ROLE_GUESSES.find(([re]) => re.test(`${l.id} ${l.task}`));
+  l.role = hit ? hit[1] : "orchestrator";
+}
 
 const health = [];
 section("health: orchestrator", () => {
@@ -260,16 +278,29 @@ section("events: tracker", () => {
     if (!m) continue;
     const [, when, lane, text] = m;
     const at = when.length === 10 ? `${when}T00:00:00Z` : when.replace(/T(\d{2}:\d{2})Z$/, "T$1:00Z");
-    const kind = /MERGED|merged/.test(text) ? "merged" : /opened/.test(text) ? "pr-opened" : /PAUSED|paused/.test(text) ? "paused" : /RESTART|[Rr]esum/.test(text) ? "resumed" : /[Ss]pawned/.test(text) ? "spawned" : "note";
+    const kind = /MERGED|merged/.test(text) ? "note" : /opened/.test(text) ? "pr-opened" : /PAUSED|paused/.test(text) ? "paused" : /RESTART|[Rr]esum/.test(text) ? "resumed" : /[Ss]pawned/.test(text) ? "spawned" : "note";
     events.push({ at, kind, text: short(text), lane });
+  }
+});
+// Finished work: PRs merged in the last 48 h, with their real titles (cached 2 min).
+section("events: merged prs", () => {
+  const since = new Date(now - 48 * 3600_000).toISOString().slice(0, 10);
+  const merged = cached("merged", 120_000, () =>
+    CFG.repos.flatMap((repo) =>
+      gh(["pr", "list", "-R", repo, "--state", "merged", "--search", `merged:>=${since}`, "--limit", "30", "--json", "number,title,mergedAt"]).map((p) => ({ ...p, repo })),
+    ),
+  );
+  for (const p of merged) {
+    if (now - Date.parse(p.mergedAt) > 48 * 3600_000) continue;
+    events.push({ at: p.mergedAt, kind: "merged", text: short(p.title, 140), repo: repoName(p.repo), pr: p.number });
   }
 });
 section("events: loop", () => {
   const since = now - 24 * 3600_000;
   for (const c of calls) {
-    if (c.kind !== "loop" || !["merged", "founder-wait", "stopped"].includes(c.event)) continue;
+    if (c.kind !== "loop" || !["founder-wait", "stopped"].includes(c.event)) continue;
     if (Date.parse(c.time) < since) continue;
-    events.push({ at: c.time, kind: c.event === "merged" ? "merged" : "review", text: `${repoName(c.repo)}#${c.pr} ${c.event.replace("-", " ")}`, repo: repoName(c.repo), pr: Number(c.pr) });
+    events.push({ at: c.time, kind: "review", text: `${repoName(c.repo)}#${c.pr} ${c.event === "founder-wait" ? "waits for the founder" : "stopped"}`, repo: repoName(c.repo), pr: Number(c.pr) });
   }
   events.sort((a, b) => b.at.localeCompare(a.at));
   events.splice(30);
@@ -426,6 +457,41 @@ section("stable times", () => {
   }
 });
 
+// ---------- people: everyone on staff, from each org's generated team table ----------
+// Nirmaan: agents/README.md (generated from agents/org-chart.yml). IP: council/README.md seats.
+const people = [];
+section("people: nirmaan", () => {
+  const text = readFileSync(join(CFG.nirmaanRepo, "agents/README.md"), "utf8");
+  const head = text.split("\n").findIndex((l) => /^\| Unit \| Head/.test(l));
+  if (head < 0) throw new Error("team table not found");
+  const entry = /([^,(]+?)\s*\(\[`([a-z0-9-]+)`\]/g; // "Frontend Engineer ([`frontend-engineer`]"
+  const clean = (t) => t.replace(/\s*\((?:interim|agent[^)]*)\)/g, "").trim();
+  for (const line of text.split("\n").slice(head + 2)) {
+    if (!line.startsWith("|")) break;
+    const [, unit, headCell, members] = line.split("|").map((c) => c.trim());
+    const team = clean(unit);
+    for (const [cell, isHead] of [[headCell, true], [members, false]]) {
+      for (const m of clean(cell).matchAll(entry)) {
+        if (!people.some((p) => p.id === m[2])) people.push({ org: "nirmaan", id: m[2], title: clean(m[1]), team, head: isHead });
+      }
+    }
+  }
+});
+section("people: ip", () => {
+  const text = readFileSync(join(CFG.ipRepo, "council/README.md"), "utf8");
+  for (const m of text.matchAll(/^\| \[([a-z0-9-]+)\]\([a-z0-9-]+\.md\) \| (.+?) \|$/gm)) {
+    const id = m[1];
+    let title = id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    try {
+      const h1 = /^#\s+(.+)$/m.exec(readFileSync(join(CFG.ipRepo, "council", `${id}.md`), "utf8"));
+      if (h1) title = h1[1].replace(/[`*]/g, "").replace(/\s*\(.*\)\s*$/, "").replace(/^Seat:\s*/i, "").trim();
+    } catch {
+      /* keep the slug title */
+    }
+    people.push({ org: "ip", id, title, team: id === "chair" ? "Council chair" : "Council", head: id === "chair", about: m[2] });
+  }
+});
+
 // ---------- assemble, check, write ----------
 for (const [name, msg] of problems) health.push({ id: `publisher-${name}`, label: `Publisher: ${name}`, status: "warn", detail: msg, since: iso(now) });
 
@@ -442,6 +508,7 @@ const snapshot = {
   reviews,
   staff,
   evals,
+  people,
 };
 
 function keys(v, out = []) {

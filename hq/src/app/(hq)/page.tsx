@@ -1,146 +1,145 @@
 "use client";
 
 import Link from "next/link";
-import { Ago, useSnapshot } from "@/app/_components/Live";
-import { Blocks, LaneBadge, Light, ModelChip, StagePipe } from "@/app/_components/ui";
+import { Ago, useNow, useSnapshot } from "@/app/_components/Live";
+import { Avatar } from "@/app/_components/people";
 import { SampleNote } from "@/app/_components/SampleNote";
+import { busyMap, greeting, laneOwner, ORG_NAME, overallStatus, plural, short } from "@/lib/plain";
 
-const KIND_LABEL = { approval: "approve", usage: "usage", setup: "set up", decision: "decide" } as const;
-
-export default function Overview() {
+export default function Today() {
   const s = useSnapshot();
+  const now = useNow(60_000);
+  const people = s.people ?? [];
+  const busy = busyMap(s);
   const working = s.lanes.filter((l) => l.status === "working");
-  const open = s.reviews.filter((r) => r.stage !== "merged");
+  const inReview = s.reviews.filter((r) => r.stage !== "merged");
+  const status = overallStatus(s.health);
+  const goals = [...s.progress].sort((a, b) => b.done / Math.max(b.total, 1) - a.done / Math.max(a.total, 1)).slice(0, 5);
+  const finished = s.events.filter((e) => e.kind === "merged" && now - Date.parse(e.at) < 48 * 3600_000).slice(0, 5);
+
   return (
     <>
-      <header className="page-head">
-        <div>
-          <span className="label">Nirmaan ecosystem</span>
-          <h1>Overview</h1>
-        </div>
-      </header>
+      <section className="hero">
+        <p className="hero-hello" suppressHydrationWarning>
+          {greeting(new Date(now))}
+        </p>
+        <h1>
+          {busy.size > 0 ? plural(busy.size, "person is", "people are") : "Nobody is"} working
+          {working.length ? ` on ${plural(working.length, "task")}` : ""}.
+        </h1>
+        <p className="hero-sub">
+          {plural(inReview.length, "piece", "pieces")} of work in review · {plural(s.waiting.length, "thing")} waiting for you · {plural(people.length, "person", "people")} on staff
+        </p>
+        <p className={`status-pill ${status.tone}`}>
+          <span className="status-dot" aria-hidden="true" />
+          <b>{status.headline}</b>
+          <span className="status-detail">{status.detail}</span>
+        </p>
+      </section>
       <SampleNote />
 
-      <section className="health" aria-label="Health">
-        {s.health.map((h) => (
-          <div key={h.id}>
-            <span className="row">
-              <Light status={h.status} />
-              <b>{h.label}</b>
-            </span>
-            <small className="muted">{h.detail}</small>
-            <small className="faint">
-              since <Ago at={h.since} />
-            </small>
-          </div>
-        ))}
+      <section className="panel" aria-labelledby="now-h">
+        <div className="panel-head">
+          <h2 id="now-h">Working right now</h2>
+          <Link href="/work" className="more">
+            See all work →
+          </Link>
+        </div>
+        {working.length === 0 ? (
+          <p className="empty">Nobody is working right now.</p>
+        ) : (
+          <ul className="now-list" role="list">
+            {working.map((l) => {
+              const who = laneOwner(l, people);
+              return (
+                <li key={l.id}>
+                  <Avatar id={who.id} busy size="lg" />
+                  <div>
+                    <b>{who.title}</b>
+                    <span className="faint"> · {ORG_NAME[l.org]}</span>
+                    <p>{short(l.task, 110)}</p>
+                    <small className="faint">
+                      started <Ago at={l.startedAt} />
+                    </small>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
 
-      <div className="split">
-        <section className="panel" aria-labelledby="progress-h">
+      <div className="grid-2">
+        <section className="panel" aria-labelledby="you-h">
           <div className="panel-head">
-            <h2 id="progress-h">Progress</h2>
-            <span className="label">done · in progress · to do</span>
+            <h2 id="you-h">Needs you</h2>
+            <Link href="/needs-you" className="more">
+              All {s.waiting.length} →
+            </Link>
           </div>
-          {s.progress.map((p) => (
-            <div className="track" key={p.id}>
-              <div className="track-head">
-                <span>
-                  <b>{p.label}</b> <span className="faint label">{p.org}</span>
-                </span>
-                <span className="mono num muted">
-                  {p.done}/{p.total} {p.unit}
-                  {p.active ? ` · ${p.active} active` : ""}
-                </span>
-              </div>
-              <Blocks done={p.done} active={p.active} total={p.total} label={p.label} />
-              {p.note && <small className="faint">{p.note}</small>}
-            </div>
-          ))}
+          {s.waiting.length === 0 ? (
+            <p className="empty">Nothing needs you. Enjoy the quiet.</p>
+          ) : (
+            <ol className="todo" role="list">
+              {s.waiting.slice(0, 4).map((w) => (
+                <li key={w.id}>
+                  <span className={`todo-kind k-${w.kind}`}>{w.kind === "approval" ? "Approve" : w.kind === "usage" ? "Decide" : w.kind === "decision" ? "Decide" : "Set up"}</span>
+                  <span>{short(w.title, 100)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
 
-        <div className="stack">
-          <section className="panel" aria-labelledby="waiting-h">
-            <div className="panel-head">
-              <h2 id="waiting-h">Waiting on you</h2>
-              <span className="label">{s.waiting.length}</span>
-            </div>
-            {s.waiting.length === 0 ? (
-              <p className="empty">Nothing needs you right now.</p>
-            ) : (
-              <ul className="list" role="list">
-                {s.waiting.map((w) => (
-                  <li key={w.id}>
-                    <div className="item-head">
-                      <b>{w.title}</b>
-                      <span className="badge warn">{KIND_LABEL[w.kind]}</span>
-                    </div>
-                    <small className="muted">
-                      {w.where} · <Ago at={w.since} />
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="panel" aria-labelledby="now-h">
-            <div className="panel-head">
-              <h2 id="now-h">Working now</h2>
-              <Link href="/agents" className="label">
-                all agents
-              </Link>
-            </div>
-            {working.length === 0 ? (
-              <p className="empty">No lane is working.</p>
-            ) : (
-              <ul className="list" role="list">
-                {working.map((l) => (
-                  <li key={l.id}>
-                    <div className="item-head">
-                      <b className="mono">{l.id}</b>
-                      <LaneBadge status={l.status} />
-                    </div>
-                    <span>{l.task}</span>
-                    <span className="lane-meta">
-                      <ModelChip model={l.model} />
-                      <span>
-                        active <Ago at={l.lastActivityAt} />
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="panel" aria-labelledby="rev-h">
-            <div className="panel-head">
-              <h2 id="rev-h">In review</h2>
-              <Link href="/reviews" className="label">
-                all reviews
-              </Link>
-            </div>
-            {open.length === 0 ? (
-              <p className="empty">No open PRs.</p>
-            ) : (
-              <ul className="list" role="list">
-                {open.map((r) => (
-                  <li key={`${r.repo}#${r.pr}`}>
-                    <span>
-                      <span className="mono faint">
-                        {r.repo}#{r.pr}
-                      </span>{" "}
-                      {r.title}
-                    </span>
-                    <StagePipe stage={r.stage} fixRounds={r.fixRounds} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+        <section className="panel" aria-labelledby="goals-h">
+          <div className="panel-head">
+            <h2 id="goals-h">Goals</h2>
+            <Link href="/goals" className="more">
+              All goals →
+            </Link>
+          </div>
+          {goals.map((g) => {
+            const pct = Math.round((g.done / Math.max(g.total, 1)) * 100);
+            return (
+              <div className="goal" key={g.id}>
+                <div className="goal-head">
+                  <span>{g.label}</span>
+                  <b className="num">{pct}%</b>
+                </div>
+                <div className="meter" role="progressbar" aria-label={g.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+                  <span style={{ width: `${pct}%` }} />
+                  {g.active > 0 && <span className="meter-active" style={{ width: `${Math.min(100 - pct, Math.round((g.active / Math.max(g.total, 1)) * 100))}%` }} />}
+                </div>
+              </div>
+            );
+          })}
+        </section>
       </div>
+
+      <section className="panel" aria-labelledby="done-h">
+        <div className="panel-head">
+          <h2 id="done-h">Just finished</h2>
+          <span className="faint">last 2 days</span>
+        </div>
+        {finished.length === 0 ? (
+          <p className="empty">Nothing finished in the last two days.</p>
+        ) : (
+          <ul className="done-list" role="list">
+            {finished.map((e, i) => (
+              <li key={`${e.at}-${i}`}>
+                <span className="done-tick" aria-hidden="true" />
+                <span>
+                  {short(e.text, 120)}
+                  {e.repo && <span className="faint"> · {e.repo.includes("ip") ? ORG_NAME.ip : ORG_NAME.nirmaan}</span>}
+                </span>
+                <small className="faint">
+                  <Ago at={e.at} />
+                </small>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </>
   );
 }
