@@ -324,7 +324,9 @@ What the script does, in order:
    keeps the 10 worst and marks the verdict "more not listed" when there were
    more. The verdict itself never changes.
 9. **Fail closed.** A failed call, a timeout or a rate limit (the plan's
-   "session limit" message counts as one) gets one retry
+   limit in any of its wordings, such as "You've hit your 5-hour limit", an
+   overloaded model, or an `api_error_status` of 429 or 529 in claude's
+   result, counts as one) gets one retry
    after a backoff; after that, and on any invalid output or a citation that
    fails as above, the key is posted as "review deferred" and stays pending.
    It never passes by default.
@@ -466,8 +468,8 @@ scratch. Removing the `needs-founder` label lets the loop resume with a fresh
 round count.
 
 **Rate limits pause, they do not stop.** When a key or the Founder Proxy is
-deferred only because of a rate limit (the plan's session or usage limit,
-after its one retry), or the fixer hits one, the loop does not label the PR
+deferred only because of a rate limit (the plan's 5-hour, weekly, model or
+usage limit, or an overloaded model, after its one retry), or the fixer hits one, the loop does not label the PR
 and does not stop: the key's check stays pending, nothing is pushed, and the
 whole loop makes no model call for any PR for `rate_limit_pause_minutes` (30,
 in `.github/scripts/pr-loop/config.json`). Then it reviews the same head

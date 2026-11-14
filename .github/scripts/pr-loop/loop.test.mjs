@@ -837,6 +837,19 @@ test('a key hits a rate limit (after its one retry): the loop pauses, no needs-f
   } finally { t.cleanup(); }
 });
 
+test("Claude 2.1.325's 5-hour limit (subtype success, exit 1) pauses the loop like any rate limit: no needs-founder label, no stop", async () => {
+  const limit = { type: 'rate_limit', subtype: 'success', code: 1, text: "You've hit your 5-hour limit · resets 2:40pm (Asia/Calcutta)" };
+  const t = setup({ reviews: [limit, limit, { verdict: 'pass' }] });
+  try {
+    assert.deepEqual(outcomes(await t.tick()), ['paused']);
+    assert.ok(!t.labeled(), 'no needs-founder label');
+    assert.equal(t.state().stopped, null, 'not a stop');
+    assert.ok(!t.comments().some((c) => /Automated loop stopped/.test(c)));
+    expirePause(t);
+    assert.deepEqual(outcomes(await t.tick()), ['auto-merge'], 'after the pause the same head is reviewed again');
+  } finally { t.cleanup(); }
+});
+
 test('the fixer hits a rate limit: pause, nothing pushed, no label, the findings are not counted as seen; after the pause the round runs and the PR merges', async () => {
   const t = setup({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ type: 'rate_limit' }, { edits: { 'os/app.js': 'fixed\n' } }] });
   try {
