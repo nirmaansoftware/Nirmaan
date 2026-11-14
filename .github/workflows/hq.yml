@@ -1,0 +1,50 @@
+# hq (hq.nirmaan.online): the checks AGENTS.md asks of a Next.js app before
+# merge (typecheck, lint, unit tests, next build), in one job. It deploys
+# nothing: Vercel builds hq from the hq/ folder on its own.
+#
+# No path filter, so every pull request gets an hq-test result and the check
+# can be made required (a skipped path-filtered job would report as passing).
+# Actions are pinned by commit SHA, with the release in a comment (same pins as
+# os.yml).
+name: hq
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hq-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hq-test:
+    name: hq-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: hq
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: hq/package-lock.json
+      - name: Install (npm ci)
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: Production build
+        run: npx next build

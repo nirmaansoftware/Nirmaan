@@ -7,6 +7,7 @@ documentation. Each deployable has its own folder, and each folder explains itse
 | --- | --- | --- |
 | [`website/`](website/README.md) | nirmaan.online (Vercel) | The marketing site. Eleventy sources are in `website/src/`. The built site in `website/public/` is what Vercel serves. |
 | [`os/`](os/README.md) | os.nirmaan.online (Fly.io): screens on, worker off since 2026-10-17 | Nirmaan OS: the team's operating system, the client portal and the intake API. Next.js and Prisma on SQLite. |
+| [`hq/`](hq/README.md) | hq.nirmaan.online (Vercel, login only): not deployed yet | The founder's live view of the ecosystem: progress, live agents and their models, reviews, evals, staff. Next.js; data from a publisher on the founder's Mac. |
 | [`agents/`](agents/README.md) | read by the OS at runtime | The agent specifications, one `agent.md` per agent. The OS image includes them. |
 
 ip.nirmaan.online is a separate repository, IP Nirmaan, and is not part of this one.
