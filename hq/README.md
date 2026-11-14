@@ -14,7 +14,7 @@ account, the GitHub OAuth app, and the Vercel project with its DNS record (found
 - `src/proxy.ts` gates every page and API route: a signed session cookie (HMAC, 7 days,
   `src/lib/session.ts`) for a login in `HQ_ALLOWED_LOGINS`. No database; the GitHub token is
   read once at sign-in and dropped. **It fails closed:** missing settings serve 503.
-  `HQ_AUTH=off` exists only for running on the founder's Mac and is never set on Vercel.
+  `HQ_AUTH=off` exists only for running on the founder's Mac; the code ignores it wherever Vercel runs the app.
 - The login page renders no data: the screens live in the `(hq)` route group, whose layout
   loads the snapshot, and `/login` is outside it.
 - The site reads the store with a read-only token, server-side only. The publisher holds the
@@ -28,7 +28,7 @@ account, the GitHub OAuth app, and the Vercel project with its DNS record (found
 | --- | --- |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the "Nirmaan HQ" OAuth app under nirmaansoftware; callback `https://hq.nirmaan.online/api/auth/callback` |
 | `HQ_SESSION_SECRET` | 32+ random characters (`openssl rand -hex 32`) |
-| `HQ_ALLOWED_LOGINS` | `nirmaansoftware,patel-om` |
+| `HQ_ALLOWED_LOGINS` | the founder's GitHub logins, comma-separated (set in Vercel, never committed) |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_READONLY_TOKEN` | the store (read-only token) |
 
 Production only: preview deployments get no settings, so they fail closed.

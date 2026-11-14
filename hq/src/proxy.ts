@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, isAllowed, verifySession } from "@/lib/session";
+import { SESSION_COOKIE, authBypassed, isAllowed, verifySession } from "@/lib/session";
 
 /**
  * The gate. Every page and API route needs a valid session for an allowed
@@ -7,14 +7,14 @@ import { SESSION_COOKIE, isAllowed, verifySession } from "@/lib/session";
  *
  * FAILS CLOSED: if the auth settings are missing, nothing is served (503).
  * HQ_AUTH=off turns the gate off for running on the founder's Mac only; it is
- * never set on the deployed site.
+ * ignored on Vercel (authBypassed), so it can never open the deployed site.
  */
 const PUBLIC = ["/login", "/api/auth/login", "/api/auth/callback"];
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (PUBLIC.includes(pathname)) return NextResponse.next();
-  if (process.env.HQ_AUTH === "off") return NextResponse.next();
+  if (authBypassed()) return NextResponse.next();
 
   const secret = process.env.HQ_SESSION_SECRET;
   if (!secret || secret.length < 32 || !process.env.GITHUB_CLIENT_ID || !process.env.HQ_ALLOWED_LOGINS) {

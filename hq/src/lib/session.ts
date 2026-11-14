@@ -70,3 +70,12 @@ export function isAllowed(login: string, allowed = process.env.HQ_ALLOWED_LOGINS
 export function safeNext(next: string | null | undefined): string {
   return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
 }
+
+/**
+ * HQ_AUTH=off turns the gate off for running on the founder's Mac only. It is
+ * ignored wherever Vercel runs the app (Vercel always sets VERCEL=1), so a
+ * mistaken setting there can never open the site.
+ */
+export function authBypassed(env: Record<string, string | undefined> = process.env): boolean {
+  return env.HQ_AUTH === "off" && !env.VERCEL;
+}

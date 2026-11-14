@@ -406,11 +406,21 @@ section("models: sessions", () => {
     const walk = (dir, depth) => {
       for (const name of readdirSync(dir)) {
         const p = join(dir, name);
-        const st = statSync(p);
-        if (st.isDirectory()) {
-          if (depth < 4) walk(p, depth + 1);
-        } else if (name.endsWith(".jsonl") && st.mtimeMs >= since) {
-          for (const line of readFileSync(p, "utf8").split("\n")) {
+        // One unreadable entry (a broken link, a transcript deleted mid-scan) is skipped, not fatal.
+        let st, text;
+        try {
+          st = statSync(p);
+          if (st.isDirectory()) {
+            if (depth < 4) walk(p, depth + 1);
+            continue;
+          }
+          if (!name.endsWith(".jsonl") || st.mtimeMs < since) continue;
+          text = readFileSync(p, "utf8");
+        } catch {
+          continue;
+        }
+        {
+          for (const line of text.split("\n")) {
             if (!line.includes('"usage"') || !line.includes('"model"')) continue;
             let r;
             try {

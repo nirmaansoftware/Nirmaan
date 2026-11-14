@@ -2,17 +2,16 @@
 # merge (typecheck, lint, unit tests, next build), in one job. It deploys
 # nothing: Vercel builds hq from the hq/ folder on its own.
 #
-# Path-filtered to hq/ and this file: hq is not a required check, so a
-# docs-only pull request never waits on it. Actions are pinned by commit SHA,
-# with the release in a comment (same pins as os.yml).
+# No path filter, so every pull request gets an hq-test result and the check
+# can be made required (a skipped path-filtered job would report as passing).
+# Actions are pinned by commit SHA, with the release in a comment (same pins as
+# os.yml).
 name: hq
 
 on:
   pull_request:
-    paths: ["hq/**", ".github/workflows/hq.yml"]
   push:
     branches: [main]
-    paths: ["hq/**", ".github/workflows/hq.yml"]
   workflow_dispatch: {}
 
 permissions:
