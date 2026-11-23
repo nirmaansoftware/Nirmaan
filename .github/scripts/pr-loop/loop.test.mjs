@@ -1092,8 +1092,8 @@ test('the cap holds across both repositories with the real config (calls, cap 2)
   assert.equal(REAL_LOOP.lock_mode, 'calls');
   assert.equal(REAL_LOOP.model_cap, 2);
   const loop = { ...LOOP, lock_mode: REAL_LOOP.lock_mode, model_cap: REAL_LOOP.model_cap };
-  // A loop that holds review.lock reviewing (ip-nirmaan's loop, if it shared this
-  // state folder, with its model_cap 2): this loop runs beside it.
+  // ip-nirmaan's loop holds review.lock reviewing (it shares this state folder,
+  // under the cap of 2): this loop runs beside it.
   const a = setup({ reviews: [fail('bad'), { verdict: 'pass' }] });
   try {
     a.scenario({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ edits: { 'os/app.js': 'fixed\n' } }], probeLocks: a.stateDir });

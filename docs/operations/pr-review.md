@@ -510,11 +510,7 @@ be 2 on a state folder it shares with this loop. This loop tries its other slot
 first, so it leaves the shared lock free for ip-nirmaan whenever it can. The
 review holds its slot only for the review, the fixer only for its call, and the
 local checks and pushes hold nothing. So the two repositories can review at
-once, and never more than 2 model processes run. ip-nirmaan's own repository
-sets its loop's width to 3 in GitHub Actions
-(nirmaansoftware/ip-nirmaan#488); whether the cap of 2 covers a loop with its
-own slots there is not decided by any record here and is not changed by this
-page. Every lock is taken with a try, never a wait, so the two loops cannot
+once, and never more than 2 model processes run. Every lock is taken with a try, never a wait, so the two loops cannot
 deadlock; a loop that finds no slot free is "busy" and tries again next pass.
 `step` (the earlier setting): one review lock, shared with ip-nirmaan,
 held for a whole review and fix round.
