@@ -205,8 +205,8 @@ What the script does, in order:
 
 1. **A shared lock.** Run by hand, it takes the lock shared with ip-nirmaan
    (`review.lock`); run by the automated loop, it uses the model slot the
-   loop already holds ("Locks" below), so at most 2 model calls run across
-   both repositories ("Locks" below). The lock is a folder
+   loop already holds ("Locks" below), so at most 2 reviews run across both
+   repositories. The lock is a folder
    (`review.lock`) with an owner file written whole (a temporary file renamed
    inside it). A lock whose process is gone is cleared, and so is one with no
    readable owner file that is older than 30 minutes.
@@ -498,22 +498,20 @@ reviewed against the other PR's branch.
 **Locks.** `lock_mode` in `.github/scripts/pr-loop/config.json` chooses how
 reviews share the plan. The setting is `calls` with `model_cap` 2: this
 repository has its own lock, and every model call takes one of 2 model slots
-shared by both loops. The cap is 2 across both repositories, as the founder
+shared by both loops. The cap across both repositories is 2, as the founder
 approved on 2026-10-22 ([pr-review-decisions.md](pr-review-decisions.md), line
 193) and as decision R5.5 of
 [2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md) sets:
-raised only while rate-limit outcomes stay flat. No record in this repository
-raises it. The shared review lock (`review.lock`) is one slot, so the
-ip-nirmaan loop always counts when it uses it; it now holds a slot only around
-each model call, not for a whole review and fix round, and its `model_cap` must
-be 2 on a state folder it shares with this loop. This loop tries its other slot
-first, so it leaves the shared lock free for ip-nirmaan whenever it can. The
-review holds its slot only for the review, the fixer only for its call, and the
-local checks and pushes hold nothing. So the two repositories can review at
-once, and never more than 2 model processes run. Every lock is taken with a try, never a wait, so the two loops cannot
-deadlock; a loop that finds no slot free is "busy" and tries again next pass.
-`step` (the earlier setting): one review lock, shared with ip-nirmaan,
-held for a whole review and fix round.
+raised only while rate-limit outcomes stay flat. The shared review lock
+(`review.lock`) is one slot, so the ip-nirmaan loop counts against that cap
+whenever it shares this state folder; this loop tries its other slot first, so it leaves the
+shared lock free for ip-nirmaan whenever it can. The review holds its slot
+only for the review, the fixer only for its call, and the local checks and
+pushes hold nothing. So the two repositories can review at once, and never
+more than 2 model processes run. Every lock is taken with a try, never a
+wait, so the two loops cannot deadlock; a loop that finds no slot free is
+"busy" and tries again next pass. `step` (the earlier setting): one review
+lock, shared with ip-nirmaan, held for a whole review and fix round.
 
 **One review at a time per repository, every PR each pass.** Each pass takes one
 step on every open PR, a PR the loop is fixing first, then by number, so a PR

@@ -761,9 +761,9 @@ export function acquireLock(stateDir, owner, { staleMs = OWNERLESS_LOCK_STALE_MS
 }
 
 // One of `cap` model slots shared by both repositories' loops. Slot 0 is the
-// shared review lock itself, so a loop that only knows that lock (this one with
-// lock_mode "step", or ip-nirmaan's loop, which shares this folder) holds one
-// slot; the cap across both repositories is 2 (docs/operations/pr-review.md). The
+// shared review lock itself, so a loop that only knows that lock (ip-nirmaan's,
+// or this one with lock_mode "step") holds one slot; the cap across both
+// repositories is 2 (docs/operations/pr-review.md). The
 // other slots are tried first, so a loop still on the shared-lock protocol
 // finds that lock free whenever another slot is. Every acquire is a try: no
 // loop ever waits holding one lock for another, so nothing can deadlock.
