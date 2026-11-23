@@ -1084,15 +1084,16 @@ test('any other author is still skipped, with no model call', async () => {
   }
 });
 
-// The model slots held while each model call ran: the shared review lock (an
-// old-protocol loop's lock and slot 0) plus model-slot-<n>.
+// The model slots held while each model call ran: the shared review lock (ip-nirmaan's
+// lock, which is also slot 0) plus model-slot-<n>.
 const modelSlots = (locks) => (locks ?? []).filter((f) => f === 'review.lock' || /^model-slot-\d+\.lock$/.test(f));
 
 test('the cap holds across both repositories with the real config (calls, cap 2): with ip-nirmaan\'s old-protocol loop reviewing, this loop takes the other slot and never a third; alone, it leaves the shared lock free for ip-nirmaan', async () => {
   assert.equal(REAL_LOOP.lock_mode, 'calls');
   assert.equal(REAL_LOOP.model_cap, 2);
   const loop = { ...LOOP, lock_mode: REAL_LOOP.lock_mode, model_cap: REAL_LOOP.model_cap };
-  // ip-nirmaan reviewing (it knows only review.lock): this loop runs beside it.
+  // ip-nirmaan's loop is reviewing and holds review.lock: this loop runs beside it
+  // under the cap of 2.
   const a = setup({ reviews: [fail('bad'), { verdict: 'pass' }] });
   try {
     a.scenario({ reviews: [fail('bad'), { verdict: 'pass' }], fixes: [{ edits: { 'os/app.js': 'fixed\n' } }], probeLocks: a.stateDir });
@@ -1105,7 +1106,7 @@ test('the cap holds across both repositories with the real config (calls, cap 2)
     }
     ip.release();
   } finally { a.cleanup(); }
-  // Alone: it uses slot 1, so ip-nirmaan's old loop could take review.lock at
+  // Alone: it uses slot 1, so ip-nirmaan's loop could take review.lock at
   // any moment and the total stays at 2.
   const b = setup();
   try {

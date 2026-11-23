@@ -498,9 +498,13 @@ reviewed against the other PR's branch.
 **Locks.** `lock_mode` in `.github/scripts/pr-loop/config.json` chooses how
 reviews share the plan. The setting is `calls` with `model_cap` 2: this
 repository has its own lock, and every model call takes one of 2 model slots
-shared by both loops. The shared review lock (`review.lock`) is one slot, so
-the ip-nirmaan loop, which still holds that lock for a whole review and fix
-round, always counts; this loop tries its other slot first, so it leaves the
+shared by both loops. The cap across both repositories is 2, as the founder
+approved on 2026-10-22 ([pr-review-decisions.md](pr-review-decisions.md), line
+193) and as decision R5.5 of
+[2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md) sets:
+raised only while rate-limit outcomes stay flat. The shared review lock
+(`review.lock`) is one slot, so the ip-nirmaan loop counts against that cap
+whenever it shares this state folder; this loop tries its other slot first, so it leaves the
 shared lock free for ip-nirmaan whenever it can. The review holds its slot
 only for the review, the fixer only for its call, and the local checks and
 pushes hold nothing. So the two repositories can review at once, and never
