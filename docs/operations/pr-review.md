@@ -205,8 +205,8 @@ What the script does, in order:
 
 1. **A shared lock.** Run by hand, it takes the lock shared with ip-nirmaan
    (`review.lock`); run by the automated loop, it uses the model slot the
-   loop already holds ("Locks" below), so at most 3 model calls run across
-   both repositories while they share one state folder. The lock is a folder
+   loop already holds ("Locks" below), so at most 2 model calls run across
+   both repositories while they share one state folder ("Locks" below). The lock is a folder
    (`review.lock`) with an owner file written whole (a temporary file renamed
    inside it). A lock whose process is gone is cleared, and so is one with no
    readable owner file that is older than 30 minutes.
@@ -499,17 +499,23 @@ reviewed against the other PR's branch.
 reviews share the plan. The setting is `calls` with `model_cap` 2: this
 repository has its own lock, and every model call takes one of this loop's 2
 model slots (`model-slot-1.lock` and the shared review lock, `review.lock`).
-The ip-nirmaan loop takes one of 3 for each model call (`model_cap` 3 there
-since nirmaansoftware/ip-nirmaan#488; its council record
-2026-11-19-parallel-keys.md, addendum 2026-11-24, decision A1): the same two
-and `model-slot-2.lock`. It tries `review.lock` first; this loop tries its
-other slot first, so it leaves the shared lock free for ip-nirmaan whenever it
-can. The review holds its slot only for the review, the fixer only for its
-call, and the local checks and pushes hold nothing. So the two repositories
-can review at once, and while they share one state folder never more than 3
-model processes run across both, at most 2 of them this loop's. Where each
-loop has its own state folder (ip-nirmaan's loop in GitHub Actions), each has
-its own slots. Every lock is taken with a try, never a wait, so the two loops
+The ip-nirmaan loop runs in GitHub Actions with its own model slots, where it
+has `model_cap` 3 (nirmaansoftware/ip-nirmaan#488; its council record
+2026-11-19-parallel-keys.md, addendum 2026-11-24, decision A1). That width
+holds only there. The cap across both repositories on a shared state folder
+stays 2, as the founder approved on 2026-10-22
+([pr-review-decisions.md](pr-review-decisions.md), line 193) and as decision
+R5.5 of [2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md)
+sets: raised only while rate-limit outcomes stay flat. If the ip-nirmaan loop
+ever runs on the Mac's shared state folder again, its `model_cap` must be 2
+there, or a decision record in this repository must raise the shared cap
+first. It tries `review.lock` first; this loop tries its other slot first, so
+it leaves the shared lock free for ip-nirmaan whenever it can. The review holds
+its slot only for the review, the fixer only for its call, and the local checks
+and pushes hold nothing. So the two repositories can review at once, and while
+they share one state folder never more than 2 model processes run across both.
+Where each loop has its own state folder (ip-nirmaan's loop in GitHub
+Actions), each has its own slots. Every lock is taken with a try, never a wait, so the two loops
 cannot deadlock; a loop that finds no slot free is "busy" and tries again next
 pass. `step` (the earlier setting): one review lock, shared with ip-nirmaan,
 held for a whole review and fix round.
