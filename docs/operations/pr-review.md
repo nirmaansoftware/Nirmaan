@@ -499,18 +499,18 @@ reviewed against the other PR's branch.
 reviews share the plan. The setting is `calls` with `model_cap` 2: this
 repository has its own lock, and every model call takes one of this loop's 2
 model slots (`model-slot-1.lock` and the shared review lock, `review.lock`).
-The ip-nirmaan loop runs in GitHub Actions with its own model slots, where it
-has `model_cap` 3 (nirmaansoftware/ip-nirmaan#488; its council record
-2026-11-19-parallel-keys.md, addendum 2026-11-24, decision A1). That width
-holds only there. The cap across both repositories on a shared state folder
-stays 2, as the founder approved on 2026-10-22
+The cap across both repositories is 2, as the founder approved on 2026-10-22
 ([pr-review-decisions.md](pr-review-decisions.md), line 193) and as decision
 R5.5 of [2026-10-18-review-loop-decisions.md](2026-10-18-review-loop-decisions.md)
-sets: raised only while rate-limit outcomes stay flat. If the ip-nirmaan loop
-ever runs on the Mac's shared state folder again, its `model_cap` must be 2
-there, or a decision record in this repository must raise the shared cap
-first. It tries `review.lock` first; this loop tries its other slot first, so
-it leaves the shared lock free for ip-nirmaan whenever it can. The review holds
+sets: raised only while rate-limit outcomes stay flat. No record in this
+repository raises it. The ip-nirmaan loop's own width is ip-nirmaan's to set in
+its repository (it states three model slots in its `docs/REVIEW_MECHANISM.md`;
+that is not checked here), and it counts against the cap of 2 only if it runs
+on the same state folder as this loop. If it ever does, its `model_cap` must be
+2 there, or a decision record in this repository must raise the shared cap
+first. On that folder the ip-nirmaan loop tries `review.lock` first; this loop
+tries its other slot first, so it leaves the shared lock free for ip-nirmaan
+whenever it can. The review holds
 its slot only for the review, the fixer only for its call, and the local checks
 and pushes hold nothing. So the two repositories can review at once, and while
 they share one state folder never more than 2 model processes run across both.
